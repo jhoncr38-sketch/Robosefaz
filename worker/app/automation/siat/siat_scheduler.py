@@ -100,6 +100,7 @@ class SiatExportScheduler:
     ) -> ExportRequestResult:
         family = family_of(document_type)
         await self.legacy.go_to(family)
+        await self.legacy.dismiss_notices()
         await self._fill_form(document_type, start_date, end_date)
         # PROTEÇÃO CONTRA CLIENTE ERRADO: IE selecionada = IE do cliente
         await self._security_check()

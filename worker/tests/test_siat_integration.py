@@ -262,3 +262,15 @@ def test_policy_pattern_covers_all_sefaz_hosts() -> None:
     client = make_client()
     entry = ChromeCertificatePolicyService.entry_for_certificate(make_certificate(client), "https://[*.]sefaz.pi.gov.br")
     assert '"pattern":"https://[*.]sefaz.pi.gov.br"' in entry.to_policy_json()
+
+
+async def test_notice_is_dismissed_and_logged(repo: FakeRepo, integration_settings: Settings) -> None:
+    # "Comunicado Importante" cobre o formulário da NFC-e até clicar em [Entendi].
+    state = MockState(show_notice=True)
+    ctx, job = await _context(repo, integration_settings)
+    provider = SiatAutomationProvider()
+    async with provider.open_session(ctx):
+        await _open(provider, ctx, state)
+        result = await provider.schedule(ctx, (await repo.list_tasks(job.id))[0])
+        assert result.external_request_id == "9237950"
+    assert any("Aviso do SIAT web fechado" in m and "60 dias" in m for m in repo.log_messages())

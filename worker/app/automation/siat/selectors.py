@@ -107,6 +107,9 @@ class SiatSelectors:
     legacy_status_todas: str = r"^\s*todas\s*$"
     legacy_date_start_label: str = r"data\s+de\s+emiss[ãa]o\s+inicial|data\s+inicial"
     legacy_date_end_label: str = r"data\s+de\s+emiss[ãa]o\s+final|data\s+final"
+    # aviso informativo ao abrir a exportação ("Comunicado Importante" [Entendi])
+    legacy_notice_title: str = r"comunicado\s+importante"
+    legacy_notice_button: str = r"^\s*entendi\s*$"
     legacy_schedule_button: str = r"agendar\s+exporta[çc][ãa]o"
     legacy_feedback_container: str = ".ui-messages, .ui-message, .ui-growl, [class*='messages'], [role='alert']"
     legacy_table_id_header: str = r"^\s*id\s*$"

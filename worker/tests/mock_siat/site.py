@@ -51,6 +51,8 @@ class MockState:
     # IE exibida nas linhas da lista (None = a IE informada no agendamento)
     rows_ie_override: str | None = None
     export_status: str = "Processado"
+    # "Comunicado Importante" ao abrir a exportação de NFC-e
+    show_notice: bool = True
     scheduled: list[dict] = field(default_factory=list)
     downloads_served: int = 0
 
@@ -187,6 +189,12 @@ LEGACY_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><
 </ul>
 <div>Usuário: <span id="user">__USER__</span> <a href="#">Pagina Inicial</a> <a href="#">Sair</a></div>
 <div class="ui-messages" id="msg" style="display:none"></div>
+<div id="overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:10"></div>
+<div id="notice" class="ui-dialog" role="dialog" style="display:none;position:fixed;top:30%;left:30%;z-index:11;background:#fff;padding:20px">
+  <span class="ui-dialog-title">Comunicado Importante</span>
+  <p>Observação: Os arquivos de download estarão disponíveis durante 60 dias a partir da sua data de processamento.</p>
+  <button id="entendi">Entendi</button>
+</div>
 
 <section id="nfce" style="display:none">
   <h3>Consultar NFCE</h3>
@@ -198,12 +206,12 @@ LEGACY_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><
   Status da NFC-e: <input type="radio" name="c-st" id="c-at"><label for="c-at">Ativas</label>
   <input type="radio" name="c-st" id="c-ca"><label for="c-ca">Canceladas</label>
   <input type="radio" name="c-st" id="c-to"><label for="c-to">Todas</label>
-  <label for="c-serie">Série</label><input id="c-serie">
-  <label for="c-ini">Data de Emissão Inicial</label><input id="c-ini">
-  <label for="c-fim">Data de Emissão Final</label><input id="c-fim">
+  <table class="form"><tr><td>Série</td><td><input id="c-serie"></td></tr>
+  <tr><td>Data de Emissão Inicial</td><td><input id="c-ini"></td></tr>
+  <tr><td>Data de Emissão Final</td><td><input id="c-fim"></td></tr></table>
   <button id="c-agendar">Agendar exportação</button>
   <h4>Agendamentos de exportação NFCe</h4>
-  <table id="c-table"><thead><tr><th>ID</th><th>Situação</th><th>Data de criação</th><th>IE</th><th>Data processamento</th><th>Ações</th></tr></thead><tbody></tbody></table>
+  <table id="c-table"><thead><tr><th>ID</th><th>Situação</th><th>Data de criação</th><th>Data processamento</th><th>CNPJ<select><option>Selecione...</option></select></th><th>IE<select><option>Selecione...</option></select></th><th>Ações</th></tr></thead><tbody></tbody></table>
 </section>
 
 <section id="nfe" style="display:none">
@@ -214,8 +222,8 @@ LEGACY_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><
   <div id="n-chave-box"><label for="n-ch">Chave NFE (DANFE):</label><input id="n-ch"><button>Exportar</button></div>
   <div id="n-periodo" style="display:none">
     <label for="n-insc">Inscrição:</label><select id="n-insc">__OPTIONS__</select>
-    <label for="n-ini">Data de Emissão Inicial</label><input id="n-ini">
-    <label for="n-fim">Data de Emissão Final</label><input id="n-fim">
+    <table class="form"><tr><td>Data de Emissão Inicial</td><td><input id="n-ini"></td></tr>
+    <tr><td>Data de Emissão Final</td><td><input id="n-fim"></td></tr></table>
     <button id="n-agendar">Agendar exportação</button>
   </div>
   <h4>Exportação de Notas Fiscais Agendadas</h4>
@@ -235,8 +243,12 @@ document.querySelectorAll('[data-go]').forEach((a) => a.onclick = (e) => {
   $('nfce').style.display = a.dataset.go === 'nfce' ? 'block' : 'none';
   $('nfe').style.display = a.dataset.go === 'nfe' ? 'block' : 'none';
   $('msg').style.display = 'none';
+  if (a.dataset.go === 'nfce' && __NOTICE__ && !sessionStorage.getItem('noticeSeen')) {
+    $('overlay').style.display = 'block'; $('notice').style.display = 'block';
+  }
   render();
 });
+$('entendi').onclick = () => { $('overlay').style.display = 'none'; $('notice').style.display = 'none'; sessionStorage.setItem('noticeSeen', '1'); };
 ['n-chave', 'n-emit', 'n-dest'].forEach((id) => $(id).onchange = () => {
   const periodo = !$('n-chave').checked;
   $('n-periodo').style.display = periodo ? 'block' : 'none';
@@ -251,8 +263,10 @@ function render() {
     reqs().filter(r => r.family === fam).slice().reverse().forEach((r) => {
       const tr = document.createElement('tr');
       const ie = fmtIe(ieOverride || r.ie);
-      tr.innerHTML = '<td>' + r.id + '</td><td>' + status + '</td><td>' + r.created + '</td>' +
-        (fam === 'nfe' ? '<td></td>' : '') + '<td>' + ie + '</td><td>' + r.created + '</td>' +
+      tr.innerHTML = fam === 'nfce'
+        ? '<td>' + r.id + '</td><td>' + status + '</td><td>' + r.created + '</td><td>' + r.created + '</td><td></td><td>' + ie + '</td>'
+        : '<td>' + r.id + '</td><td>' + status + '</td><td>' + r.created + '</td><td></td><td>' + ie + '</td><td>' + r.created + '</td>';
+      tr.innerHTML +=
         '<td><button>Info</button><button class="dl">Download</button><button>Excluir</button></td>';
       tr.querySelector('.dl').onclick = async () => {
         const res = await fetch('/siatweb/api/download/' + r.id);
@@ -340,7 +354,8 @@ def build_handler(state: MockState):
                 LEGACY_HTML.replace("__USER__", state.legacy_user)
                 .replace("__OPTIONS__", _options(state))
                 .replace("__STATUS__", json.dumps(state.export_status))
-                .replace("__IE_OVERRIDE__", json.dumps(state.rows_ie_override)),
+                .replace("__IE_OVERRIDE__", json.dumps(state.rows_ie_override))
+                .replace("__NOTICE__", json.dumps(state.show_notice)),
             )
         else:
             await route.fulfill(status=404, body="not found")

@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from playwright.async_api import Error as PlaywrightError, Locator, Page
 
 from app.automation.base import AutomationContext
-from app.automation.siat.page_helpers import find_clickable, first_visible, wait_idle
+from app.automation.siat.page_helpers import dialog_by_title, find_clickable, first_visible, wait_idle
 from app.automation.siat.selectors import SiatSelectors, get_selectors
 from app.jobs.errors import AutomationError, ErrorCode, TaxpayerMismatchError
 from app.jobs.models import Client, DocumentType
@@ -194,7 +194,25 @@ class SiatLegacy:
             what = "Autoatendimento > NF-e > Consultar/Exportar NF-e"
         await self._menu(*patterns, what=what)
         self.ctx.state["legacy_page"] = family
+        await self.dismiss_notices()
         await self.ctx.reporter.screenshot(f"legacy_{family}")
+
+    async def dismiss_notices(self) -> None:
+        """Fecha avisos informativos ("Comunicado Importante" -> [Entendi]), registrando o texto."""
+        for _ in range(3):
+            dialog = await dialog_by_title(self.page, self.sel.rx("legacy_notice_title"), timeout_ms=2_000)
+            if dialog is None:
+                return
+            try:
+                text = re.sub(r"\s+", " ", (await dialog.inner_text()).strip())
+            except PlaywrightError:
+                text = ""
+            button = await find_clickable(dialog, self.sel.rx("legacy_notice_button"), timeout_ms=3_000)
+            if button is None:
+                raise AutomationError(ErrorCode.SELECTOR_NOT_FOUND, "Aviso do SIAT web sem botão 'Entendi'.")
+            await button.click()
+            await wait_idle(self.page, 5_000)
+            await self.ctx.logger.info(f"Aviso do SIAT web fechado: {text[:400]}", step="navigating_export")
 
     # -- contribuinte -----------------------------------------------------------
     async def logged_user(self) -> str | None:

@@ -69,6 +69,12 @@ async def find_field(scope: Page | Locator, label: re.Pattern[str], timeout_ms: 
             scope.get_by_role("textbox", name=label),
             scope.get_by_role("combobox", name=label),
             scope.get_by_placeholder(label),
+            # telas antigas (JSF em tabela): o texto do rótulo não tem <label for>;
+            # o campo é o primeiro input/select que vem depois do texto
+            scope.get_by_text(label).locator(
+                "xpath=following::*[self::input[not(@type='hidden') and not(@type='radio') "
+                "and not(@type='checkbox') and not(@type='button') and not(@type='submit')] or self::select][1]"
+            ),
         ],
         timeout_ms,
     )
@@ -140,7 +146,7 @@ async def dialog_by_title(page: Page, title: re.Pattern[str], timeout_ms: int = 
     return await first_visible(
         [
             page.get_by_role("dialog").filter(has_text=title),
-            page.locator(".v-dialog--active, .v-dialog").filter(has_text=title),
+            page.locator(".v-dialog--active, .v-dialog, .ui-dialog, .modal").filter(has_text=title),
         ],
         timeout_ms,
     )
