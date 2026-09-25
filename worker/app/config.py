@@ -86,8 +86,8 @@ class Settings(BaseSettings):
 
     profile_setup_timeout: int = 900  # segundos com o perfil aberto para configuração manual
     # e-AGEAT costuma abrir com "Error 500"; o contorno é fechar a aba e clicar de novo
-    module_open_attempts: int = 5
-    module_retry_delay: float = 3.0
+    module_open_attempts: int = 7
+    module_retry_delay: float = 5.0  # espera cresce: 5s, 10s, 15s...
     # status das NFC-e exportadas: ativas | canceladas | todas
     nfce_status: str = "todas"
 

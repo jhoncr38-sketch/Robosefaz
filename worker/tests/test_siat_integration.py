@@ -186,8 +186,8 @@ async def test_eageat_500_and_unidentified_close_and_click_again(repo: FakeRepo,
         assert len(ctx.page.context.pages) == 2  # type: ignore[union-attr]
     assert state.module_opens == 3
     logs = repo.log_messages()
-    assert any("erro do servidor (tentativa 1/5)" in m for m in logs)
-    assert any("'Usuário não identificado' (tentativa 2/5)" in m for m in logs)
+    assert any("erro do servidor (tentativa 1/7)" in m for m in logs)
+    assert any("'Usuário não identificado' (tentativa 2/7)" in m for m in logs)
 
 
 async def test_eageat_always_failing_is_retryable(repo: FakeRepo, integration_settings: Settings) -> None:

@@ -68,6 +68,16 @@ class SiatNavigation:
             link = await find_clickable(painel, self.sel.rx("module_link"), timeout_ms=10_000)
             if link is None:
                 raise AutomationError(ErrorCode.SELECTOR_NOT_FOUND, "Card do e-AGEAT não encontrado no Painel de Aplicações.")
+            try:
+                href = (await link.get_attribute("href")) or ""
+            except Exception:  # noqa: BLE001
+                href = ""
+            if href:
+                # só caminho (sem parâmetros, que podem conter tokens de acesso)
+                await self.ctx.logger.debug(
+                    f"Card e-AGEAT aponta para: {href.split('?')[0]} (com parâmetros: {'sim' if '?' in href else 'não'})",
+                    step="opening_siat_module",
+                )
             pages_before = len(painel.context.pages)
             await link.click()
             await self._adopt_new_tab(pages_before)
@@ -86,15 +96,16 @@ class SiatNavigation:
                 "fechando e clicando de novo no Painel de Aplicações.",
                 step="opening_siat_module",
             )
-            # mesmo contorno do usuário: fecha a aba problemática e clica de novo
+            # contorno do usuário: fecha a aba problemática e clica de novo. O painel
+            # é RECARREGADO para gerar um link novo (o anterior pode ter sido consumido),
+            # com espera crescente para dar tempo ao servidor do e-AGEAT.
             if self.page is not painel:
                 await self.page.close()
                 self.ctx.page = painel
                 await painel.bring_to_front()
-            else:
-                await painel.goto(painel_url, wait_until="domcontentloaded")
+            await asyncio.sleep(self.ctx.settings.module_retry_delay * attempt)
+            await painel.goto(painel_url, wait_until="domcontentloaded")
             await wait_idle(painel)
-            await asyncio.sleep(self.ctx.settings.module_retry_delay)
         raise AutomationError(
             ErrorCode.SIAT_UNAVAILABLE,
             f"O e-AGEAT não abriu corretamente em {attempts} tentativas seguidas.",
