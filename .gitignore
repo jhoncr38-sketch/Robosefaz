@@ -41,3 +41,6 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# exceção: certificados FALSOS usados só nos testes do painel
+!apps/web/tests/fixtures/*.pfx
