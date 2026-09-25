@@ -84,14 +84,36 @@ class SiatExportScheduler:
             await target.click()
         await wait_idle(self.page, 10_000)
 
+    async def _choose_in_group(self, group: re.Pattern[str], option: re.Pattern[str], what: str) -> None:
+        """Marca a opção DENTRO da linha do grupo (ex.: "Todas" de "Status" e não de "Tipo de nota")."""
+        label = await first_visible([self.page.get_by_text(group)], 10_000)
+        if label is None:
+            raise AutomationError(ErrorCode.SELECTOR_NOT_FOUND, f"Grupo não encontrado: {what} ({group.pattern}).")
+        row = label.locator("xpath=ancestor::tr[1]")
+        scope = row if await row.count() else label.locator("xpath=..")
+        target = await first_visible([scope.get_by_label(option), scope.get_by_text(option)], 5_000)
+        if target is None:
+            raise AutomationError(ErrorCode.SELECTOR_NOT_FOUND, f"Opção não encontrada: {what} ({option.pattern}).")
+        try:
+            await target.check(timeout=5_000)
+        except PlaywrightError:
+            await target.click()
+        await wait_idle(self.page, 10_000)
+
     async def _fill_form(self, document_type: DocumentType, start_date: date, end_date: date) -> None:
         role = "legacy_radio_destinatario" if document_type == DocumentType.NFE_RECEBIDAS else "legacy_radio_emitente"
         await self._choose(self.sel.rx(role), "Tipo de consulta (Emitente/Destinatário)")
         await self.legacy.select_client_inscricao()
         if document_type == DocumentType.NFCE:
-            await self._choose(self.sel.rx("legacy_tipo_nota_saida"), "Tipo de nota: Saída")
-            status_key = f"legacy_status_{self.ctx.settings.nfce_status}"
-            await self._choose(self.sel.rx(status_key), f"Status da NFC-e: {self.ctx.settings.nfce_status}")
+            tipo, status = "saida", self.ctx.settings.nfce_status
+        else:
+            tipo, status = self.ctx.settings.nfe_tipo_nota, self.ctx.settings.nfe_status
+        await self._choose_in_group(
+            self.sel.rx("legacy_group_tipo_nota"), self.sel.rx(f"legacy_tipo_nota_{tipo}"), f"Tipo de nota: {tipo}"
+        )
+        await self._choose_in_group(
+            self.sel.rx("legacy_group_status"), self.sel.rx(f"legacy_status_{status}"), f"Status: {status}"
+        )
         await fill_field(self.page, self.sel.rx("legacy_date_start_label"), format_br_date(start_date), what="Data inicial")
         await fill_field(self.page, self.sel.rx("legacy_date_end_label"), format_br_date(end_date), what="Data final")
 
@@ -107,7 +129,11 @@ class SiatExportScheduler:
         await self.ctx.logger.info(
             f"Formulário preenchido: {document_type.value}, IE {self.legacy.require_ie()}, "
             f"{format_br_date(start_date)} a {format_br_date(end_date)}"
-            + (f", status {self.ctx.settings.nfce_status}" if family == NFCE else ""),
+            + (
+                f", tipo saída, status {self.ctx.settings.nfce_status}"
+                if family == NFCE
+                else f", tipo {self.ctx.settings.nfe_tipo_nota}, status {self.ctx.settings.nfe_status}"
+            ),
             step="scheduling",
             metadata={"document_type": document_type.value, "competence": competence},
         )

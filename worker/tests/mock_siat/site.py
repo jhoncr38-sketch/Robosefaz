@@ -201,11 +201,11 @@ LEGACY_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><
   <input type="radio" name="c-tipo" id="c-emit"><label for="c-emit">Contribuinte como Emitente</label>
   <input type="radio" name="c-tipo" id="c-dest"><label for="c-dest">Contribuinte como Destinatário</label>
   <label for="c-insc">Inscrição::</label><select id="c-insc">__OPTIONS__</select>
-  Tipo de nota: <input type="radio" name="c-nota" id="c-ent"><label for="c-ent">Entrada</label>
-  <input type="radio" name="c-nota" id="c-sai"><label for="c-sai">Saída</label>
-  Status da NFC-e: <input type="radio" name="c-st" id="c-at"><label for="c-at">Ativas</label>
+  <table class="grp"><tr><td>Tipo de nota:</td><td><input type="radio" name="c-nota" id="c-ent"><label for="c-ent">Entrada</label>
+  <input type="radio" name="c-nota" id="c-sai"><label for="c-sai">Saída</label></td></tr>
+  <tr><td>Status da NFC-e:</td><td><input type="radio" name="c-st" id="c-at" checked><label for="c-at">Ativas</label>
   <input type="radio" name="c-st" id="c-ca"><label for="c-ca">Canceladas</label>
-  <input type="radio" name="c-st" id="c-to"><label for="c-to">Todas</label>
+  <input type="radio" name="c-st" id="c-to"><label for="c-to">Todas</label></td></tr></table>
   <table class="form"><tr><td>Série</td><td><input id="c-serie"></td></tr>
   <tr><td>Data de Emissão Inicial</td><td><input id="c-ini"></td></tr>
   <tr><td>Data de Emissão Final</td><td><input id="c-fim"></td></tr></table>
@@ -222,6 +222,15 @@ LEGACY_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><
   <div id="n-chave-box"><label for="n-ch">Chave NFE (DANFE):</label><input id="n-ch"><button>Exportar</button></div>
   <div id="n-periodo" style="display:none">
     <label for="n-insc">Inscrição:</label><select id="n-insc">__OPTIONS__</select>
+    <table class="grp"><tr><td>Razão Social:</td><td><input id="n-razao" disabled></td></tr>
+    <tr><td>Tipo de nota:</td><td><input type="radio" name="n-nota" id="n-nt" checked><label for="n-nt">Todas</label>
+      <input type="radio" name="n-nota" id="n-ne"><label for="n-ne">Entrada</label>
+      <input type="radio" name="n-nota" id="n-ns"><label for="n-ns">Saída</label></td></tr>
+    <tr><td>Status da Nota:</td><td><input type="radio" name="n-st" id="n-sa"><label for="n-sa">Ativas</label>
+      <input type="radio" name="n-st" id="n-sc"><label for="n-sc">Canceladas</label>
+      <input type="radio" name="n-st" id="n-si"><label for="n-si">Inutilizadas</label>
+      <input type="radio" name="n-st" id="n-sd"><label for="n-sd">Denegadas</label>
+      <input type="radio" name="n-st" id="n-sT" checked><label for="n-sT">Todas</label></td></tr></table>
     <table class="form"><tr><td>Data de Emissão Inicial</td><td><input id="n-ini"></td></tr>
     <tr><td>Data de Emissão Final</td><td><input id="n-fim"></td></tr></table>
     <button id="n-agendar">Agendar exportação</button>
@@ -287,6 +296,8 @@ async function agendar(fam) {
         status: $('c-at').checked ? 'ativas' : ($('c-ca').checked ? 'canceladas' : ($('c-to').checked ? 'todas' : '')),
         ini: $('c-ini').value, fim: $('c-fim').value }
     : { tipo: $('n-emit').checked ? 'emitente' : ($('n-dest').checked ? 'destinatario' : ''), ie: $('n-insc').value,
+        nota: $('n-nt').checked ? 'todas' : ($('n-ne').checked ? 'entrada' : ($('n-ns').checked ? 'saida' : '')),
+        status: ['n-sa', 'n-sc', 'n-si', 'n-sd', 'n-sT'].map(i => $(i).checked ? {'n-sa':'ativas','n-sc':'canceladas','n-si':'inutilizadas','n-sd':'denegadas','n-sT':'todas'}[i] : '').join(''),
         ini: $('n-ini').value, fim: $('n-fim').value };
   const missing = !p.tipo || !p.ie || !p.ini || !p.fim || (fam === 'nfce' && (!p.nota || !p.status));
   $('msg').style.display = 'block';

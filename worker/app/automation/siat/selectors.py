@@ -101,10 +101,17 @@ class SiatSelectors:
     legacy_radio_emitente: str = r"contribuinte\s+como\s+emitente"
     legacy_radio_destinatario: str = r"contribuinte\s+como\s+destinat[áa]rio"
     legacy_inscricao_label: str = r"inscri[çc][ãa]o"
+    # grupos de opções (a opção "Todas" aparece em mais de um grupo na NF-e)
+    legacy_group_tipo_nota: str = r"tipo\s+de\s+nota"
+    legacy_group_status: str = r"status\s+da\s+(nfc-?e|nota)"
+    legacy_tipo_nota_todas: str = r"^\s*todas\s*$"
+    legacy_tipo_nota_entrada: str = r"^\s*entrada\s*$"
     legacy_tipo_nota_saida: str = r"^\s*sa[íi]da\s*$"
     legacy_status_ativas: str = r"^\s*ativas\s*$"
     legacy_status_canceladas: str = r"^\s*canceladas\s*$"
     legacy_status_todas: str = r"^\s*todas\s*$"
+    legacy_status_inutilizadas: str = r"^\s*inutilizadas\s*$"
+    legacy_status_denegadas: str = r"^\s*denegadas\s*$"
     legacy_date_start_label: str = r"data\s+de\s+emiss[ãa]o\s+inicial|data\s+inicial"
     legacy_date_end_label: str = r"data\s+de\s+emiss[ãa]o\s+final|data\s+final"
     # aviso informativo ao abrir a exportação ("Comunicado Importante" [Entendi])

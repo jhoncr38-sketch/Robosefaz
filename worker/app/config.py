@@ -90,6 +90,10 @@ class Settings(BaseSettings):
     module_retry_delay: float = 5.0  # espera cresce: 5s, 10s, 15s...
     # status das NFC-e exportadas: ativas | canceladas | todas
     nfce_status: str = "todas"
+    # NF-e (emitidas e recebidas): status ativas|canceladas|inutilizadas|denegadas|todas
+    nfe_status: str = "ativas"
+    # NF-e: tipo de nota todas|entrada|saida
+    nfe_tipo_nota: str = "todas"
 
     log_level: str = "INFO"
 
@@ -99,6 +103,22 @@ class Settings(BaseSettings):
         v = v.strip().lower()
         if v not in {"chrome", "msedge", "chromium"}:
             raise ValueError("BROWSER_CHANNEL deve ser chrome, msedge ou chromium")
+        return v
+
+    @field_validator("nfe_status")
+    @classmethod
+    def _nfe_status(cls, v: str) -> str:
+        v = v.strip().lower()
+        if v not in {"ativas", "canceladas", "inutilizadas", "denegadas", "todas"}:
+            raise ValueError("NFE_STATUS deve ser ativas, canceladas, inutilizadas, denegadas ou todas")
+        return v
+
+    @field_validator("nfe_tipo_nota")
+    @classmethod
+    def _nfe_tipo_nota(cls, v: str) -> str:
+        v = v.strip().lower().replace("í", "i")
+        if v not in {"todas", "entrada", "saida"}:
+            raise ValueError("NFE_TIPO_NOTA deve ser todas, entrada ou saida")
         return v
 
     @field_validator("nfce_status")

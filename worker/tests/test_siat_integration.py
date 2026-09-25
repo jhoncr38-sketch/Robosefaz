@@ -95,7 +95,11 @@ async def test_full_flow_schedule_check_download(repo: FakeRepo, integration_set
     assert nfce == {"family": "nfce", "tipo": "emitente", "ie": "123456789", "nota": "saida",
                     "status": "todas", "ini": "01/08/2026", "fim": "31/08/2026", "id": "9237950"}
     assert (issued["family"], issued["tipo"], issued["ie"]) == ("nfe", "emitente", "123456789")
+    # NF-e: tipo "Todas" e status "Ativas" (o mock deixa status "Todas" pré-marcado para
+    # provar que o robô marca a opção dentro do grupo certo)
+    assert (issued["nota"], issued["status"]) == ("todas", "ativas")
     assert (received["family"], received["tipo"]) == ("nfe", "destinatario")
+    assert (received["nota"], received["status"]) == ("todas", "ativas")
     assert received["ini"] == "01/08/2026" and received["fim"] == "31/08/2026"
 
     path = Path(stored.filepath)
