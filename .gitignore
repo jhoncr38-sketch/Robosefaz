@@ -1,0 +1,43 @@
+# Segredos — nunca versionar
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.pem
+*.key
+
+# Dados de execução (arquivos fiscais, perfis de navegador, screenshots, cofre)
+storage/downloads/*
+storage/browser_profiles/*
+storage/errors/*
+storage/screenshots/*
+storage/secrets/*
+!storage/**/.gitkeep
+
+# Seletores calibrados localmente
+worker/config/siat_selectors.json
+
+# Python
+worker/.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+# Node / Next.js
+node_modules/
+apps/web/.next/
+apps/web/out/
+apps/web/next-env.d.ts
+*.tsbuildinfo
+npm-debug.log*
+
+# SO / editores
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/

@@ -1,0 +1,11 @@
+{
+  "name": "siat-migrations-test",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node run-migrations.test.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.0"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "_comentario": "Copie para siat_selectors.json e ajuste SOMENTE o que mudar no portal. Valores são regex (sem diferenciar maiúsculas). Veja docs/siat-selectors.md.",
+  "module_link": "e-?\\s?ageat",
+  "eageat_menu_root": "^\\s*autorregulariza[çc][ãa]o\\s*$",
+  "eageat_menu_siat": "^\\s*siat\\s*$",
+  "legacy_menu_root": "^\\s*autoatendimento\\s*$",
+  "legacy_menu_nfce_export": "^\\s*consultar\\s*/\\s*exportar\\s+nfc-?e\\s*$",
+  "legacy_menu_nfe_export": "^\\s*consultar\\s*/\\s*exportar\\s+nf-?e\\s*$",
+  "legacy_schedule_button": "agendar\\s+exporta[çc][ãa]o"
+}
