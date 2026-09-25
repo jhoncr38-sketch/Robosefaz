@@ -124,6 +124,7 @@ class SiatSelectors:
     legacy_table_ie_header: str = r"^\s*ie\b"
     legacy_download_button: str = r"^\s*download\s*$"
     legacy_paginator_next: str = ".ui-paginator-next"
+    legacy_paginator_first: str = ".ui-paginator-first"
 
     export_success_message: str = r"agendad[oa]|agendamento\s+(realizado|efetuado|inclu[íi]do|cadastrado)|sucesso"
     export_error_message: str = r"erro|n[ãa]o\s+foi\s+poss[íi]vel|inv[áa]lid|obrigat[óo]ri"
@@ -178,7 +179,7 @@ def build_selectors(overrides: dict | None = None) -> SiatSelectors:
     for key, value in list(kwargs.items()):
         for pattern in value if isinstance(value, tuple) else (value,):
             # caminhos e seletores CSS não são regex
-            if key.endswith(("_path", "_container")) or key == "legacy_paginator_next":
+            if key.endswith(("_path", "_container")) or key.startswith("legacy_paginator_"):
                 continue
             try:
                 re.compile(pattern)

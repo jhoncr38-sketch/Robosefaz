@@ -4,7 +4,8 @@ import { getAccessToken } from "@/lib/auth";
 
 // URL da API FastAPI (somente servidor). O token do usuário é repassado para
 // que a API valide sessão e papel no Supabase.
-export const WORKER_API_URL = (process.env.WORKER_API_URL ?? "http://127.0.0.1:8000").replace(/\/$/, "");
+// "||" (e não "??"): variável cadastrada vazia na Vercel também cai no padrão
+export const WORKER_API_URL = (process.env.WORKER_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 
 export class WorkerApiError extends Error {
   constructor(

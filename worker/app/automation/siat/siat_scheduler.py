@@ -156,6 +156,8 @@ class SiatExportScheduler:
         button = await find_clickable(self.page, self.sel.rx("legacy_schedule_button"), timeout_ms=10_000)
         if button is None:
             raise AutomationError(ErrorCode.SELECTOR_NOT_FOUND, "Botão 'Agendar exportação' não encontrado.")
+        if self.ctx.on_submit is not None:
+            await self.ctx.on_submit()
         await button.click()
         await wait_idle(self.page, 20_000)
 

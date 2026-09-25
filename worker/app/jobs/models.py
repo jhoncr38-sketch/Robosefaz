@@ -144,6 +144,7 @@ class Task(_Base):
     dedup_key: str | None = None
     superseded: bool = False
     external_request_id: str | None = None
+    requested_at: datetime | None = None
     retry_count: int = 0
     result: dict[str, Any] = Field(default_factory=dict)
 

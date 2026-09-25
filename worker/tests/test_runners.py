@@ -245,3 +245,33 @@ class TestWorkerInterrupt:
             await task
         assert repo.job(job.id)["status"] == "waiting_sefaz"
         assert repo.job(job.id)["locked_by"] is None
+
+
+class TestNoDuplicateAfterSubmit:
+    async def test_failure_after_click_never_resubmits(self, repo: FakeRepo, provider: FakeProvider, deps) -> None:  # noqa: ANN001
+        # O clique em "Agendar exportação" aconteceu, mas o robô falhou antes de ler o ID.
+        _, job = _setup(repo, operations=[TaskType.NFCE_EXPORT, TaskType.NFE_ISSUED_EXPORT], attempts=0)
+        original = provider.schedule
+        state = {"first": True}
+
+        async def schedule_then_crash(ctx, task):  # noqa: ANN001, ANN202
+            if state["first"] and task.task_type == TaskType.NFCE_EXPORT:
+                state["first"] = False
+                await ctx.on_submit()  # o robô clicou no botão final...
+                raise AutomationError(ErrorCode.TIMEOUT, "página travou após o clique")  # ...e caiu
+            return await original(ctx, task)
+
+        provider.schedule = schedule_then_crash  # type: ignore[method-assign]
+        await SchedulerRunner(deps).run_once()
+        st = _statuses(repo, job.id)
+        assert st[TaskType.NFCE_EXPORT] == TaskStatus.SCHEDULED  # já conta como enviado
+        assert repo.job(job.id)["status"] == "queued"  # retentativa agendada
+
+        repo.jobs[job.id]["next_attempt_at"] = None
+        provider.calls.clear()
+        await SchedulerRunner(deps).run_once()
+        assert "schedule:NFCE_EXPORT" not in provider.calls  # NUNCA reenviado
+        assert "schedule:NFE_ISSUED_EXPORT" in provider.calls
+        assert repo.job(job.id)["status"] == "waiting_sefaz"
+        nfce = next(t for t in repo.tasks_of(job.id) if t["task_type"] == TaskType.NFCE_EXPORT)
+        assert nfce["requested_at"] is not None and not nfce.get("external_request_id")

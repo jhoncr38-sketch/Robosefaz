@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { inspectPfx, saveCertificate, saveCertificateSecret } from "@/app/actions/certificates";
+import { saveCertificate, saveCertificateSecret } from "@/app/actions/certificates";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -25,6 +25,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCNPJ } from "@/lib/cnpj";
+import { parsePfx, PfxError, type PfxInfo } from "@/lib/pfx";
 import type { Certificate } from "@/lib/types";
 
 export interface ClientOption {
@@ -99,16 +100,15 @@ export function CertificateFormDialog({
       toast.error("Selecione o arquivo do certificado (.pfx ou .p12).");
       return;
     }
-    const fd = new FormData();
-    fd.set("file", file);
-    fd.set("password", password);
     startInspect(async () => {
-      const res = await inspectPfx(fd);
-      if (!res.ok || !res.data) {
-        toast.error(res.ok ? "Falha ao ler certificado." : res.error);
+      // leitura local no navegador: arquivo e senha não saem deste computador
+      let info: PfxInfo;
+      try {
+        info = parsePfx(await file.arrayBuffer(), password);
+      } catch (e) {
+        toast.error(e instanceof PfxError ? e.message : "Não foi possível ler o certificado.");
         return;
       }
-      const info = res.data;
       setForm((f) => ({
         ...f,
         type: "A1",
@@ -120,7 +120,7 @@ export function CertificateFormDialog({
         valid_until: toLocalInput(info.valid_until),
       }));
       setPfxCnpj(info.cnpj);
-      toast.success("Metadados lidos do certificado. O arquivo não foi armazenado.");
+      toast.success("Dados lidos no seu navegador. O arquivo e a senha não foram enviados a lugar nenhum.");
     });
   }
 
@@ -220,6 +220,7 @@ export function CertificateFormDialog({
             <label className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
               <Checkbox checked={storeSecret} onCheckedChange={(v) => setStoreSecret(v === true)} disabled={!password} />
               Guardar a senha no cofre seguro do worker (Windows Credential Manager). Nunca é salva no banco.
+              Requer a API do worker acessível (painel aberto na máquina do worker).
             </label>
             {pfxCnpj && selectedClient && pfxCnpj !== selectedClient.cnpj ? (
               <Alert className="mt-3 border-amber-200 bg-amber-50 text-amber-900">

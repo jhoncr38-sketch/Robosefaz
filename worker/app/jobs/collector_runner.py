@@ -73,6 +73,9 @@ class CollectorRunner(BaseRunner):
 
                 for task, st in zip(pending, statuses, strict=True):
                     await reporter.check_cancel()
+                    if st.external_request_id and not task.external_request_id:
+                        await self.repo.update_task(task.id, external_request_id=st.external_request_id)
+                        task.external_request_id = st.external_request_id
                     if st.status == ExportStatus.PROCESSED:
                         await self.repo.update_task(task.id, status=TaskStatus.PROCESSED.value)
                         await reporter.step(JobStatus.DOWNLOAD_AVAILABLE, f"{task.document_type} processado")

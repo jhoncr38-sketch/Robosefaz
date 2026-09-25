@@ -103,7 +103,9 @@ class SchedulerRunner(BaseRunner):
 
                     await reporter.step(TASK_STEP[task.task_type])
                     await self.repo.update_task(task.id, status=TaskStatus.RUNNING.value, started_at=now_utc())
+                    ctx.on_submit = self._submit_marker(task, logger)
                     result = await provider.schedule(ctx, task)
+                    ctx.on_submit = None
                     new_status = TaskStatus.DRY_RUN if result.dry_run else TaskStatus.SCHEDULED
                     await self.repo.update_task(
                         task.id,
@@ -132,6 +134,27 @@ class SchedulerRunner(BaseRunner):
             await self._failed(job, reporter, tasks, logger, ctx, exc)
         finally:
             await self.repo.release_lock(job.id, self.deps.worker_id)
+
+    def _submit_marker(self, task: Task, logger: JobLogger):  # noqa: ANN202
+        """Marca a tarefa como agendada no banco ANTES do clique final.
+
+        Se algo falhar depois do clique (antes de ler o ID), a retentativa não
+        reenvia o pedido; o Collector recupera o ID pela IE e pela data de criação.
+        """
+
+        async def mark() -> None:
+            submitted = now_utc()
+            await self.repo.update_task(
+                task.id,
+                status=TaskStatus.SCHEDULED.value,
+                requested_at=submitted,
+                result={"submitted_at": submitted.isoformat()},
+            )
+            task.status = TaskStatus.SCHEDULED
+            task.requested_at = submitted
+            await logger.debug(f"{task.task_type}: marcada como enviada antes do clique.", step="scheduling")
+
+        return mark
 
     # -- desfechos ---------------------------------------------------------------
     async def _finish_without_work(self, job: Job, reporter: JobReporter, all_tasks: list[Task]) -> None:

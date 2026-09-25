@@ -187,3 +187,40 @@ def test_server_error_markers() -> None:
     assert rx.search("Error 500--Internal Server Error")
     assert rx.search("503 Service Unavailable")
     assert not rx.search("Exportação de Documentos Fiscais")
+
+
+class TestRecoverRequestId:
+    HEADERS = ["ID", "Situação", "Data de criação", "Data processamento", "CNPJ", "IE", "Ações"]
+
+    def _rows(self, *rows: tuple[str, str, str]) -> list:
+        return parse_export_table(self.HEADERS, [[i, "Processado", created, "", "", ie, ""] for i, created, ie in rows])
+
+    def test_recovers_unique_candidate(self) -> None:
+        from datetime import datetime, timezone
+
+        from app.automation.siat.siat_legacy import recover_request_id
+
+        clicked = datetime(2026, 9, 25, 9, 54, 20, tzinfo=timezone.utc)  # 06:54:20 no horário do SIAT (UTC-3)
+        rows = self._rows(
+            ("9316160", "25/09/2026 06:54:21", "19662259-0"),  # o pedido certo
+            ("9237944", "09/09/2026 11:39:43", "19662259-0"),  # antigo
+            ("9316199", "25/09/2026 06:54:30", "98765432-1"),  # outra IE
+        )
+        assert recover_request_id(rows, "196622590", clicked, set()) == "9316160"
+        assert recover_request_id(rows, "196622590", clicked, {"9316160"}) is None  # já usado por outra tarefa
+
+    def test_ambiguous_returns_none(self) -> None:
+        from datetime import datetime, timezone
+
+        from app.automation.siat.siat_legacy import recover_request_id
+
+        clicked = datetime(2026, 9, 25, 9, 54, 20, tzinfo=timezone.utc)
+        rows = self._rows(("1111111", "25/09/2026 06:54:21", "196622590"), ("2222222", "25/09/2026 06:55:00", "196622590"))
+        assert recover_request_id(rows, "196622590", clicked, set()) is None  # nunca adivinha
+
+    def test_parse_siat_datetime(self) -> None:
+        from app.automation.siat.siat_legacy import parse_siat_datetime
+
+        dt = parse_siat_datetime("09/09/2026 11:39:43")
+        assert dt is not None and dt.utcoffset().total_seconds() == -3 * 3600
+        assert parse_siat_datetime("") is None

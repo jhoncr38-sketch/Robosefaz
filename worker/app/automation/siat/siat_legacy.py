@@ -11,6 +11,7 @@ import asyncio
 import re
 import unicodedata
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 
 from playwright.async_api import Error as PlaywrightError, Locator, Page
 
@@ -97,6 +98,44 @@ def new_request_ids(before: set[str], after: list[LegacyRow], client_ie: str | N
         for r in after
         if r.request_id not in before and (not r.ie or not client_ie or ie_matches(r.ie, client_ie))
     ]
+
+
+# horário exibido pelo SIAT (Piauí, UTC-3, sem horário de verão)
+SIAT_TZ = timezone(timedelta(hours=-3))
+
+
+def parse_siat_datetime(value: str) -> datetime | None:
+    m = re.search(r"(\d{2})/(\d{2})/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?", value or "")
+    if not m:
+        return None
+    d, mo, y, h, mi, sec = m.groups()
+    return datetime(int(y), int(mo), int(d), int(h), int(mi), int(sec or 0), tzinfo=SIAT_TZ)
+
+
+def recover_request_id(
+    rows: list[LegacyRow],
+    client_ie: str,
+    requested_at: datetime,
+    claimed: set[str],
+    *,
+    before: timedelta = timedelta(minutes=2),
+    after: timedelta = timedelta(minutes=10),
+) -> str | None:
+    """ID do agendamento cujo ID não foi anotado: mesma IE, criado logo após o clique.
+
+    Só devolve se houver exatamente UM candidato (nunca adivinha).
+    """
+    if requested_at.tzinfo is None:
+        requested_at = requested_at.replace(tzinfo=timezone.utc)
+    candidates = []
+    for r in rows:
+        if r.request_id in claimed or not ie_matches(r.ie, client_ie):
+            continue
+        created = parse_siat_datetime(r.created)
+        if created and requested_at - before <= created <= requested_at + after:
+            candidates.append(r.request_id)
+    unique = list(dict.fromkeys(candidates))
+    return unique[0] if len(unique) == 1 else None
 
 
 def pick_inscricao_option(options: list[str], client_ie: str) -> str | None:
@@ -315,8 +354,32 @@ class SiatLegacy:
         except PlaywrightError:
             return False
 
+    async def first_page(self) -> None:
+        first = self.page.locator(self.sel.legacy_paginator_first).first
+        try:
+            if await first.count() == 0 or not await first.is_visible():
+                return
+            if "disabled" in ((await first.get_attribute("class")) or ""):
+                return
+            await first.click()
+            await wait_idle(self.page, 10_000)
+        except PlaywrightError:
+            return
+
+    async def read_all_rows(self, max_pages: int = 5) -> list[LegacyRow]:
+        await self.first_page()
+        collected: list[LegacyRow] = []
+        for _ in range(max_pages):
+            rows, _ = await self.read_rows()
+            collected.extend(rows)
+            if not await self.next_page():
+                break
+        await self.first_page()
+        return collected
+
     async def find_row(self, request_id: str, max_pages: int = 10) -> tuple[LegacyRow, Locator] | None:
-        """Procura o agendamento pelo ID, avançando páginas se necessário."""
+        """Procura o agendamento pelo ID a partir da 1ª página, avançando se necessário."""
+        await self.first_page()
         for _ in range(max_pages):
             rows, table = await self.read_rows()
             for r in rows:

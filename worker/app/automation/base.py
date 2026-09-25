@@ -59,6 +59,9 @@ class AutomationContext:
     organizer: "DownloadOrganizer"
     page: "Page | None" = None
     state: dict[str, Any] = field(default_factory=dict)
+    # chamado IMEDIATAMENTE antes do clique final de agendamento: a tarefa passa a
+    # "agendada" no banco antes do clique, para uma retentativa nunca reenviar o pedido
+    on_submit: Callable[[], Awaitable[None]] | None = None
 
     @property
     def start_date(self) -> date:

@@ -15,7 +15,7 @@ from playwright.async_api import Error as PlaywrightError, Page, TimeoutError as
 from app.automation.base import AutomationContext
 from app.automation.siat.page_helpers import first_visible
 from app.automation.siat.selectors import SiatSelectors, get_selectors
-from app.automation.siat.siat_legacy import NFCE, NFE, SiatLegacy, family_of, ie_matches
+from app.automation.siat.siat_legacy import NFCE, NFE, SiatLegacy, family_of, ie_matches, recover_request_id
 from app.downloads.organizer import InvalidDownloadError
 from app.jobs.errors import AutomationError, ErrorCode, TaxpayerMismatchError
 from app.jobs.models import DocumentType, DownloadedFile, ExportStatus, ExportStatusResult, Task
@@ -60,19 +60,31 @@ class SiatExportConsult:
             if not family_tasks:
                 continue
             await self.legacy.go_to(family)
+            claimed = {t.external_request_id for t in tasks if t.external_request_id}
             for task in family_tasks:
                 doc = task.document_type or DocumentType.NFCE
-                if not task.external_request_id:
+                request_id = task.external_request_id
+                if not request_id and task.requested_at:
+                    # clique enviado mas ID não anotado: recupera pela IE + data de criação
+                    rows = await self.legacy.read_all_rows()
+                    request_id = recover_request_id(rows, client_ie, task.requested_at, claimed)
+                    if request_id:
+                        claimed.add(request_id)
+                        await self.ctx.logger.info(
+                            f"{task.task_type}: ID {request_id} recuperado pela IE e data de criação.",
+                            step="checking_processing",
+                        )
+                if not request_id:
                     await self.ctx.logger.warning(
-                        f"{task.task_type}: agendamento sem ID registrado; não é possível localizá-lo.",
+                        f"{task.task_type}: agendamento sem ID identificável; verifique a lista no SIAT.",
                         step="checking_processing",
                     )
                     results[task.id] = ExportStatusResult(document_type=doc, status=ExportStatus.NOT_FOUND)
                     continue
-                found = await self.legacy.find_row(task.external_request_id)
+                found = await self.legacy.find_row(request_id)
                 if found is None:
                     results[task.id] = ExportStatusResult(
-                        document_type=doc, external_request_id=task.external_request_id, status=ExportStatus.NOT_FOUND
+                        document_type=doc, external_request_id=request_id, status=ExportStatus.NOT_FOUND
                     )
                     continue
                 row, _ = found
