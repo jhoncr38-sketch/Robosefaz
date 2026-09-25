@@ -188,6 +188,37 @@ Todas as rotas (exceto `/health`) exigem `Authorization: Bearer <JWT do Supabase
 
 ---
 
+## Deploy do painel na Vercel
+
+Somente o **painel** (`apps/web`) vai para a Vercel. A API e o worker rodam no PC
+onde os certificados estão instalados; o worker pega as tarefas pelo Supabase.
+
+1. Importe o repositório na Vercel.
+2. **Settings → Build and Deployment → Root Directory = `apps/web`** e
+   **Framework Preset = Next.js**. Sem isso o build "passa" em segundos sem gerar
+   nada e o site responde `404: NOT_FOUND`.
+3. **Settings → Environment Variables** (Production e Preview), **com valor**:
+
+   | Variável | Obrigatória | Observação |
+   |---|---|---|
+   | `NEXT_PUBLIC_SUPABASE_URL` | sim | URL do projeto Supabase |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | sim | chave pública (anon / publishable) |
+   | `SUPABASE_SERVICE_ROLE_KEY` | não | só para criar usuários na tela Usuários; marque como Sensitive |
+
+   Não importe o `.env.example` (os valores vêm vazios) e não envie variáveis do
+   worker (`SECRET_ENCRYPTION_KEY`, `AUTOMATION_*`...). `NEXT_PUBLIC_*` entram no
+   build: depois de alterar, faça **Redeploy**. Se a tela de login mostrar
+   "Supabase não configurado", as variáveis estavam vazias no build.
+4. No Supabase, **Authentication → URL Configuration → Redirect URLs**: adicione
+   `https://SEU-PROJETO.vercel.app/auth/callback`.
+
+Com o painel na Vercel ainda dependem da API local (`WORKER_API_URL`, inacessível
+da nuvem): download do ZIP pelo painel, "Ler PFX", "Guardar senha", "Abrir perfil
+do navegador" e o status da API em Configurações. Criar automações, fila em tempo
+real, histórico e erros funcionam normalmente.
+
+---
+
 ## Uso
 
 ### Cadastrar cliente
