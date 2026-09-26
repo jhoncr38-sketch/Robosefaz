@@ -68,6 +68,10 @@ class JobRepository(Protocol):
         self, worker_id: str, kind: str, status: str, current_job_id: str | None, meta: dict[str, Any]
     ) -> None: ...
     async def release_stale_locks(self, minutes: int) -> int: ...
+    # -- recuperação de jobs de robôs desligados ------------------------------
+    async def list_locked_jobs(self) -> list[dict[str, Any]]: ...
+    async def list_heartbeats(self) -> dict[str, dict[str, Any]]: ...
+    async def update_job_if_locked_by(self, job_id: str, owner: str, **fields: Any) -> bool: ...
     # -- retenção (limpeza automática) -------------------------------------
     async def list_downloads_before(self, cutoff: datetime) -> list[dict[str, Any]]: ...
     async def delete_rows(self, table: str, ids: list[str]) -> int: ...
@@ -127,6 +131,34 @@ class SupabaseJobRepository:
     async def release_stale_locks(self, minutes: int) -> int:
         res = await self._db.rpc("release_stale_locks", {"p_stale_minutes": minutes}).execute()
         return int(res.data or 0)
+
+    # -- recuperação ---------------------------------------------------------
+    @_transient
+    async def list_locked_jobs(self) -> list[dict[str, Any]]:
+        res = await (
+            self._db.table("automation_jobs")
+            .select("id, status, locked_by, locked_at, cancel_requested, attempts, max_attempts")
+            .not_.is_("locked_by", "null")
+            .execute()
+        )
+        return list(res.data or [])
+
+    @_transient
+    async def list_heartbeats(self) -> dict[str, dict[str, Any]]:
+        res = await self._db.table("worker_heartbeats").select("worker_id, status, last_seen_at").execute()
+        return {r["worker_id"]: r for r in res.data or []}
+
+    @_transient
+    async def update_job_if_locked_by(self, job_id: str, owner: str, **fields: Any) -> bool:
+        """Atualiza só se o job ainda estiver com o mesmo dono (evita corrida entre robôs)."""
+        res = await (
+            self._db.table("automation_jobs")
+            .update(_serialize(fields), count=CountMethod.exact, returning=ReturnMethod.minimal)
+            .eq("id", job_id)
+            .eq("locked_by", owner)
+            .execute()
+        )
+        return bool(res.count)
 
     # -- retenção -----------------------------------------------------------
     _RETENTION_TABLES = frozenset(

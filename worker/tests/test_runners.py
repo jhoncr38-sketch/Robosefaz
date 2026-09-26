@@ -287,3 +287,83 @@ async def test_worker_stops_when_flag_file_appears(settings) -> None:
     settings.stop_flag.write_text("parar", encoding="utf-8")
     await asyncio.wait_for(worker.run(), timeout=10)
     assert worker.stop_event.is_set()
+
+
+class TestDownloadFailures:
+    """Nota sem botão de download: não trava as outras, espaça tentativas e desiste no limite."""
+
+    async def test_other_notes_download_and_retry_is_spaced(self, repo: FakeRepo, provider: FakeProvider, deps) -> None:  # noqa: ANN001
+        _, job = _setup(repo, status="waiting_sefaz", task_status=TaskStatus.SCHEDULED)
+        provider.statuses = {d: ExportStatus.PROCESSED for d in DocumentType}
+        provider.download_errors = {
+            DocumentType.NFCE: AutomationError(ErrorCode.SELECTOR_NOT_FOUND, "Botão 'Download' não encontrado na linha.")
+        }
+        await CollectorRunner(deps).run_once()
+        j = repo.job(job.id)
+        assert sorted(d["document_type"] for d in repo.downloads) == ["NFE_EMITIDAS", "NFE_RECEBIDAS"]
+        assert j["status"] == "waiting_sefaz"
+        wait = j["next_check_at"] - datetime.now(timezone.utc)
+        assert timedelta(minutes=4) < wait <= timedelta(minutes=5)  # 1ª falha: 5 min (antes: 1 min)
+        assert _statuses(repo, job.id)[TaskType.NFCE_EXPORT] == TaskStatus.PROCESSED
+
+    async def test_gives_up_after_limit(self, repo: FakeRepo, provider: FakeProvider, deps) -> None:  # noqa: ANN001
+        from app.jobs.collector_runner import DOWNLOAD_MAX_FAILURES
+
+        _, job = _setup(repo, status="waiting_sefaz", task_status=TaskStatus.SCHEDULED)
+        provider.statuses = {d: ExportStatus.PROCESSED for d in DocumentType}
+        provider.download_errors = {
+            DocumentType.NFCE: AutomationError(ErrorCode.SELECTOR_NOT_FOUND, "Botão 'Download' não encontrado na linha.")
+        }
+        for _ in range(DOWNLOAD_MAX_FAILURES):
+            repo.jobs[job.id].update(status="waiting_sefaz", next_check_at=datetime.now(timezone.utc), locked_by=None)
+            await CollectorRunner(deps).run_once()
+        j = repo.job(job.id)
+        assert _statuses(repo, job.id)[TaskType.NFCE_EXPORT] == TaskStatus.FAILED
+        assert j["status"] == "completed"  # as outras notas foram baixadas; a NFC-e fica marcada com erro
+        assert "com erro" in j["last_message"]
+
+
+class TestRecovery:
+    """Robô desligado de repente: outro robô assume o job sem esperar 45 min."""
+
+    def _locked(self, repo: FakeRepo, owner_seen_s_ago: float, **job_kw):  # noqa: ANN003, ANN202
+        _, job = _setup(repo, **job_kw)
+        now = datetime.now(timezone.utc)
+        repo.jobs[job.id].update(locked_by="PC-DESLIGADO-1", locked_at=now - timedelta(minutes=10))
+        repo.heartbeat_rows["PC-DESLIGADO-1"] = {
+            "worker_id": "PC-DESLIGADO-1", "status": "busy",
+            "last_seen_at": (now - timedelta(seconds=owner_seen_s_ago)).isoformat(),
+        }
+        return job
+
+    async def test_alive_owner_is_left_alone(self, repo: FakeRepo) -> None:
+        from app.jobs.recovery import recover_orphaned_jobs
+
+        job = self._locked(repo, 20, status="downloading", task_status=TaskStatus.SCHEDULED)
+        assert await recover_orphaned_jobs(repo, "EU-1") == []
+        assert repo.job(job.id)["locked_by"] == "PC-DESLIGADO-1"
+
+    async def test_collect_phase_goes_back_to_waiting_sefaz(self, repo: FakeRepo) -> None:
+        from app.jobs.recovery import recover_orphaned_jobs
+
+        job = self._locked(repo, 300, status="navigating_export", task_status=TaskStatus.SCHEDULED)
+        assert await recover_orphaned_jobs(repo, "EU-1") == [job.id]
+        j = repo.job(job.id)
+        assert j["status"] == "waiting_sefaz" and j["locked_by"] is None
+        assert set(_statuses(repo, job.id).values()) == {TaskStatus.SCHEDULED}  # nada reagendado
+
+    async def test_cancel_requested_is_respected(self, repo: FakeRepo) -> None:
+        from app.jobs.recovery import recover_orphaned_jobs
+
+        job = self._locked(repo, 300, status="downloading", task_status=TaskStatus.SCHEDULED)
+        repo.jobs[job.id]["cancel_requested"] = True
+        await recover_orphaned_jobs(repo, "EU-1")
+        assert repo.job(job.id)["status"] == "cancelled"
+        assert set(_statuses(repo, job.id).values()) == {TaskStatus.CANCELLED}
+
+    async def test_scheduling_phase_goes_back_to_queue(self, repo: FakeRepo) -> None:
+        from app.jobs.recovery import recover_orphaned_jobs
+
+        job = self._locked(repo, 300, status="scheduling_nfce", task_status=TaskStatus.PENDING)
+        await recover_orphaned_jobs(repo, "EU-1")
+        assert repo.job(job.id)["status"] == "queued"

@@ -26,6 +26,7 @@ from app.config import Settings, get_settings
 from app.downloads.organizer import DownloadFolderUnavailable, DownloadOrganizer
 from app.jobs.base_runner import RunnerDeps
 from app.jobs.collector_runner import CollectorRunner
+from app.jobs.recovery import recover_orphaned_jobs
 from app.jobs.repository import JobRepository, SupabaseJobRepository
 from app.jobs.retention import RetentionService
 from app.jobs.scheduler_runner import SchedulerRunner
@@ -78,9 +79,6 @@ class Worker:
     async def _maintenance(self) -> None:
         while not self.stop_event.is_set():
             try:
-                released = await self.repo.release_stale_locks(self.settings.stale_lock_minutes)
-                if released:
-                    log.warning("%s lock(s) órfão(s) liberado(s)", released)
                 await self.repo.refresh_certificate_statuses()
                 await self.repo.generate_certificate_expiry_notifications()
             except Exception:
@@ -115,6 +113,21 @@ class Worker:
             except Exception as exc:
                 log.warning("Heartbeat falhou: %s", exc)
             await self._sleep(30)
+
+    async def _recovery(self) -> None:
+        """A cada minuto: assume jobs de robôs que pararam de dar sinal (PC desligado etc.)."""
+        await self._sleep(20)  # deixa o próprio heartbeat ser gravado primeiro
+        while not self.stop_event.is_set():
+            try:
+                await recover_orphaned_jobs(
+                    self.repo,
+                    self.worker_id,
+                    dead_after_s=self.settings.worker_dead_after_seconds,
+                    stale_minutes=self.settings.stale_lock_minutes,
+                )
+            except Exception:
+                log.exception("Falha ao recuperar jobs de robôs desligados")
+            await self._sleep(60)
 
     def _write_local_status(self, status: str) -> None:
         """Estado para o ícone da bandeja (storage/worker-status.json), sem depender da internet."""
@@ -160,6 +173,7 @@ class Worker:
             asyncio.create_task(self._maintenance(), name="maintenance"),
             asyncio.create_task(self._watch_stop_flag(), name="stop-flag"),
             asyncio.create_task(self._local_status(), name="local-status"),
+            asyncio.create_task(self._recovery(), name="recovery"),
         ]
         if self.mode in ("all", "scheduler"):
             for i in range(self.settings.max_parallel_jobs):

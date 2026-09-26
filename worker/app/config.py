@@ -77,6 +77,8 @@ class Settings(BaseSettings):
     collector_interval_minutes: int = 30
     collector_max_checks: int = 96
     stale_lock_minutes: int = 45
+    # robô sem sinal de vida há mais que isso é considerado desligado: outro robô assume os jobs dele
+    worker_dead_after_seconds: int = 180
 
     # Retenção: depois de N dias da data do download, apaga os ZIPs deste computador
     # e o histórico no Supabase (downloads, jobs, tarefas, logs). 0 desliga a limpeza.

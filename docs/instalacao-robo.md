@@ -85,3 +85,5 @@ Na pasta do projeto, rode `gerar-instalador.bat`. Ele precisa do Inno Setup 6 (`
 
 - **"Certificado NÃO instalado neste Windows":** instale o `.pfx` do cliente com o mesmo usuário que roda o robô.
 - **O botão Baixar diz que o arquivo não está neste computador:** a nota foi baixada por outro computador. Pegue lá ou refaça o agendamento neste; o SIAT reaproveita o pedido existente.
+- **Computador desligado no meio de um job:** nada se perde. Se outro computador com o robô estiver ligado, ele assume o job em cerca de 3 minutos. Se não houver outro, o job continua quando este computador ligar de novo. Um cancelamento feito no painel nesse meio tempo é respeitado.
+- **Uma nota não baixa (por exemplo, sem botão de download no SIAT):** as outras notas continuam sendo baixadas. O robô tenta essa nota de novo em 5, 15, 30 e 60 minutos; depois de 5 falhas, marca a nota com erro para você conferir no SIAT.

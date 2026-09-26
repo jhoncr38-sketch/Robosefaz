@@ -14,6 +14,11 @@ from app.jobs.reporter import JobReporter
 from app.jobs.state_machine import JobStatus
 from app.logs.job_logger import JobLogger
 
+# falhas de download que valem nova tentativa espaçada (a linha pode ainda não ter o botão, etc.)
+DOWNLOAD_SOFT_ERRORS = frozenset({ErrorCode.SELECTOR_NOT_FOUND, ErrorCode.DOWNLOAD_FAILED, ErrorCode.TIMEOUT})
+DOWNLOAD_MAX_FAILURES = 5
+DOWNLOAD_BACKOFF_MINUTES = (5, 15, 30, 60)
+
 FINAL_TASK_STATUSES = frozenset(
     {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.SKIPPED, TaskStatus.CANCELLED, TaskStatus.DRY_RUN}
 )
@@ -70,6 +75,7 @@ class CollectorRunner(BaseRunner):
                 await reporter.step(JobStatus.CHECKING_PROCESSING, "Consultando agendamentos na SEFAZ")
                 statuses = await provider.check_status(ctx, pending)
                 await self._record_check(job, statuses)
+                retry_minutes: list[int] = []
 
                 for task, st in zip(pending, statuses, strict=True):
                     await reporter.check_cancel()
@@ -97,7 +103,13 @@ class CollectorRunner(BaseRunner):
                                 error_message=exc.message,
                                 finished_at=now_utc(),
                             )
-                            raise
+                            if exc.code not in DOWNLOAD_SOFT_ERRORS:
+                                raise  # ex.: contribuinte errado -> para tudo
+                            # uma nota com problema não impede as outras; nova tentativa espaçada
+                            retry = await self._download_failed(job, task, exc, logger)
+                            if retry is not None:
+                                retry_minutes.append(retry)
+                            continue
                         await self.repo.insert_download(
                             client_id=job.client_id,
                             job_id=job.id,
@@ -136,7 +148,7 @@ class CollectorRunner(BaseRunner):
                         await logger.info(f"{task.task_type}: ainda em processamento.", step="checking_processing")
 
             refreshed = await self.repo.list_tasks(job.id)
-            await self._conclude(job, reporter, refreshed, logger)
+            await self._conclude(job, reporter, refreshed, logger, retry_in=min(retry_minutes) if retry_minutes else None)
 
         except asyncio.CancelledError:
             # worker interrompido: volta a aguardar a SEFAZ para nova consulta
@@ -173,7 +185,35 @@ class CollectorRunner(BaseRunner):
             result={"check": job.check_count, "statuses": summary},
         )
 
-    async def _conclude(self, job: Job, reporter: JobReporter, tasks: list[Task], logger: JobLogger) -> None:
+    async def _download_failed(self, job: Job, task: Task, exc: AutomationError, logger: JobLogger) -> int | None:
+        """Conta as falhas de download desta nota: espaça as tentativas e desiste após o limite."""
+        failures = sum(
+            1
+            for t in await self.repo.list_tasks(job.id)
+            if t.task_type == TaskType.DOWNLOAD
+            and t.status == TaskStatus.FAILED
+            and t.result.get("export_task_id") == task.id
+        )
+        if failures >= DOWNLOAD_MAX_FAILURES:
+            message = (
+                f"Download falhou {failures} vezes ({exc.message}). "
+                f"Verifique o agendamento {task.external_request_id} no SIAT."
+            )
+            await self.repo.update_task(task.id, status=TaskStatus.FAILED.value, error_message=message[:500], finished_at=now_utc())
+            task.status = TaskStatus.FAILED
+            await logger.error(f"{task.task_type}: {message}", step="downloading")
+            return None
+        wait = DOWNLOAD_BACKOFF_MINUTES[min(failures, len(DOWNLOAD_BACKOFF_MINUTES)) - 1]
+        await logger.warning(
+            f"{task.task_type}: download falhou ({failures}/{DOWNLOAD_MAX_FAILURES}): {exc.message} "
+            f"Nova tentativa em {wait} min.",
+            step="downloading",
+        )
+        return wait
+
+    async def _conclude(
+        self, job: Job, reporter: JobReporter, tasks: list[Task], logger: JobLogger, *, retry_in: int | None = None
+    ) -> None:
         exports = [t for t in tasks if t.is_export and not t.superseded]
         if exports and all(t.status in FINAL_TASK_STATUSES for t in exports):
             if any(t.status == TaskStatus.COMPLETED for t in exports):
@@ -203,6 +243,8 @@ class CollectorRunner(BaseRunner):
             return
 
         interval = await self._interval_minutes()
+        if retry_in is not None:
+            interval = min(interval, retry_in)
         await reporter.set_final(
             JobStatus.WAITING_SEFAZ,
             next_check_at=now_utc() + timedelta(minutes=interval),
@@ -217,14 +259,15 @@ class CollectorRunner(BaseRunner):
         await logger.error(f"[{code}] {message}", step=reporter.state.value, metadata={"error_code": code.value})
         retryable = not isinstance(exc, AutomationError) or exc.retryable
         if retryable and job.check_count < await self._max_checks():
-            # erros transitórios: volta a aguardar e tenta de novo mais tarde
-            delay = self.deps.retry_policy.delay_for(min(max(job.check_count, 1), len(self.deps.retry_policy.delays)))
+            # erros transitórios: volta a aguardar e tenta de novo mais tarde, sem martelar o SIAT
+            # (5 min; 15 min se a consulta anterior também falhou)
+            wait = 15 if job.error_code else 5
             await self.repo.update_job(
                 job.id,
                 status=JobStatus.WAITING_SEFAZ.value,
                 current_step=JobStatus.WAITING_SEFAZ.value,
                 progress=80,
-                next_check_at=now_utc() + timedelta(seconds=max(delay, 60)),
+                next_check_at=now_utc() + timedelta(minutes=wait),
                 error_code=code.value,
                 error_message=message,
                 error_screenshot_path=screenshot,

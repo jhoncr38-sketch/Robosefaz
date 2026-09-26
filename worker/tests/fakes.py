@@ -75,6 +75,7 @@ class FakeRepo:
         self.released: list[str] = []
         self.heartbeats: list[dict[str, Any]] = []
         self.retention_calls: list[tuple] = []
+        self.heartbeat_rows: dict[str, dict[str, Any]] = {}
 
     # -- setup helpers --------------------------------------------------------
     def add_client(self, client: Client, certificate: Certificate | None = None) -> None:
@@ -240,6 +241,19 @@ class FakeRepo:
     async def release_stale_locks(self, minutes: int) -> int:
         return 0
 
+    # -- recuperação -----------------------------------------------------------
+    async def list_locked_jobs(self) -> list[dict[str, Any]]:
+        return [dict(j) for j in self.jobs.values() if j.get("locked_by")]
+
+    async def list_heartbeats(self) -> dict[str, dict[str, Any]]:
+        return dict(self.heartbeat_rows)
+
+    async def update_job_if_locked_by(self, job_id: str, owner: str, **fields: Any) -> bool:
+        if self.jobs[job_id].get("locked_by") != owner:
+            return False
+        await self.update_job(job_id, **fields)
+        return True
+
     # -- retenção -------------------------------------------------------------
     async def list_downloads_before(self, cutoff: datetime) -> list[dict[str, Any]]:
         return [d for d in self.downloads if d.get("downloaded_at") and d["downloaded_at"] < cutoff]
@@ -296,6 +310,7 @@ class FakeProvider(AutomationProvider):
         self.schedule_error: dict[TaskType, Exception] = {}
         self.statuses: dict[DocumentType, ExportStatus] = {}
         self.download_dir = None
+        self.download_errors: dict[DocumentType, Exception] = {}
         self.on_schedule: Callable[[Task], None] | None = None
 
     @asynccontextmanager
@@ -357,6 +372,8 @@ class FakeProvider(AutomationProvider):
 
     async def download(self, ctx: AutomationContext, task: Task, status: ExportStatusResult) -> DownloadedFile:
         self.calls.append(f"download:{task.document_type}")
+        if task.document_type in self.download_errors:
+            raise self.download_errors[task.document_type]
         tmp = ctx.settings.downloads_dir.parent / f"tmp_{task.id}.zip"
         tmp.parent.mkdir(parents=True, exist_ok=True)
         tmp.write_bytes(f"conteudo {task.document_type}".encode())

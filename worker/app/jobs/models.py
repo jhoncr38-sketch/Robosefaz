@@ -127,6 +127,7 @@ class Job(_Base):
     check_count: int = 0
     cancel_requested: bool = False
     locked_by: str | None = None
+    error_code: str | None = None  # erro da execução anterior (espaça novas tentativas do Collector)
     manual_action_requested_at: datetime | None = None
     manual_action_confirmed_at: datetime | None = None
     started_at: datetime | None = None
