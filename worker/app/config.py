@@ -77,6 +77,13 @@ class Settings(BaseSettings):
     collector_interval_minutes: int = 30
     collector_max_checks: int = 96
     stale_lock_minutes: int = 45
+
+    # Retenção: depois de N dias da data do download, apaga os ZIPs deste computador
+    # e o histórico no Supabase (downloads, jobs, tarefas, logs). 0 desliga a limpeza.
+    retention_days: int = 60
+    retention_debug_log_days: int = 7  # logs DEBUG (detalhe técnico) somem antes
+    retention_heartbeat_days: int = 7  # registros de robôs que já foram desligados
+    retention_interval_hours: float = 6.0
     retry_delays: str = "10,30,60"
     max_attempts: int = 3
 
@@ -96,6 +103,14 @@ class Settings(BaseSettings):
     nfe_tipo_nota: str = "todas"
 
     log_level: str = "INFO"
+    # log em arquivo (o robô instalado roda sem janela); rotaciona em 5 arquivos de 5 MB
+    log_file_path: str = "./storage/logs/worker.log"
+    # criar este arquivo pede ao worker que termine o job atual e encerre (parar-robo.bat)
+    stop_flag_path: str = "./storage/parar-robo.flag"
+    # estado local do robô lido pelo ícone da bandeja
+    status_file_path: str = "./storage/worker-status.json"
+    # endereço do painel aberto pelo ícone da bandeja
+    panel_url: str = "https://robosefaz.vercel.app"
 
     @field_validator("browser_channel")
     @classmethod
@@ -167,6 +182,18 @@ class Settings(BaseSettings):
     @property
     def screenshots_dir(self) -> Path:
         return _resolve(self.step_screenshot_path)
+
+    @property
+    def log_file(self) -> Path | None:
+        return _resolve(self.log_file_path) if self.log_file_path.strip() else None
+
+    @property
+    def stop_flag(self) -> Path:
+        return _resolve(self.stop_flag_path)
+
+    @property
+    def status_file(self) -> Path:
+        return _resolve(self.status_file_path)
 
     @property
     def secrets_file(self) -> Path:

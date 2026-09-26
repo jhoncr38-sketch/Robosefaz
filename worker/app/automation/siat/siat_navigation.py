@@ -57,6 +57,8 @@ class SiatNavigation:
             return "'Usuário não identificado'"
         if await text_visible(self.page, self.sel.rx("logged_out_markers")):
             return "página pública sem sessão"
+        if not self.sel.rx("module_url_marker").search(self.page.url):
+            return "página intermediária do painel (o e-AGEAT não abriu)"
         return None
 
     async def open_module(self) -> None:

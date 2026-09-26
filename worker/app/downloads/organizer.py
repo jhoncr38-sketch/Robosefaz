@@ -21,6 +21,10 @@ class InvalidDownloadError(ValueError):
     pass
 
 
+class DownloadFolderUnavailable(OSError):
+    """Pasta de downloads inacessível (ex.: unidade externa ou de rede desconectada)."""
+
+
 @dataclass(frozen=True, slots=True)
 class DownloadTarget:
     folder: Path
@@ -34,6 +38,34 @@ class DownloadTarget:
 class DownloadOrganizer:
     def __init__(self, base_dir: Path) -> None:
         self.base_dir = base_dir
+
+    def check_available(self) -> None:
+        """Falha cedo se a unidade da pasta (ex.: disco externo ou unidade de rede) não estiver montada."""
+        anchor = Path(self.base_dir.anchor) if self.base_dir.anchor else None
+        if anchor is not None and not anchor.exists():
+            raise DownloadFolderUnavailable(f"Unidade {self.base_dir.anchor} indisponível para {self.base_dir}")
+        try:
+            ensure_dir(self.base_dir)
+        except OSError as exc:
+            raise DownloadFolderUnavailable(f"Não foi possível acessar {self.base_dir}: {exc}") from exc
+
+    def locate(
+        self, filepath: str, client_code: str, competence: str, document_type: DocumentType | str, filename: str
+    ) -> Path:
+        """Arquivo no disco DESTE computador.
+
+        `filepath` foi gravado pela máquina que baixou; em outra máquina (pasta do
+        pasta em outra letra/usuário) vale o caminho padrão cliente/ano/mês/tipo.
+        """
+        try:
+            stored = ensure_within(self.base_dir, Path(filepath))
+            if stored.is_file():
+                return stored
+        except ValueError:
+            pass
+        if Path(filename).name != filename:
+            raise ValueError(f"Nome de arquivo inválido: {filename!r}")
+        return ensure_within(self.base_dir, self.folder_for(client_code, competence, document_type) / filename)
 
     def folder_for(self, client_code: str, competence: str, document_type: DocumentType | str) -> Path:
         if not _CLIENT_CODE.match(client_code or ""):
@@ -75,6 +107,17 @@ class DownloadOrganizer:
             raise InvalidDownloadError("O portal retornou uma página HTML em vez do arquivo exportado.")
         checksum = sha256_file(source)
         ext = {"zip": ".zip", "xml": ".xml"}.get(kind) or source.suffix or ".zip"
+        self.check_available()
+        try:
+            return self._store(source, client_code, competence, document_type, checksum, ext)
+        except DownloadFolderUnavailable:
+            raise
+        except OSError as exc:
+            raise DownloadFolderUnavailable(f"Falha ao gravar em {self.base_dir}: {exc}") from exc
+
+    def _store(
+        self, source: Path, client_code: str, competence: str, document_type: DocumentType | str, checksum: str, ext: str
+    ) -> DownloadedFile:
         folder = ensure_dir(self.folder_for(client_code, competence, document_type))
 
         for existing in sorted(folder.glob(f"{client_code}_*{ext}")):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -20,7 +21,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     configure_logging(settings.log_level)
     for d in (settings.downloads_dir, settings.profiles_dir, settings.errors_dir, settings.screenshots_dir):
-        ensure_dir(d)
+        try:
+            ensure_dir(d)
+        except OSError as exc:  # ex.: unidade de rede desconectada
+            logging.getLogger("api").warning("Pasta indisponível %s: %s", d, exc)
     yield
 
 

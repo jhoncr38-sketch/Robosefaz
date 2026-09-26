@@ -73,6 +73,11 @@ SEFAZ entram registrando um novo provider em `automation/registry.py` e usando
 
 ## Instalação
 
+> **Só o robô, em um computador do escritório:** use o instalador `instalar-robo.bat`.
+> Ele prepara tudo e faz o robô iniciar junto com o Windows.
+> Passo a passo em [docs/instalacao-robo.md](docs/instalacao-robo.md).
+> As instruções abaixo são para desenvolvimento.
+
 ```powershell
 git clone <repo> siat-automation
 cd siat-automation

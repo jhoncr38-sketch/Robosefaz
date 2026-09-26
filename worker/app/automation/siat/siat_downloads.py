@@ -16,7 +16,7 @@ from app.automation.base import AutomationContext
 from app.automation.siat.page_helpers import first_visible
 from app.automation.siat.selectors import SiatSelectors, get_selectors
 from app.automation.siat.siat_legacy import NFCE, NFE, SiatLegacy, family_of, ie_matches, recover_request_id
-from app.downloads.organizer import InvalidDownloadError
+from app.downloads.organizer import DownloadFolderUnavailable, InvalidDownloadError
 from app.jobs.errors import AutomationError, ErrorCode, TaxpayerMismatchError
 from app.jobs.models import DocumentType, DownloadedFile, ExportStatus, ExportStatusResult, Task
 from app.jobs.state_machine import JobStatus
@@ -147,6 +147,14 @@ class SiatExportConsult:
         except InvalidDownloadError as exc:
             tmp_path.unlink(missing_ok=True)
             raise AutomationError(ErrorCode.DOWNLOAD_FAILED, str(exc)) from exc
+        except DownloadFolderUnavailable as exc:
+            # o arquivo continua disponível no SIAT: nova tentativa mais tarde
+            tmp_path.unlink(missing_ok=True)
+            raise AutomationError(
+                ErrorCode.DOWNLOAD_FAILED,
+                f"Pasta de downloads indisponível: {exc}",
+                retryable=True,
+            ) from exc
         await self.ctx.logger.info(
             f"Arquivo salvo: {stored.filename} ({stored.size} bytes, sha256 {stored.checksum[:12]}…) "
             f"— agendamento {row.request_id}",

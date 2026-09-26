@@ -10,6 +10,15 @@ if %errorlevel% neq 0 (
   exit /b
 )
 
+schtasks /Query /TN "SIAT Automacao - Robo" >nul 2>&1
+if %errorlevel% equ 0 (
+  echo ATENCAO: o robo automatico esta instalado neste computador.
+  echo Use iniciar-robo.bat, parar-robo.bat e status-robo.bat.
+  echo Abrir esta janela tambem roda um segundo robo ao mesmo tempo.
+  choice /C SN /M "Abrir mesmo assim"
+  if errorlevel 2 exit /b
+)
+
 cd /d "%~dp0worker"
 if not exist ".venv\Scripts\python.exe" (
   echo ERRO: ambiente Python nao encontrado em "%~dp0worker\.venv".

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import logging.handlers
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from app.jobs.models import LogLevel
@@ -20,15 +22,27 @@ _PY_LEVEL = {
 }
 
 
-def configure_logging(level: str = "INFO") -> None:
+def configure_logging(level: str = "INFO", log_file: Path | None = None) -> None:
     root = logging.getLogger()
     if any(getattr(h, "_siat", False) for h in root.handlers):
         root.setLevel(level.upper())
         return
-    handler = logging.StreamHandler(sys.stdout)
-    handler._siat = True  # type: ignore[attr-defined]
-    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)-7s %(name)s: %(message)s"))
-    root.addHandler(handler)
+    fmt = logging.Formatter("%(asctime)s %(levelname)-7s %(name)s: %(message)s")
+    handlers: list[logging.Handler] = []
+    if sys.stdout is not None:  # pythonw/serviço não tem console
+        handlers.append(logging.StreamHandler(sys.stdout))
+    if log_file is not None:
+        try:
+            log_file.parent.mkdir(parents=True, exist_ok=True)
+            handlers.append(
+                logging.handlers.RotatingFileHandler(log_file, maxBytes=5_000_000, backupCount=5, encoding="utf-8")
+            )
+        except OSError as exc:
+            print(f"Não foi possível abrir o log {log_file}: {exc}", file=sys.stderr)
+    for handler in handlers:
+        handler._siat = True  # type: ignore[attr-defined]
+        handler.setFormatter(fmt)
+        root.addHandler(handler)
     root.setLevel(level.upper())
     for noisy in ("httpx", "httpcore", "hpack", "postgrest", "supabase"):
         logging.getLogger(noisy).setLevel(logging.WARNING)

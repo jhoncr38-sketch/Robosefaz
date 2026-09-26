@@ -77,6 +77,10 @@ class TestSchedulingMessages:
         assert extract_protocol("Solicitação nº 998877 registrada") == "998877"
         assert extract_protocol("Agendado com sucesso") is None
         assert extract_protocol("") is None
+        dup = "Já existe um agendamento com os parâmetros passados. Tente com novos ou busque o ID: 9240745"
+        assert classify_message(dup) == "duplicate"
+        assert extract_protocol(dup) == "9240745"
+        assert extract_protocol("Agendamento com sucesso. Protocolo: 123456") == "123456"
 
 
 class TestLegacyExportList:

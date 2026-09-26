@@ -78,6 +78,14 @@ def url_pattern(url: str) -> str:
     return f"{parsed.scheme}://{parsed.hostname}"
 
 
+def _entry_pattern(value: object) -> str | None:
+    try:
+        data = json.loads(str(value))
+    except ValueError:
+        return None
+    return data.get("pattern") if isinstance(data, dict) else None
+
+
 def _cn_from_dn(dn: str | None) -> str | None:
     if not dn:
         return None
@@ -218,12 +226,37 @@ class ChromeCertificatePolicyService:
         self._save_state(state)
         return removed
 
+    def remove_pattern(self, pattern: str, *, confirm: bool = False) -> list[str]:
+        """Remove TODAS as entradas deste endereço, inclusive sobras de outro robô.
+
+        Se o worker for encerrado à força no meio de um job, a entrada daquele
+        certificado fica no Registro; como o Chrome usa a PRIMEIRA entrada que
+        combina, o próximo job abriria o SIAT com o certificado de outro cliente.
+        Entradas de outros endereços não são tocadas.
+        """
+        self._check_write(confirm)
+        winreg = self._winreg()
+        stale = [name for name, value in self.list_entries().items() if _entry_pattern(value) == pattern]
+        if stale:
+            with winreg.OpenKey(self._hive(winreg), self.key_path, 0, winreg.KEY_SET_VALUE) as key:
+                for name in stale:
+                    try:
+                        winreg.DeleteValue(key, name)
+                    except FileNotFoundError:
+                        pass
+        state = self._load_state()
+        managed = set(state.get("managed", [])) - set(stale)
+        state["managed"] = sorted(managed, key=int)
+        self._save_state(state)
+        return stale
+
     @asynccontextmanager
     async def applied_for_job(self, certificate: Certificate, url: str) -> AsyncIterator[list[str]]:
-        """Modo per_job: grava a entrada do certificado e remove ao final."""
-        created = self.apply([self.entry_for_certificate(certificate, url)], confirm=True)
+        """Modo per_job: deixa SÓ a entrada do certificado do job e remove ao final."""
+        entry = self.entry_for_certificate(certificate, url)
+        self.remove_pattern(entry.pattern, confirm=True)
+        created = self.apply([entry], confirm=True)
         try:
             yield created
         finally:
-            if created:
-                self.remove_managed(created, confirm=True)
+            self.remove_pattern(entry.pattern, confirm=True)

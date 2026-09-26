@@ -123,6 +123,16 @@ class SiatTaxpayer:
     async def verify(self, *, security: bool = True) -> None:
         """Guarda de segurança; security=True gera SECURITY_CLIENT_MISMATCH."""
         docs = await self.current_documents()
+        if normalize_cnpj(self.ctx.client.cnpj) not in docs and not docs:
+            # só para a mensagem de erro dizer QUEM abriu; a decisão continua sendo "não confirmado"
+            try:
+                body = await self.page.locator("body").inner_text(timeout=3_000)
+            except PlaywrightError:
+                body = ""
+            seen = [d for d in extract_cnpjs(body) if d != normalize_cnpj(self.ctx.client.cnpj)]
+            raise TaxpayerMismatchError(
+                format_cnpj(self.ctx.client.cnpj), format_cnpj(seen[0]) if seen else None, security=security
+            )
         validate_current_taxpayer(docs, self.ctx.client, security=security)
         await self.ctx.logger.debug(
             f"Contribuinte confirmado: {format_cnpj(self.ctx.client.cnpj)}", step="security_check"

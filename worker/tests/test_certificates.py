@@ -246,9 +246,65 @@ class TestChromePolicy:
         decoded = json.loads(re.sub(r"\\(.)", lambda m: m.group(1), raw))  # desfaz o escape do .reg
         assert decoded["filter"]["SUBJECT"]["CN"] == 'EMPRESA "A"'
 
+    async def test_job_removes_stale_entry_of_other_client(self, tmp_path: Path, monkeypatch) -> None:
+        """Sobra de um robô interrompido não pode fazer o Chrome escolher o certificado de outro cliente."""
+        registry = _FakeWinreg()
+        pattern = "https://[*.]sefaz.pi.gov.br"
+        stale = PolicyEntry(pattern, subject_cn="OUTRO CLIENTE:28100366000151").to_policy_json()
+        other_site = PolicyEntry("https://outro.site.com.br", subject_cn="NAO MEXER").to_policy_json()
+        registry.values.update({"1": stale, "7": other_site})
+        svc = ChromeCertificatePolicyService(allow_write=True, state_file=tmp_path / "s.json")
+        monkeypatch.setattr(svc, "_winreg", lambda: registry)
+        cert = make_certificate(make_client(), subject_name="ALESSANDRO DE ARAUJO BARBOSA:36145344000136")
+
+        async with svc.applied_for_job(cert, pattern):
+            during = [json.loads(v) for n, v in registry.values.items() if n != "7"]
+            assert len(during) == 1  # só a entrada do cliente do job
+            assert during[0]["filter"]["SUBJECT"]["CN"] == "ALESSANDRO DE ARAUJO BARBOSA:36145344000136"
+        assert registry.values == {"7": other_site}  # outros endereços ficam intactos
+
     def test_write_requires_confirmation_and_flag(self, tmp_path: Path) -> None:
         entry = PolicyEntry("https://siatweb.sefaz.pi.gov.br", subject_cn="X")
         with pytest.raises(PolicyWriteNotAllowed):
             ChromeCertificatePolicyService(allow_write=True, state_file=tmp_path / "s.json").apply([entry])
         with pytest.raises(PolicyWriteNotAllowed):
             ChromeCertificatePolicyService(allow_write=False).apply([entry], confirm=True)
+
+
+class _FakeWinreg:
+    """Registro em memória com a API usada por ChromeCertificatePolicyService."""
+
+    HKEY_CURRENT_USER = "HKCU"
+    HKEY_LOCAL_MACHINE = "HKLM"
+    KEY_SET_VALUE = 2
+    REG_SZ = 1
+
+    def __init__(self) -> None:
+        self.values: dict[str, str] = {}
+
+    def __enter__(self) -> "_FakeWinreg":
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        return None
+
+    def OpenKey(self, *_a: object) -> "_FakeWinreg":  # noqa: N802
+        return self
+
+    def CreateKeyEx(self, *_a: object) -> "_FakeWinreg":  # noqa: N802
+        return self
+
+    def EnumValue(self, _key: object, index: int) -> tuple[str, str, int]:  # noqa: N802
+        items = list(self.values.items())
+        if index >= len(items):
+            raise OSError("fim")
+        name, value = items[index]
+        return name, value, self.REG_SZ
+
+    def SetValueEx(self, _key: object, name: str, _r: int, _t: int, value: str) -> None:  # noqa: N802
+        self.values[name] = value
+
+    def DeleteValue(self, _key: object, name: str) -> None:  # noqa: N802
+        if name not in self.values:
+            raise FileNotFoundError(name)
+        del self.values[name]

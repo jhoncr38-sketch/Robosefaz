@@ -11,6 +11,7 @@ import socket
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
+from postgrest import CountMethod, ReturnMethod
 from supabase import AsyncClient
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
@@ -67,6 +68,14 @@ class JobRepository(Protocol):
         self, worker_id: str, kind: str, status: str, current_job_id: str | None, meta: dict[str, Any]
     ) -> None: ...
     async def release_stale_locks(self, minutes: int) -> int: ...
+    # -- retenção (limpeza automática) -------------------------------------
+    async def list_downloads_before(self, cutoff: datetime) -> list[dict[str, Any]]: ...
+    async def delete_rows(self, table: str, ids: list[str]) -> int: ...
+    async def delete_jobs_finished_before(self, cutoff: datetime, statuses: list[str]) -> int: ...
+    async def delete_older_than(
+        self, table: str, column: str, cutoff: datetime, *, eq: dict[str, str] | None = None,
+        in_: dict[str, list[str]] | None = None,
+    ) -> int: ...
     async def refresh_certificate_statuses(self) -> int: ...
     async def generate_certificate_expiry_notifications(self) -> int: ...
     async def get_setting(self, key: str, default: Any = None) -> Any: ...
@@ -118,6 +127,70 @@ class SupabaseJobRepository:
     async def release_stale_locks(self, minutes: int) -> int:
         res = await self._db.rpc("release_stale_locks", {"p_stale_minutes": minutes}).execute()
         return int(res.data or 0)
+
+    # -- retenção -----------------------------------------------------------
+    _RETENTION_TABLES = frozenset(
+        {"downloads", "automation_logs", "worker_heartbeats", "notifications", "audit_logs"}
+    )
+
+    @_transient
+    async def list_downloads_before(self, cutoff: datetime) -> list[dict[str, Any]]:
+        res = await (
+            self._db.table("downloads")
+            .select("id, filepath, filename, competence, document_type, clients(client_code)")
+            .lt("downloaded_at", iso(cutoff))
+            .limit(500)
+            .execute()
+        )
+        return list(res.data or [])
+
+    @_transient
+    async def delete_rows(self, table: str, ids: list[str]) -> int:
+        if table not in self._RETENTION_TABLES:
+            raise ValueError(f"Tabela fora da retenção: {table}")
+        deleted = 0
+        for i in range(0, len(ids), 100):  # URL do PostgREST tem limite de tamanho
+            res = await (
+                self._db.table(table)
+                .delete(count=CountMethod.exact, returning=ReturnMethod.minimal)
+                .in_("id", ids[i : i + 100])
+                .execute()
+            )
+            deleted += int(res.count or 0)
+        return deleted
+
+    @_transient
+    async def delete_jobs_finished_before(self, cutoff: datetime, statuses: list[str]) -> int:
+        # tarefas e logs do job são apagados junto (on delete cascade)
+        c = iso(cutoff)
+        res = await (
+            self._db.table("automation_jobs")
+            .delete(count=CountMethod.exact, returning=ReturnMethod.minimal)
+            .in_("status", statuses)
+            .or_(f"finished_at.lt.{c},and(finished_at.is.null,created_at.lt.{c})")
+            .execute()
+        )
+        return int(res.count or 0)
+
+    @_transient
+    async def delete_older_than(
+        self,
+        table: str,
+        column: str,
+        cutoff: datetime,
+        *,
+        eq: dict[str, str] | None = None,
+        in_: dict[str, list[str]] | None = None,
+    ) -> int:
+        if table not in self._RETENTION_TABLES:
+            raise ValueError(f"Tabela fora da retenção: {table}")
+        q = self._db.table(table).delete(count=CountMethod.exact, returning=ReturnMethod.minimal).lt(column, iso(cutoff))
+        for k, v in (eq or {}).items():
+            q = q.eq(k, v)
+        for k, values in (in_ or {}).items():
+            q = q.in_(k, values)
+        res = await q.execute()
+        return int(res.count or 0)
 
     # -- leitura ----------------------------------------------------------
     @_transient

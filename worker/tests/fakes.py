@@ -74,6 +74,7 @@ class FakeRepo:
         self.job_updates: list[tuple[str, dict[str, Any]]] = []
         self.released: list[str] = []
         self.heartbeats: list[dict[str, Any]] = []
+        self.retention_calls: list[tuple] = []
 
     # -- setup helpers --------------------------------------------------------
     def add_client(self, client: Client, certificate: Certificate | None = None) -> None:
@@ -237,6 +238,34 @@ class FakeRepo:
         self.heartbeats.append({"worker_id": worker_id, "status": status})
 
     async def release_stale_locks(self, minutes: int) -> int:
+        return 0
+
+    # -- retenção -------------------------------------------------------------
+    async def list_downloads_before(self, cutoff: datetime) -> list[dict[str, Any]]:
+        return [d for d in self.downloads if d.get("downloaded_at") and d["downloaded_at"] < cutoff]
+
+    async def delete_rows(self, table: str, ids: list[str]) -> int:
+        assert table == "downloads"
+        before = len(self.downloads)
+        self.downloads = [d for d in self.downloads if d.get("id") not in ids]
+        return before - len(self.downloads)
+
+    async def delete_jobs_finished_before(self, cutoff: datetime, statuses: list[str]) -> int:
+        old = [
+            jid
+            for jid, j in self.jobs.items()
+            if j["status"] in statuses and (j.get("finished_at") or j.get("created_at") or cutoff) < cutoff
+        ]
+        for jid in old:
+            del self.jobs[jid]
+            self.tasks = {tid: t for tid, t in self.tasks.items() if t["job_id"] != jid}
+            self.logs = [entry for entry in self.logs if entry.get("job_id") != jid]
+        return len(old)
+
+    async def delete_older_than(
+        self, table: str, column: str, cutoff: datetime, *, eq: dict | None = None, in_: dict | None = None
+    ) -> int:
+        self.retention_calls.append((table, column, cutoff, eq, in_))
         return 0
 
     async def refresh_certificate_statuses(self) -> int:

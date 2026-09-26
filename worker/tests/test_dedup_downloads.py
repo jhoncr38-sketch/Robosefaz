@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from app.downloads.organizer import DownloadOrganizer
+from app.downloads.organizer import DownloadFolderUnavailable, DownloadOrganizer
 from app.jobs.dedup import DuplicateGuard, build_dedup_key, conflicts, is_duplicate
 from app.jobs.models import DocumentType, Task, TaskStatus, TaskType
 from app.utils.files import sha256_file
@@ -106,6 +106,45 @@ class TestDownloadOrganizer:
         other.write_bytes(b"zip-2")
         second = org.store(other, "CLI000001", "2026-08", DocumentType.NFE_EMITIDAS)
         assert second.filename == "CLI000001_2026-08_NFE_EMITIDAS_2.zip"
+
+
+class TestDownloadFolder:
+    """Pasta de downloads no Google Drive: unidade ausente e arquivo gravado por outro computador."""
+
+    def test_missing_drive_is_reported(self, tmp_path: Path) -> None:
+        missing = next((Path(f"{d}:/SIAT") for d in "QRSTUVWXYZ" if not Path(f"{d}:/").exists()), None)
+        if missing is None:
+            pytest.skip("todas as letras de unidade em uso")
+        org = DownloadOrganizer(missing)
+        with pytest.raises(DownloadFolderUnavailable):
+            org.check_available()
+        src = tmp_path / "a.zip"
+        src.write_bytes(b"PK\x03\x04zip")
+        with pytest.raises(DownloadFolderUnavailable):
+            org.store(src, "CLI000001", "2026-08", DocumentType.NFCE)
+        assert src.exists()  # arquivo temporário preservado até a próxima tentativa
+
+    def test_locate_uses_stored_path_on_same_machine(self, tmp_path: Path) -> None:
+        org = DownloadOrganizer(tmp_path / "downloads")
+        src = tmp_path / "a.zip"
+        src.write_bytes(b"zip-1")
+        stored = org.store(src, "CLI000001", "2026-08", DocumentType.NFCE)
+        found = org.locate(stored.filepath, "CLI000001", "2026-08", "NFCE", stored.filename)
+        assert found == Path(stored.filepath).resolve()
+
+    def test_locate_from_other_machine_path(self, tmp_path: Path) -> None:
+        org = DownloadOrganizer(tmp_path / "downloads")
+        src = tmp_path / "a.zip"
+        src.write_bytes(b"zip-1")
+        stored = org.store(src, "CLI000001", "2026-08", DocumentType.NFCE)
+        other = "G:/Meu Drive/SIAT-Notas/CLI000001/2026/08/NFCE/CLI000001_2026-08_NFCE.zip"
+        found = org.locate(other, "CLI000001", "2026-08", "NFCE", stored.filename)
+        assert found == Path(stored.filepath).resolve()
+
+    def test_locate_rejects_traversal_in_filename(self, tmp_path: Path) -> None:
+        org = DownloadOrganizer(tmp_path / "downloads")
+        with pytest.raises(ValueError):
+            org.locate("x", "CLI000001", "2026-08", "NFCE", "../../segredo.txt")
 
 
 class TestContentSniffing:

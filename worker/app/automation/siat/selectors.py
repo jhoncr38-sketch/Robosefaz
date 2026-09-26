@@ -76,6 +76,8 @@ class SiatSelectors:
 
     # --- Módulo e-AGEAT --------------------------------------------------
     module_link: str = r"e-?\s?ageat"
+    # endereço do e-AGEAT de verdade (a página intermediária /painel-aplicacoes/paginas/e-AGEAT/<n> não serve)
+    module_url_marker: str = r"/eageat/"
     # e-AGEAT às vezes abre sem sessão: "Acesso proibido / Usuário não identificado".
     # O botão "Efetuar login" leva à página pública; o contorno é fechar e clicar de novo.
     module_login_required: str = r"usu[áa]rio\s+n[ãa]o\s+identificado|acesso\s+proibido"
@@ -129,6 +131,7 @@ class SiatSelectors:
     export_success_message: str = r"agendad[oa]|agendamento\s+(realizado|efetuado|inclu[íi]do|cadastrado)|sucesso"
     export_error_message: str = r"erro|n[ãa]o\s+foi\s+poss[íi]vel|inv[áa]lid|obrigat[óo]ri"
     export_duplicate_message: str = r"j[áa]\s+existe|duplicad|j[áa]\s+agendad"
+    export_existing_id_regex: str = r"busque\s+o\s+id\s*[:#-]?\s*(\d{3,})"
     export_protocol_regex: str = (
         r"\b(?:protocolo|solicita[çc][ãa]o|pedido|agendamento|n[úu]mero|c[óo]digo|id)\b\s*(?:n[º°o.]*)?\s*[:#-]?\s*([A-Z0-9-]{3,})"
     )

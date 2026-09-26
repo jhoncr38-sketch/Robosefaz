@@ -13,6 +13,9 @@ storage/browser_profiles/*
 storage/errors/*
 storage/screenshots/*
 storage/secrets/*
+storage/logs/*
+storage/parar-robo.flag
+storage/worker-status.json
 !storage/**/.gitkeep
 
 # Seletores calibrados localmente
@@ -44,3 +47,5 @@ Thumbs.db
 
 # exceção: certificados FALSOS usados só nos testes do painel
 !apps/web/tests/fixtures/*.pfx
+dist/
+instalador/cache/

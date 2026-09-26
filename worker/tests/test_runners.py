@@ -275,3 +275,15 @@ class TestNoDuplicateAfterSubmit:
         assert repo.job(job.id)["status"] == "waiting_sefaz"
         nfce = next(t for t in repo.tasks_of(job.id) if t["task_type"] == TaskType.NFCE_EXPORT)
         assert nfce["requested_at"] is not None and not nfce.get("external_request_id")
+
+
+async def test_worker_stops_when_flag_file_appears(settings) -> None:
+    """parar-robo.bat cria o arquivo-sinal; o worker encerra sozinho."""
+    import asyncio
+
+    from app.worker import Worker
+
+    worker = Worker(FakeRepo(), settings, mode="none")
+    settings.stop_flag.write_text("parar", encoding="utf-8")
+    await asyncio.wait_for(worker.run(), timeout=10)
+    assert worker.stop_event.is_set()

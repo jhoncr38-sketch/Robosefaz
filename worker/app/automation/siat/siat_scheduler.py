@@ -47,13 +47,17 @@ def extract_protocol(text: str, sel: SiatSelectors | None = None) -> str | None:
     sel = sel or get_selectors()
     if not text:
         return None
-    m = sel.rx("export_protocol_regex").search(text)
-    if not m:
-        return None
-    value = m.group(1).strip().strip(".-")
-    if re.fullmatch(r"\d{2}/\d{2}/\d{4}", value) or not re.search(r"\d", value):
-        return None
-    return value
+    # "Já existe um agendamento ... busque o ID: 9240745": o ID vem no fim da frase
+    m = sel.rx("export_existing_id_regex").search(text)
+    if m:
+        return m.group(1)
+    # várias palavras-chave podem aparecer ("agendamento com ..."): vale o 1º valor com dígito
+    for m in sel.rx("export_protocol_regex").finditer(text):
+        value = m.group(1).strip().strip(".-")
+        if re.fullmatch(r"\d{2}/\d{2}/\d{4}", value) or not re.search(r"\d", value):
+            continue
+        return value
+    return None
 
 
 class SiatExportScheduler:
@@ -117,6 +121,22 @@ class SiatExportScheduler:
         await fill_field(self.page, self.sel.rx("legacy_date_start_label"), format_br_date(start_date), what="Data inicial")
         await fill_field(self.page, self.sel.rx("legacy_date_end_label"), format_br_date(end_date), what="Data final")
 
+    async def _check_existing(self, request_id: str, client_ie: str) -> None:
+        """Agendamento já existente informado pelo SIAT: confere a IE da linha, se ela estiver na lista."""
+        found = await self.legacy.find_row(request_id)
+        if found is None:
+            await self.ctx.logger.warning(
+                f"SIAT informou agendamento já existente (ID {request_id}); a linha não foi localizada na lista.",
+                step="scheduling",
+            )
+            return
+        row, _ = found
+        if row.ie and not ie_matches(row.ie, client_ie):
+            raise TaxpayerMismatchError(f"IE {client_ie}", f"IE {row.ie}", security=True)
+        await self.ctx.logger.info(
+            f"Agendamento já existia no SIAT: reaproveitando o ID {request_id} ({row.situacao}).", step="scheduling"
+        )
+
     async def schedule(
         self, document_type: DocumentType, start_date: date, end_date: date, competence: str
     ) -> ExportRequestResult:
@@ -176,6 +196,8 @@ class SiatExportScheduler:
             raise TaxpayerMismatchError(f"IE {client_ie}", f"IE {foreign[0].ie}", security=True)
         new_ids = new_request_ids(before, after_rows, client_ie)
         request_id = new_ids[0] if len(new_ids) == 1 else extract_protocol(message, self.sel)
+        if kind == "duplicate" and request_id is not None:
+            await self._check_existing(request_id, client_ie)
         if request_id is None:
             if kind != "success":
                 raise AutomationError(
