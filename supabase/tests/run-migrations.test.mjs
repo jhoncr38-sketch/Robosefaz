@@ -570,6 +570,16 @@ await test("robô grava só no próprio escritório (logs, tarefas, downloads, s
     tx.query("insert into public.worker_heartbeats (worker_id, kind, meta) values ('PC-B-1', 'all', '{\"version\":\"1.1.0\"}')"),
   );
   await as(DEVICE_B.authId, (tx) => tx.query("insert into public.automation_logs (job_id, message) values (null, 'mensagem geral do robô')"));
+  // como o robô grava de verdade: a biblioteca pede a linha de volta (RETURNING)
+  const jobOfB = (await db.query("select id from public.automation_jobs where org_id = $1 limit 1", [ORG_B])).rows[0].id;
+  for (const [table, sql, params] of [
+    ["automation_logs", "insert into public.automation_logs (job_id, message) values ($1, 'com returning') returning *", [jobOfB]],
+    ["automation_tasks", "insert into public.automation_tasks (job_id, client_id, task_type, competence) values ($1, $2, 'CHECK_PROCESSING', '2026-05') returning *", [jobOfB, CLIENT_B1]],
+    ["automation_jobs", "update public.automation_jobs set last_message = 'robô' where id = $1 returning *", [jobOfB]],
+  ]) {
+    const r = await as(DEVICE_B.authId, (tx) => tx.query(sql, params));
+    assert.equal(r.rows.length, 1, `robô não conseguiu gravar em ${table} com RETURNING`);
+  }
   const general = (await db.query("select org_id from public.automation_logs where message = 'mensagem geral do robô'")).rows[0];
   assert.equal(general.org_id, ORG_B);
   const hb = (await db.query("select org_id, device_id from public.worker_heartbeats where worker_id = 'PC-B-1'")).rows[0];
