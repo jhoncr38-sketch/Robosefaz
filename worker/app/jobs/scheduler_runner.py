@@ -36,7 +36,8 @@ class SchedulerRunner(BaseRunner):
         job = await self.repo.claim_next_job(self.deps.worker_id)
         if job is None:
             return False
-        await self.process(job)
+        with self.deps.activity.job():
+            await self.process(job)
         return True
 
     async def process(self, job: Job) -> None:

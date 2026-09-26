@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import time
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import Iterator
 from datetime import datetime, timezone
 
 from app.automation.base import AutomationContext
@@ -23,6 +26,33 @@ def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class Activity:
+    """Jobs em processamento de verdade (não conta a consulta à fila a cada 5 s)."""
+
+    def __init__(self) -> None:
+        self.running = 0
+        self.last_active = time.monotonic()
+
+    @contextmanager
+    def job(self) -> Iterator[None]:
+        self.running += 1
+        try:
+            yield
+        finally:
+            self.running -= 1
+            self.last_active = time.monotonic()
+
+    @property
+    def busy(self) -> bool:
+        return self.running > 0
+
+    def idle_for(self, now: float | None = None) -> float:
+        """Segundos sem processar nenhum job (0 enquanto houver job em andamento)."""
+        if self.running:
+            return 0.0
+        return (now if now is not None else time.monotonic()) - self.last_active
+
+
 @dataclass(slots=True)
 class RunnerDeps:
     repo: JobRepository
@@ -32,6 +62,7 @@ class RunnerDeps:
     organizer: DownloadOrganizer
     worker_id: str
     retry_policy: RetryPolicy
+    activity: Activity = field(default_factory=Activity)
 
     @classmethod
     def build(

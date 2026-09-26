@@ -51,11 +51,11 @@ class Worker:
         self.browser_slots = asyncio.Semaphore(settings.max_parallel_jobs)
         self.current_jobs: set[str] = set()
         deps = RunnerDeps.build(repo, default_registry(), settings, self.worker_id)
+        self.activity = deps.activity
         self.scheduler = SchedulerRunner(deps)
         self.collector = CollectorRunner(deps)
         self.retention = RetentionService(repo, settings)
         self._next_retention_at: float | None = None
-        self._last_busy = time.monotonic()
 
     async def _sleep(self, seconds: float) -> None:
         try:
@@ -97,7 +97,7 @@ class Worker:
     async def _heartbeat(self) -> None:
         while not self.stop_event.is_set():
             try:
-                busy = self.settings.max_parallel_jobs - self.browser_slots._value  # noqa: SLF001
+                busy = self.activity.running
                 await self.repo.heartbeat(
                     self.worker_id,
                     self.mode,
@@ -156,10 +156,7 @@ class Worker:
 
     async def _local_status(self) -> None:
         while not self.stop_event.is_set():
-            busy = self.settings.max_parallel_jobs - self.browser_slots._value  # noqa: SLF001
-            if busy > 0:
-                self._last_busy = time.monotonic()
-            self._write_local_status("busy" if busy > 0 else "idle")
+            self._write_local_status("busy" if self.activity.busy else "idle")
             await self._sleep(5)
 
     async def _update_watch(self) -> None:
@@ -179,8 +176,11 @@ class Worker:
                     write_status(self.settings, latest)
                 except Exception as exc:  # noqa: BLE001 - sem internet: tenta na próxima
                     log.debug("Consulta de atualização falhou: %s", exc)
-            idle_for = now - self._last_busy
-            if latest and is_newer(latest.version) and idle_for >= self.settings.update_idle_minutes * 60:
+            if (
+                latest
+                and is_newer(latest.version)
+                and self.activity.idle_for(now) >= self.settings.update_idle_minutes * 60
+            ):
                 log.warning("Versão %s disponível e robô ocioso: encerrando para atualizar.", latest.version)
                 self.settings.update_flag.write_text(latest.version, encoding="utf-8")
                 self.stop()

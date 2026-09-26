@@ -367,3 +367,29 @@ class TestRecovery:
         job = self._locked(repo, 300, status="scheduling_nfce", task_status=TaskStatus.PENDING)
         await recover_orphaned_jobs(repo, "EU-1")
         assert repo.job(job.id)["status"] == "queued"
+
+
+class TestActivity:
+    """Robô 'parado' = sem job em processamento; a consulta à fila não conta."""
+
+    def test_idle_counts_only_real_jobs(self) -> None:
+        from app.jobs.base_runner import Activity
+
+        a = Activity()
+        a.last_active = 100.0
+        assert a.idle_for(now=700.0) == 600.0 and not a.busy
+        with a.job():
+            assert a.busy and a.idle_for(now=10_000.0) == 0.0
+        assert not a.busy and a.idle_for() < 1.0
+
+    async def test_polling_an_empty_queue_is_not_activity(self, repo: FakeRepo, deps) -> None:  # noqa: ANN001
+        before = deps.activity.last_active
+        assert not await SchedulerRunner(deps).run_once()  # fila vazia
+        assert not await CollectorRunner(deps).run_once()
+        assert deps.activity.last_active == before and not deps.activity.busy
+
+    async def test_processing_a_job_marks_activity(self, repo: FakeRepo, provider: FakeProvider, deps) -> None:  # noqa: ANN001
+        _setup(repo)
+        deps.activity.last_active = 0.0  # "parado desde sempre"
+        assert await SchedulerRunner(deps).run_once()
+        assert deps.activity.last_active > 0.0 and not deps.activity.busy
