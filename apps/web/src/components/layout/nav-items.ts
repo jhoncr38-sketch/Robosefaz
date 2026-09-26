@@ -4,6 +4,7 @@ import {
   Building2,
   Download,
   History,
+  Laptop,
   Landmark,
   LayoutDashboard,
   ListOrdered,
@@ -34,6 +35,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/history", label: "Histórico", icon: History },
   { href: "/errors", label: "Erros", icon: AlertTriangle },
   { href: "/users", label: "Usuários", icon: Users, permission: "users:manage" },
+  { href: "/devices", label: "Computadores", icon: Laptop },
   { href: "/settings", label: "Configurações", icon: Settings },
   { href: "/organizations", label: "Escritórios", icon: Landmark, ownerOnly: true },
 ];

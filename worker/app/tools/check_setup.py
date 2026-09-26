@@ -95,9 +95,13 @@ def check_task(r: Report) -> None:
 
 
 async def check_supabase_and_certs(settings: Settings, r: Report) -> None:
-    if not settings.supabase_configured:
-        r.fail("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY não preenchidos no .env")
+    if settings.auth_mode is None:
+        r.fail("Computador não ativado. Menu Iniciar → SIAT Robô → Ativar este computador.")
         return
+    if settings.auth_mode == "service":
+        r.warn("Usando a chave-mestra (instalação antiga). Ative este computador com um código do painel.")
+    else:
+        r.ok(f"Computador ativado ({settings.device_email.split('@')[0]})")
     from app.services.supabase_client import get_supabase
 
     try:

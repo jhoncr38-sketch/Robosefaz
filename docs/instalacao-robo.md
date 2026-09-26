@@ -6,7 +6,7 @@ O painel (site) funciona de qualquer lugar. Quem entra no SIAT e baixa as notas 
 
 - Windows 10 ou 11, com um usuário **administrador**. O robô usa esse acesso para fazer o Chrome escolher o certificado sozinho.
 - Os arquivos **.pfx** e as senhas dos certificados A1 dos clientes.
-- Os dados do Supabase: a URL do projeto e a **secret key** (`sb_secret_...`).
+- Um **código de ativação**: no painel, **Computadores → Adicionar computador** (8 caracteres, vale 30 minutos, uso único).
 
 ## 1. Instalar os certificados dos clientes
 
@@ -23,7 +23,7 @@ O assistente mostra:
 
 1. **Boas-vindas**;
 2. **Pasta de instalação**: o padrão é `C:\SIAT-Robo`;
-3. **Conexão com o painel**: cole a **Secret key** do Supabase. A URL já vem preenchida. Essa tela não aparece em atualizações;
+3. **Ativar este computador**: digite o **código de ativação**. Essa tela não aparece em atualizações;
 4. **Opções**: impedir a suspensão na tomada (recomendado) e atalho do painel na Área de Trabalho;
 5. **Instalação**: copia os arquivos e prepara o robô (Python, bibliotecas, verificação dos certificados). Leva alguns minutos na primeira vez;
 6. **Concluído**: o robô já fica ligado, com o ícone ao lado do relógio.

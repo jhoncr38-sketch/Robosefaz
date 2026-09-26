@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_service_role_key: str = ""
     supabase_anon_key: str = ""
+    # computador ativado pelo painel (login técnico; a senha fica no cofre do Windows)
+    device_email: str = ""
 
     # SIAT
     siat_base_url: str = "https://siatweb.sefaz.pi.gov.br"
@@ -113,11 +115,11 @@ class Settings(BaseSettings):
     status_file_path: str = "./storage/worker-status.json"
     # atualização automática pelas Releases do GitHub (instala ao ligar ou quando o robô fica ocioso)
     update_enabled: bool = True
-    update_repo: str = "jhoncr38-sketch/Robosefaz"
+    update_repo: str = "jhoncr38-sketch/siat-robo-releases"
     update_check_minutes: int = 60
     update_idle_minutes: int = 10
     # endereço do painel aberto pelo ícone da bandeja
-    panel_url: str = "https://robosefaz.vercel.app"
+    panel_url: str = "https://jrsistema.com"
 
     @field_validator("browser_channel")
     @classmethod
@@ -216,8 +218,17 @@ class Settings(BaseSettings):
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
     @property
+    def auth_mode(self) -> str | None:
+        """"device" = computador ativado (recomendado); "service" = chave-mestra (instalações antigas)."""
+        if self.supabase_url and self.device_email and self.supabase_anon_key:
+            return "device"
+        if self.supabase_url and self.supabase_service_role_key:
+            return "service"
+        return None
+
+    @property
     def supabase_configured(self) -> bool:
-        return bool(self.supabase_url and self.supabase_service_role_key)
+        return self.auth_mode is not None
 
 
 @lru_cache

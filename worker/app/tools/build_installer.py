@@ -83,7 +83,6 @@ def build() -> Path:
         f"/DStageDir={stage}",
         f"/DPythonExe={python_exe}",
         f"/DOutputDir={out_dir}",
-        f"/DSupabaseUrl={settings.supabase_url}",
         f"/DPanelUrl={settings.panel_url}",
         str(ISS),
     ]

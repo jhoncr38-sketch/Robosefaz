@@ -45,6 +45,10 @@ await db.query("insert into public.notifications (user_id, title, message) value
 await db.query("insert into public.worker_heartbeats (worker_id, kind) values ('PC-1', 'all')");
 
 await db.exec(readFileSync(join(migrationsDir, orgMigration), "utf8"));
+// migrations posteriores (ex.: computadores) também sobre os dados existentes
+for (const file of files.filter((f) => f > orgMigration)) {
+  await db.exec(readFileSync(join(migrationsDir, file), "utf8"));
+}
 
 const org = (await db.query("select id, name, client_code_seq from public.organizations")).rows;
 assert.equal(org.length, 1);

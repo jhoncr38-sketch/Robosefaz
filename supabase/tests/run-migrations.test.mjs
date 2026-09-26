@@ -240,7 +240,7 @@ await test("lote respeita configuração do cliente (B não usa NFC-e)", async (
 });
 
 await test("fila: claim com lock e sem paralelismo no mesmo cliente", async () => {
-  await rejects(as(OPERATOR, (tx) => tx.query("select * from public.claim_next_job('w1')")), /permission denied/);
+  await rejects(as(OPERATOR, (tx) => tx.query("select * from public.claim_next_job('w1')")), /permission denied|FORBIDDEN/);
   const first = await as("service_role", (tx) => tx.query("select id, client_id, status, locked_by, attempts from public.claim_next_job('w1')"));
   assert.equal(first.rows[0].status, "starting");
   assert.equal(first.rows[0].locked_by, "w1");
@@ -479,6 +479,128 @@ await test("painel do dono: números por escritório, sem acesso para os demais"
   const rows = (await as(ADMIN, (tx) => tx.query("select name, clients, users from public.platform_organizations()"))).rows;
   assert.equal(rows.length, 2);
   assert.deepEqual(rows.find((r) => r.name === "Escritório B"), { name: "Escritório B", clients: 1, users: 1 });
+});
+
+// ---------------------------------------------------------------------
+// Computadores (robôs): ativação por código e isolamento por escritório
+// ---------------------------------------------------------------------
+async function activateDevice(adminId, name) {
+  const code = (await as(adminId, (tx) => tx.query("select public.create_device_activation_code() r"))).rows[0].r.code;
+  const redeemed = (
+    await as("service_role", (tx) => tx.query("select public.redeem_device_activation_code($1, $2) r", [code, name]))
+  ).rows[0].r;
+  const authId = (
+    await db.query(
+      "insert into auth.users (email, raw_app_meta_data) values ($1, $2) returning id",
+      [`robo-${redeemed.device_id}@robos.test`, { kind: "device", org_id: redeemed.org_id, device_id: redeemed.device_id }],
+    )
+  ).rows[0].id;
+  await db.query("update public.devices set auth_user_id = $1 where id = $2", [authId, redeemed.device_id]);
+  return { code, authId, deviceId: redeemed.device_id, orgId: redeemed.org_id };
+}
+
+let DEVICE_A;
+let DEVICE_B;
+await test("ativação: só admin gera código; uso único; robô não vira usuário do painel", async () => {
+  await rejects(as(OPERATOR, (tx) => tx.query("select public.create_device_activation_code()")), /FORBIDDEN/);
+  DEVICE_A = await activateDevice(ADMIN, "PC-ESCRITORIO-A");
+  DEVICE_B = await activateDevice(ADMIN_B, "PC-ESCRITORIO-B");
+  assert.equal(DEVICE_A.orgId, ORG_A);
+  assert.equal(DEVICE_B.orgId, ORG_B);
+  assert.match(DEVICE_A.code, /^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+  await rejects(
+    as("service_role", (tx) => tx.query("select public.redeem_device_activation_code($1, 'X')", [DEVICE_A.code])),
+    /INVALID_CODE/,
+  );
+  await rejects(
+    as(ADMIN, (tx) => tx.query("select public.redeem_device_activation_code('AAAA-BBBB', 'X')")),
+    /permission denied/,
+  );
+  const profile = (await db.query("select count(*)::int n from public.profiles where user_id = $1", [DEVICE_A.authId])).rows[0].n;
+  assert.equal(profile, 0);
+  const stored = (await db.query("select count(*)::int n from public.device_activation_codes where code_hash = $1", [DEVICE_A.code])).rows[0].n;
+  assert.equal(stored, 0, "código guardado só como hash");
+});
+
+await test("código expirado não ativa", async () => {
+  const code = (await as(ADMIN, (tx) => tx.query("select public.create_device_activation_code() r"))).rows[0].r.code;
+  await db.query("update public.device_activation_codes set expires_at = now() - interval '1 minute' where used_at is null");
+  await rejects(
+    as("service_role", (tx) => tx.query("select public.redeem_device_activation_code($1, 'X')", [code])),
+    /INVALID_CODE/,
+  );
+});
+
+await test("robô só lê os dados do próprio escritório", async () => {
+  const a = await as(DEVICE_A.authId, (tx) => tx.query("select distinct org_id from public.clients"));
+  assert.deepEqual(a.rows.map((r) => r.org_id), [ORG_A]);
+  const b = await as(DEVICE_B.authId, (tx) => tx.query("select distinct org_id from public.clients"));
+  assert.deepEqual(b.rows.map((r) => r.org_id), [ORG_B]);
+  for (const table of ["automation_jobs", "automation_tasks", "downloads", "certificates"]) {
+    const leak = await as(DEVICE_B.authId, (tx) => tx.query(`select count(*)::int n from public.${table} where org_id <> $1`, [ORG_B]));
+    assert.equal(leak.rows[0].n, 0, `robô de B leu ${table} de outro escritório`);
+  }
+  const panel = await as(DEVICE_A.authId, (tx) => tx.query("select count(*)::int n from public.profiles"));
+  assert.equal(panel.rows[0].n, 0, "robô não lê usuários");
+});
+
+await test("fila: robô de B só pega jobs de B; robô de A nunca pega jobs de B", async () => {
+  await db.query("update public.automation_jobs set locked_by = null, locked_at = null");
+  const jobB = (
+    await as(ADMIN_B, (tx) => tx.query("select public.create_automation_job($1, '2026-05', '{NFE_ISSUED_EXPORT}') r", [CLIENT_B1]))
+  ).rows[0].r.job_id;
+  const fromA = await as(DEVICE_A.authId, (tx) => tx.query("select id, org_id from public.claim_next_job('robo-a')"));
+  for (const row of fromA.rows) assert.equal(row.org_id, ORG_A);
+  const fromB = await as(DEVICE_B.authId, (tx) => tx.query("select id, org_id from public.claim_next_job('robo-b')"));
+  assert.equal(fromB.rows[0].id, jobB);
+  const again = await as(DEVICE_B.authId, (tx) => tx.query("select id from public.claim_next_job('robo-b2')"));
+  assert.equal(again.rows.length, 0, "B não tem mais trabalho e não pega o de A");
+  await rejects(as(OPERATOR, (tx) => tx.query("select * from public.claim_next_job('humano')")), /FORBIDDEN/);
+});
+
+await test("robô grava só no próprio escritório (logs, tarefas, downloads, sinal de vida)", async () => {
+  const jobA = (await db.query("select id from public.automation_jobs where org_id = $1 limit 1", [ORG_A])).rows[0].id;
+  await rejects(
+    as(DEVICE_B.authId, (tx) => tx.query("insert into public.automation_logs (job_id, message) values ($1, 'invasão')", [jobA])),
+    /row-level security/,
+  );
+  const upd = await as(DEVICE_B.authId, (tx) => tx.query("update public.automation_jobs set last_message = 'hack' where id = $1", [jobA]));
+  assert.equal(upd.affectedRows, 0);
+  await as(DEVICE_B.authId, (tx) =>
+    tx.query("insert into public.worker_heartbeats (worker_id, kind, meta) values ('PC-B-1', 'all', '{\"version\":\"1.1.0\"}')"),
+  );
+  await as(DEVICE_B.authId, (tx) => tx.query("insert into public.automation_logs (job_id, message) values (null, 'mensagem geral do robô')"));
+  const general = (await db.query("select org_id from public.automation_logs where message = 'mensagem geral do robô'")).rows[0];
+  assert.equal(general.org_id, ORG_B);
+  const hb = (await db.query("select org_id, device_id from public.worker_heartbeats where worker_id = 'PC-B-1'")).rows[0];
+  assert.deepEqual(hb, { org_id: ORG_B, device_id: DEVICE_B.deviceId });
+  const dev = (await db.query("select robot_version, last_seen_at is not null seen from public.devices where id = $1", [DEVICE_B.deviceId])).rows[0];
+  assert.deepEqual(dev, { robot_version: "1.1.0", seen: true });
+  const seenByA = await as(DEVICE_A.authId, (tx) => tx.query("select count(*)::int n from public.worker_heartbeats where worker_id = 'PC-B-1'"));
+  assert.equal(seenByA.rows[0].n, 0);
+});
+
+await test("painel lista só os computadores do próprio escritório", async () => {
+  const a = await as(ADMIN, (tx) => tx.query("select name from public.devices"));
+  assert.deepEqual(a.rows.map((r) => r.name), ["PC-ESCRITORIO-A"]);
+  const b = await as(ADMIN_B, (tx) => tx.query("select name from public.devices"));
+  assert.deepEqual(b.rows.map((r) => r.name), ["PC-ESCRITORIO-B"]);
+  await rejects(as(ADMIN, (tx) => tx.query("select public.revoke_device($1)", [DEVICE_B.deviceId])), /DEVICE_NOT_FOUND/);
+});
+
+await test("computador desativado perde o acesso na hora", async () => {
+  await as(ADMIN_B, (tx) => tx.query("select public.revoke_device($1)", [DEVICE_B.deviceId]));
+  const seen = await as(DEVICE_B.authId, (tx) => tx.query("select count(*)::int n from public.clients"));
+  assert.equal(seen.rows[0].n, 0);
+  await rejects(as(DEVICE_B.authId, (tx) => tx.query("select * from public.claim_next_job('robo-b')")), /FORBIDDEN/);
+});
+
+await test("escritório suspenso: robô dele também para", async () => {
+  await as(ADMIN, (tx) => tx.query("update public.organizations set status = 'suspended' where id = $1", [ORG_A]));
+  await rejects(as(DEVICE_A.authId, (tx) => tx.query("select * from public.claim_next_collection('robo-a')")), /FORBIDDEN/);
+  await as(ADMIN, (tx) => tx.query("update public.organizations set status = 'active' where id = $1", [ORG_A]));
+  const ok = await as(DEVICE_A.authId, (tx) => tx.query("select count(*)::int n from public.clients"));
+  assert.ok(ok.rows[0].n > 0);
 });
 
 console.log(`\n${passed} teste(s) de banco passaram${process.exitCode ? " (com falhas)" : ""}.`);

@@ -64,12 +64,12 @@ def _message(text: str, error: bool = False) -> None:
 
 
 def open_download(download_id: str, settings: Settings) -> None:
-    from supabase import create_client
+    from app.services.supabase_client import create_sync_client
 
     if not settings.supabase_configured:
-        _message("O SIAT Robô deste computador não está configurado. Rode o instalador novamente.", error=True)
+        _message("Este computador não está ativado. Ative-o pelo menu Iniciar → SIAT Robô.", error=True)
         return
-    db = create_client(settings.supabase_url, settings.supabase_service_role_key)
+    db = create_sync_client(settings)
     rows = (
         db.table("downloads")
         .select("filepath, filename, competence, document_type, clients(client_code)")

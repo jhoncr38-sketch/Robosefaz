@@ -42,8 +42,8 @@ from app import __version__  # noqa: E402
 from app.tray_icons import draw  # noqa: E402
 
 OUT = Path(__file__).with_name("Manual-SIAT-Robo.pdf")
-PANEL_URL = "https://robosefaz.vercel.app"
-RELEASES_URL = "https://github.com/jhoncr38-sketch/Robosefaz/releases/latest"
+PANEL_URL = "https://jrsistema.com"
+RELEASES_URL = "https://github.com/jhoncr38-sketch/siat-robo-releases/releases/latest"
 
 # --- fontes e cores -------------------------------------------------------------
 FONTS = Path("C:/Windows/Fonts")
@@ -305,26 +305,20 @@ def cap_requisitos() -> list:
                     "exige seleção manual.",
                 ],
                 [
-                    "Secret key do Supabase",
-                    "A chave que conecta o robô ao painel (começa com " + code("sb_secret_") + "). "
-                    "É pedida só na primeira instalação de cada computador.",
+                    "Código de ativação",
+                    "Gerado no painel, em <b>Computadores → Adicionar computador</b>. Tem 8 caracteres "
+                    "(ex.: ABCD-EFGH), vale por 30 minutos e só pode ser usado uma vez.",
                 ],
                 ["Inscrição Estadual", "De cada cliente. O SIAT web identifica o contribuinte pela IE."],
             ],
             [42, 128],
         ),
-        H2("Onde encontrar a Secret key"),
-        *bullets(
-            [
-                "No computador onde o robô já está instalado: abra o arquivo " + code("C:\\SIAT-Robo\\.env")
-                + " no Bloco de Notas e copie o que vem depois de " + code("SUPABASE_SERVICE_ROLE_KEY=") + ".",
-                "Ou no site do Supabase: <b>Project Settings → API Keys → Secret keys</b>, botão copiar.",
-            ]
-        ),
-        *warn(
-            "Quem tem a Secret key consegue mexer no banco de dados inteiro. Não envie por WhatsApp ou "
-            "e-mail; leve por pen drive ou cole direto no computador. Não confunda com a Publishable key "
-            "(" + code("sb_publishable_") + "), que não serve para o robô."
+        H2("Como o computador se conecta"),
+        P(
+            "Cada computador é <b>ativado</b> com um código gerado pelo administrador do escritório. Depois da "
+            "ativação, o robô daquele computador só enxerga os dados do próprio escritório, e o computador pode "
+            "ser desativado a qualquer momento na tela <b>Computadores</b>. Nenhuma chave do sistema fica "
+            "guardada no computador: o acesso é exclusivo dele e fica no cofre do Windows."
         ),
     ]
 
@@ -358,9 +352,9 @@ def cap_instalacao() -> list:
                 ["Boas-vindas", "Avançar."],
                 ["Pasta de instalação", "Deixe o padrão " + code("C:\\SIAT-Robo") + "."],
                 [
-                    "Conexão com o painel",
-                    "A URL já vem preenchida. Cole a <b>Secret key</b>; os caracteres não aparecem enquanto "
-                    "você cola. Esta tela só aparece na primeira instalação.",
+                    "Ativar este computador",
+                    "Digite o <b>código de ativação</b> gerado no painel (Computadores → Adicionar "
+                    "computador). Esta tela só aparece na primeira instalação.",
                 ],
                 [
                     "Opções",
@@ -452,6 +446,8 @@ def cap_painel_acesso() -> list:
                 ["Histórico", "Todas as execuções, com detalhes, logs e resultado."],
                 ["Erros", "Falhas, com o motivo e o print da tela."],
                 ["Usuários", "Quem acessa o painel e com qual perfil."],
+                ["Computadores", "Computadores com o robô: ativar (código), ver versão e último sinal, desativar."],
+                ["Escritórios", "Só para o dono da plataforma: criar, suspender e limitar escritórios."],
                 ["Configurações", "Intervalo das consultas, limites e alertas."],
             ],
             [35, 135],
@@ -869,8 +865,13 @@ def cap_problemas() -> list:
                     "Clique em Mais informações → Executar assim mesmo.",
                 ],
                 [
-                    "A Secret key foi recusada no instalador",
-                    "Confira se copiou a Secret key (" + code("sb_secret_") + ") e não a Publishable key.",
+                    "O código de ativação foi recusado",
+                    "Ele vale 30 minutos e só uma vez. Gere outro em Computadores → Adicionar computador.",
+                ],
+                [
+                    "O ícone mostra “Ativar este computador”",
+                    "O computador ainda usa o acesso antigo. Gere um código em Computadores e clique na opção "
+                    "(ou menu Iniciar → SIAT Robô → Ativar este computador).",
                 ],
                 [
                     "Uma nota ficou com erro depois de 5 tentativas",
@@ -903,7 +904,8 @@ def cap_glossario() -> list:
                 ["e-AGEAT", "Área do SIAT por onde o robô chega ao SIAT web de exportação."],
                 ["Certificado A1", "Certificado digital em arquivo (.pfx), instalado no Windows."],
                 ["IE", "Inscrição Estadual do contribuinte."],
-                ["Secret key", "Chave que conecta o robô ao painel. Só para os computadores do robô."],
+                ["Código de ativação", "Código de uso único que vincula um computador ao escritório."],
+                ["Escritório", "Cada empresa de contabilidade que usa o sistema; os dados de um não aparecem para outro."],
                 ["Reprocessar", "Colocar de novo na fila um agendamento que deu erro."],
                 ["SHA-256", "Código de conferência do arquivo; prova que o ZIP não foi alterado."],
             ],

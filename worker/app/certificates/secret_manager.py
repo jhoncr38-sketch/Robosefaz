@@ -116,6 +116,18 @@ class EncryptedFileBackend:
             return existed
 
 
+def backend_from_settings(settings) -> SecretBackend:  # noqa: ANN001
+    """Cofre do Windows (keyring) ou arquivo cifrado, conforme SECRET_BACKEND."""
+    mode = (settings.secret_backend or "auto").lower()
+    if mode in {"auto", "keyring"}:
+        try:
+            return KeyringBackend()
+        except Exception as exc:
+            if mode == "keyring":
+                raise SecretBackendError(f"Keyring indisponível: {exc}") from exc
+    return EncryptedFileBackend(settings.secrets_file, settings.secret_encryption_key)
+
+
 class CertificateSecretManager:
     """Abstração para salvar/obter/remover a senha de um certificado."""
 
@@ -128,14 +140,7 @@ class CertificateSecretManager:
 
     @classmethod
     def from_settings(cls, settings) -> "CertificateSecretManager":  # noqa: ANN001
-        mode = (settings.secret_backend or "auto").lower()
-        if mode in {"auto", "keyring"}:
-            try:
-                return cls(KeyringBackend())
-            except Exception as exc:
-                if mode == "keyring":
-                    raise SecretBackendError(f"Keyring indisponível: {exc}") from exc
-        return cls(EncryptedFileBackend(settings.secrets_file, settings.secret_encryption_key))
+        return cls(backend_from_settings(settings))
 
     def save_secret(self, certificate_id: str, secret: str) -> None:
         if not secret:

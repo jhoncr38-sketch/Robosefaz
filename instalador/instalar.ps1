@@ -17,7 +17,8 @@
 param(
     [switch]$Silencioso,          # sem perguntas; o .env já deve existir
     [string]$PythonInstalador,    # instalador oficial do Python 3.12 embutido no .exe
-    [string]$Conexao,             # (silencioso) arquivo temporário: 1ª linha URL, 2ª linha secret key
+    [string]$Conexao,             # arquivo temporário com o código de ativação (apagado após ler)
+    [string]$Painel = 'https://jrsistema.com',  # endereço do painel (ativação)
     [switch]$SemSuspensao,        # (silencioso) impede a suspensão na tomada
     [switch]$Iniciar,             # (silencioso) liga o robô no fim
     [string]$Log                  # (silencioso) arquivo com o registro da instalação
@@ -152,45 +153,38 @@ if ($LASTEXITCODE -ne 0) { Falha 'Falha ao instalar as dependências (verifique 
 Ok 'Dependências instaladas'
 
 # ------------------------------------------------------------------------------
-Titulo '3/6 Configuração (.env)'
+Titulo '3/6 Configuração e ativação'
 $novo = -not (Test-Path $EnvFile)
-if ($novo -and $Silencioso -and -not $Conexao) { Falha 'Configuração (.env) não encontrada.' }
+$env:PYTHONIOENCODING = 'utf-8'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$codigo = ''
+if ($Conexao -and (Test-Path -LiteralPath $Conexao)) {
+    $codigo = [string](@(Get-Content -LiteralPath $Conexao -Encoding UTF8) | Select-Object -First 1)
+    $codigo = $codigo.Trim()
+    Remove-Item -LiteralPath $Conexao -Force
+}
 if ($novo) {
     if (-not (Test-Path $Exemplo)) { Falha ".env.example não encontrado em $Raiz" }
     $linhas = Ler-Env $Exemplo
-    if ($Conexao) {
-        $dados = @(Get-Content -LiteralPath $Conexao -Encoding UTF8)
-        Remove-Item -LiteralPath $Conexao -Force
-        $url = $dados[0].Trim().TrimEnd('/')
-        $secret = $dados[1].Trim()
-    }
-    else {
-        Write-Host '  Informe os dados do Supabase (Supabase > Project Settings > API Keys).'
-        $url = ''
-        while ($url -notmatch '^https://[a-z0-9-]+\.supabase\.co/?$') {
-            $url = Pergunta 'URL do projeto (https://xxxx.supabase.co)'
-        }
-        $url = $url.TrimEnd('/')
-        $sec = Read-Host '  Secret key (sb_secret_...; não aparece enquanto digita)' -AsSecureString
-        $secret = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
-    }
-    if ($secret -notmatch '^(sb_secret_|eyJ)') { Falha 'A chave informada não parece uma secret key do Supabase.' }
-    $anon = if ($Silencioso) { '' } else { Pergunta 'Publishable key (sb_publishable_...; opcional, Enter para pular)' }
-    Definir-Env $linhas 'SUPABASE_URL' $url
-    Definir-Env $linhas 'NEXT_PUBLIC_SUPABASE_URL' $url
-    Definir-Env $linhas 'SUPABASE_SERVICE_ROLE_KEY' $secret
-    if ($anon) { Definir-Env $linhas 'SUPABASE_ANON_KEY' $anon; Definir-Env $linhas 'NEXT_PUBLIC_SUPABASE_ANON_KEY' $anon }
-    $secret = $null
     # valores de produção (os mesmos usados no computador principal)
     Definir-Env $linhas 'AUTOMATION_DRY_RUN' 'false'
     Definir-Env $linhas 'AUTOMATION_SCREENSHOTS' 'true'
     Definir-Env $linhas 'CHROME_POLICY_MODE' 'per_job'
     Definir-Env $linhas 'CHROME_POLICY_ALLOW_WRITE' 'true'
-    Ok 'Chaves registradas (o .env fica só neste computador e nunca vai para o GitHub)'
+    Definir-Env $linhas 'PANEL_URL' $Painel
+    if (-not $codigo -and -not $Silencioso) {
+        Write-Host '  No painel: Computadores > Adicionar computador. Digite o código mostrado (ex.: ABCD-EFGH).'
+        $codigo = Pergunta 'Código de ativação'
+    }
+    if (-not $codigo) { Falha 'Informe o código de ativação (painel > Computadores > Adicionar computador).' }
 }
 else {
     $linhas = Ler-Env $EnvFile
-    Ok ".env já existe; chaves mantidas"
+    Ok '.env já existe; configuração mantida'
+    if (-not (Valor-Env $linhas 'DEVICE_EMAIL') -and -not $codigo -and -not $Silencioso) {
+        Aviso 'Este computador ainda usa a chave-mestra. O recomendado é ativá-lo com um código do painel.'
+        if (SimNao 'Ativar agora?' $true) { $codigo = Pergunta 'Código de ativação' }
+    }
 }
 if (-not (Valor-Env $linhas 'SECRET_ENCRYPTION_KEY')) {
     Push-Location $Worker; $chave = (& $Py -m app.tools.generate_key); Pop-Location
@@ -211,6 +205,19 @@ if (SimNao 'Usar outra pasta de downloads?' $false $false) {
     }
 }
 Gravar-Env $linhas $EnvFile
+
+# ativação: troca o código pelo acesso deste computador (a senha vai para o cofre do Windows)
+if ($codigo) {
+    Push-Location $Worker
+    $saida = @(& $Py -m app.tools.activate $codigo --painel $Painel --json)
+    Pop-Location
+    try { $res = ($saida | Select-Object -Last 1) | ConvertFrom-Json } catch { $res = $null }
+    if (-not $res -or -not $res.ok) {
+        $motivo = if ($res) { $res.error } else { ($saida -join ' ') }
+        Falha "Não foi possível ativar este computador: $motivo"
+    }
+    Ok "Computador ativado no escritório: $($res.org_name)"
+}
 
 # ------------------------------------------------------------------------------
 Titulo '4/6 Verificação'

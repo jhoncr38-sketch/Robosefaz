@@ -3,7 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { publicEnv } from "@/lib/env";
 
-const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password", "/auth"];
+// /api/devices/activate: chamado pelo instalador do robô (sem login), protegido pelo código de uso único
+const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password", "/auth", "/api/devices/activate"];
 
 function isPublic(pathname: string) {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));

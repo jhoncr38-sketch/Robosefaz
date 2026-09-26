@@ -60,6 +60,18 @@ export interface Profile {
 
 export type OrganizationStatus = "active" | "suspended";
 
+/** Computador com o robô, ativado por código e vinculado a um escritório. */
+export interface Device {
+  id: string;
+  org_id: string;
+  name: string;
+  status: "active" | "revoked";
+  robot_version: string | null;
+  activated_at: string;
+  last_seen_at: string | null;
+  revoked_at: string | null;
+}
+
 /** Escritório com os números exibidos ao dono da plataforma (RPC platform_organizations). */
 export interface PlatformOrganization {
   id: string;
@@ -70,6 +82,7 @@ export interface PlatformOrganization {
   created_at: string;
   users: number;
   clients: number;
+  devices: number;
   jobs_30d: number;
   last_activity: string | null;
 }

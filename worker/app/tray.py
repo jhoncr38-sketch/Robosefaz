@@ -115,9 +115,9 @@ class RemoteWatcher:
 
     def _db(self):
         if self._client is None:
-            from supabase import create_client
+            from app.services.supabase_client import create_sync_client
 
-            self._client = create_client(self.settings.supabase_url, self.settings.supabase_service_role_key)
+            self._client = create_sync_client(self.settings)
         return self._client
 
     def poll(self) -> tuple[list[str], list[str]]:
@@ -192,6 +192,11 @@ class RobotTray:
                     visible=lambda _i: bool(self.state.attention),
                 ),
                 pystray.Menu.SEPARATOR,
+                pystray.MenuItem(
+                    "⚠ Ativar este computador…",
+                    self.activate,
+                    visible=lambda _i: self.settings.auth_mode != "device",
+                ),
                 pystray.MenuItem("Abrir painel", self.open_panel, default=True),
                 pystray.MenuItem("Abrir pasta das notas", self.open_downloads),
                 pystray.Menu.SEPARATOR,
@@ -242,6 +247,11 @@ class RobotTray:
         flag.write_text("parar", encoding="utf-8")
         self.icon.notify("O robô vai terminar o trabalho atual e parar.", "SIAT Robô")
 
+    def activate(self, *_a) -> None:
+        """Abre a janela de ativação (pede o código gerado em Computadores, no painel)."""
+        bat = PROJECT_ROOT / "ativar-robo.bat"
+        ctypes.windll.shell32.ShellExecuteW(None, "open", str(bat), None, str(PROJECT_ROOT), 1)
+
     def update_now(self, *_a) -> None:
         """O robô termina o trabalho atual; o serviço instala a versão nova e religa."""
         flag = self.settings.update_flag
@@ -265,7 +275,16 @@ class RobotTray:
         self.icon.stop()
 
     # -- atualização --------------------------------------------------------------
+    def _reload_if_activated(self) -> None:
+        """Depois da ativação o .env muda: passa a usar o acesso do computador."""
+        fresh = Settings()
+        if fresh.device_email != self.settings.device_email:
+            self.settings = fresh
+            self.remote = RemoteWatcher(fresh)
+            self.icon.notify("Computador ativado. O robô já usa o acesso deste escritório.", "SIAT Robô")
+
     def _refresh(self) -> None:
+        self._reload_if_activated()
         robot, dry_run = read_local_status(self.settings.status_file)
         self.state.robot, self.state.dry_run = robot, dry_run
         update = read_update_status(self.settings)

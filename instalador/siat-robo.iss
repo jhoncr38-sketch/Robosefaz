@@ -1,6 +1,6 @@
 ﻿; Instalador do SIAT Robô (Inno Setup 6).
 ; Não compile à mão: use gerar-instalador.bat, que prepara os arquivos e
-; passa StageDir, PythonExe, AppVersion, OutputDir, SupabaseUrl e PanelUrl.
+; passa StageDir, PythonExe, AppVersion, OutputDir e PanelUrl.
 
 #define AppName "SIAT Robô"
 #define TaskName "SIAT Automacao - Robo"
@@ -57,6 +57,7 @@ Name: "{group}\Pasta das notas"; Filename: "{app}\storage\downloads"
 Name: "{group}\Ligar robô"; Filename: "{app}\iniciar-robo.bat"; IconFilename: "{app}\instalador\robo.ico"
 Name: "{group}\Parar robô"; Filename: "{app}\parar-robo.bat"; IconFilename: "{app}\instalador\robo.ico"
 Name: "{group}\Status e verificação"; Filename: "{app}\status-robo.bat"; IconFilename: "{app}\instalador\robo.ico"
+Name: "{group}\Ativar este computador"; Filename: "{app}\ativar-robo.bat"; IconFilename: "{app}\instalador\robo.ico"
 Name: "{group}\Desinstalar SIAT Robô"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\Painel SIAT"; Filename: "{#PanelUrl}"; IconFilename: "{app}\instalador\robo.ico"; Tasks: atalhopainel
 
@@ -92,13 +93,26 @@ end;
 procedure InitializeWizard;
 begin
   KeyPage := CreateInputQueryPage(wpSelectDir,
-    'Conexão com o painel',
-    'Dados do Supabase usados pelo robô',
-    'Cole a URL do projeto e a Secret key (Supabase > Project Settings > API Keys).' + #13#10 +
-    'A chave fica guardada somente neste computador.');
-  KeyPage.Add('URL do projeto:', False);
-  KeyPage.Add('Secret key (começa com sb_secret_):', True);
-  KeyPage.Values[0] := '{#SupabaseUrl}';
+    'Ativar este computador',
+    'Código de ativação do escritório',
+    'No painel ({#PanelUrl}), abra Computadores > Adicionar computador e digite abaixo o código ' +
+    'de 8 caracteres. Ele vale por 30 minutos e só pode ser usado uma vez.' + #13#10#13#10 +
+    'Com o código, este computador passa a acessar somente os dados do seu escritório.');
+  KeyPage.Add('Código de ativação (ex.: ABCD-EFGH):', False);
+end;
+
+function CleanCode(Value: String): String;
+var
+  I: Integer;
+  C: Char;
+begin
+  Result := '';
+  for I := 1 to Length(Value) do
+  begin
+    C := Value[I];
+    if ((C >= '0') and (C <= '9')) or ((C >= 'A') and (C <= 'Z')) or ((C >= 'a') and (C <= 'z')) then
+      Result := Result + Uppercase(C);
+  end;
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
@@ -108,24 +122,13 @@ begin
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
-var
-  Url, Key: String;
 begin
   Result := True;
-  if CurPageID = KeyPage.ID then
+  if (CurPageID = KeyPage.ID) and (Length(CleanCode(KeyPage.Values[0])) <> 8) then
   begin
-    Url := Trim(KeyPage.Values[0]);
-    Key := Trim(KeyPage.Values[1]);
-    if (Pos('https://', Url) <> 1) or (Pos('.supabase.co', Url) = 0) then
-    begin
-      MsgBox('Informe a URL do projeto no formato https://xxxx.supabase.co', mbError, MB_OK);
-      Result := False;
-    end
-    else if (Pos('sb_secret_', Key) <> 1) and (Pos('eyJ', Key) <> 1) then
-    begin
-      MsgBox('Isso não parece uma Secret key do Supabase (ela começa com sb_secret_).', mbError, MB_OK);
-      Result := False;
-    end;
+    MsgBox('O código de ativação tem 8 caracteres (ex.: ABCD-EFGH). Gere um no painel, em Computadores.',
+      mbError, MB_OK);
+    Result := False;
   end;
 end;
 
@@ -159,16 +162,16 @@ begin
   Params := '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' +
     ExpandConstant('{app}\instalador\instalar.ps1') + '" -Silencioso -Iniciar' +
     ' -PythonInstalador "' + ExpandConstant('{tmp}\python-instalador.exe') + '"' +
-    ' -Log "' + ExpandConstant('{app}\storage\logs\instalacao.log') + '"';
+    ' -Log "' + ExpandConstant('{app}\storage\logs\instalacao.log') + '"' +
+    ' -Painel "{#PanelUrl}"';
   if WizardIsTaskSelected('semsuspensao') then
     Params := Params + ' -SemSuspensao';
   if not EnvExists() then
   begin
-    { a chave vai por arquivo temporário (apagado pelo script), nunca pela linha de comando }
+    { o código vai por arquivo temporário (apagado pelo script), nunca pela linha de comando }
     Conn := ExpandConstant('{tmp}\conexao.txt');
-    SetArrayLength(Lines, 2);
-    Lines[0] := Trim(KeyPage.Values[0]);
-    Lines[1] := Trim(KeyPage.Values[1]);
+    SetArrayLength(Lines, 1);
+    Lines[0] := CleanCode(KeyPage.Values[0]);
     SaveStringsToUTF8File(Conn, Lines, False);
     Params := Params + ' -Conexao "' + Conn + '"';
   end;

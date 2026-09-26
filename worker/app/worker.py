@@ -117,6 +117,17 @@ class Worker:
                 log.warning("Heartbeat falhou: %s", exc)
             await self._sleep(30)
 
+    async def _session(self) -> None:
+        """Computador ativado: renova o acesso ao banco antes de expirar (1 h)."""
+        from app.services.supabase_client import keep_session_alive
+
+        while not self.stop_event.is_set():
+            await self._sleep(20 * 60)
+            try:
+                await keep_session_alive(self.settings)
+            except Exception:
+                log.exception("Falha ao renovar o acesso do computador")
+
     async def _recovery(self) -> None:
         """A cada minuto: assume jobs de robôs que pararam de dar sinal (PC desligado etc.)."""
         await self._sleep(20)  # deixa o próprio heartbeat ser gravado primeiro
@@ -209,6 +220,7 @@ class Worker:
             asyncio.create_task(self._watch_stop_flag(), name="stop-flag"),
             asyncio.create_task(self._local_status(), name="local-status"),
             asyncio.create_task(self._recovery(), name="recovery"),
+            asyncio.create_task(self._session(), name="session"),
             asyncio.create_task(self._update_watch(), name="update-watch"),
         ]
         if self.mode in ("all", "scheduler"):

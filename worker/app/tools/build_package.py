@@ -22,6 +22,7 @@ INCLUDE_FILES = [
     "worker/abrir_nota.pyw",
     ".env.example",
     "instalar-robo.bat",
+    "ativar-robo.bat",
     "iniciar-robo.bat",
     "parar-robo.bat",
     "status-robo.bat",

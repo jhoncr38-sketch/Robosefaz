@@ -256,6 +256,7 @@ export function OrganizationsManager({ orgs, ownOrgId }: { orgs: PlatformOrganiz
                 <TableHead>Situação</TableHead>
                 <TableHead className="text-right">Empresas</TableHead>
                 <TableHead className="text-right">Usuários</TableHead>
+                <TableHead className="text-right">Computadores</TableHead>
                 <TableHead className="text-right">Agendamentos (30 dias)</TableHead>
                 <TableHead>Última atividade</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
@@ -283,6 +284,7 @@ export function OrganizationsManager({ orgs, ownOrgId }: { orgs: PlatformOrganiz
                       <span className="text-muted-foreground"> / {org.max_clients ?? "∞"}</span>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{org.users}</TableCell>
+                    <TableCell className="text-right tabular-nums">{org.devices}</TableCell>
                     <TableCell className="text-right tabular-nums">{org.jobs_30d}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {org.last_activity ? formatDateTime(org.last_activity) : "—"}
