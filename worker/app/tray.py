@@ -204,7 +204,8 @@ class RobotTray:
                     visible=lambda _i: bool(self.state.update_to),
                 ),
                 pystray.Menu.SEPARATOR,
-                pystray.MenuItem("Fechar este ícone (o robô continua)", self.quit),
+                pystray.MenuItem("Parar robô e fechar o ícone", self.stop_and_quit),
+                pystray.MenuItem("Fechar só o ícone (o robô continua)", self.quit),
             ),
         )
 
@@ -252,6 +253,12 @@ class RobotTray:
             "O robô vai terminar o trabalho atual, instalar a versão nova e voltar sozinho em 1 a 2 minutos.",
             "SIAT Robô",
         )
+
+    def stop_and_quit(self, *_a) -> None:
+        """Desliga tudo: o robô termina o trabalho atual e para; o ícone fecha na hora."""
+        if self.state.robot != "stopped":
+            self.stop_robot()
+        self.quit()
 
     def quit(self, *_a) -> None:
         self._stop.set()
