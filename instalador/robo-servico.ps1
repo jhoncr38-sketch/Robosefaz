@@ -105,8 +105,10 @@ finally {
     $mutex.Dispose()
     if ($script:religar) {
         Remove-Item -LiteralPath $Flag -ErrorAction SilentlyContinue  # o instalador deixa o sinal de parada
+        # religa pela tarefa agendada (status "Em execução"); religar.ps1 espera esta instância terminar
         Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList @(
-            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$PSCommandPath`""
+            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
+            '-File', "`"$(Join-Path $PSScriptRoot 'religar.ps1')`"", '-Servico', "`"$PSCommandPath`""
         )
     }
 }
