@@ -60,7 +60,7 @@ def build(dest_dir: Path | None = None) -> Path:
         for path in _files():
             zf.write(path, Path("SIAT-Robo") / path.relative_to(PROJECT_ROOT))
         for rel in EMPTY_DIRS:
-            zf.writestr(f"SIAT-Robo/{rel}/.gitkeep", "")
+            zf.writestr(f"SIAT-Robo/{rel}/", "")  # pasta vazia (sem arquivo .gitkeep visível ao usuário)
     return target
 
 

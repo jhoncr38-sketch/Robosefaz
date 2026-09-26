@@ -67,7 +67,6 @@ def _stage() -> Path:
         shutil.copy2(src, dst)
     for rel in EMPTY_DIRS:
         (stage / rel).mkdir(parents=True, exist_ok=True)
-        (stage / rel / ".gitkeep").write_text("", encoding="utf-8")
     save_ico(stage / "instalador" / "robo.ico")
     return stage
 
