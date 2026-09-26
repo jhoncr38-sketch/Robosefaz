@@ -16,6 +16,9 @@ storage/secrets/*
 storage/logs/*
 storage/parar-robo.flag
 storage/worker-status.json
+storage/update-status.json
+storage/atualizar.flag
+storage/updates/
 !storage/**/.gitkeep
 
 # Seletores calibrados localmente

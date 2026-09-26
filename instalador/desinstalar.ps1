@@ -7,7 +7,8 @@
 #>
 param(
     [string]$Raiz = (Split-Path -Parent $PSScriptRoot),
-    [switch]$RemoverTarefa
+    [switch]$RemoverTarefa,
+    [switch]$ManterTarefa   # atualização automática: a própria tarefa chamou o instalador
 )
 $ErrorActionPreference = 'SilentlyContinue'
 $TaskName = 'SIAT Automacao - Robo'
@@ -16,7 +17,7 @@ if (Test-Path -LiteralPath $Raiz) {
     New-Item -ItemType Directory -Force -Path (Join-Path $Raiz 'storage') | Out-Null
     Set-Content -LiteralPath (Join-Path $Raiz 'storage\parar-robo.flag') -Value 'parar'
 }
-schtasks /End /TN $TaskName 2>$null | Out-Null
+if (-not $ManterTarefa) { schtasks /End /TN $TaskName 2>$null | Out-Null }
 
 # robô (-m app.worker) e ícone (-m app.tray) de qualquer instalação do SIAT Robô
 Get-CimInstance Win32_Process -Filter "Name='python.exe' OR Name='pythonw.exe'" |

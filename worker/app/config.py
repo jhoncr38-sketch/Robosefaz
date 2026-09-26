@@ -111,6 +111,11 @@ class Settings(BaseSettings):
     stop_flag_path: str = "./storage/parar-robo.flag"
     # estado local do robô lido pelo ícone da bandeja
     status_file_path: str = "./storage/worker-status.json"
+    # atualização automática pelas Releases do GitHub (instala ao ligar ou quando o robô fica ocioso)
+    update_enabled: bool = True
+    update_repo: str = "jhoncr38-sketch/Robosefaz"
+    update_check_minutes: int = 60
+    update_idle_minutes: int = 10
     # endereço do painel aberto pelo ícone da bandeja
     panel_url: str = "https://robosefaz.vercel.app"
 
@@ -196,6 +201,11 @@ class Settings(BaseSettings):
     @property
     def status_file(self) -> Path:
         return _resolve(self.status_file_path)
+
+    @property
+    def update_flag(self) -> Path:
+        """Criado pelo robô ocioso ou pelo ícone ("Atualizar agora"): o serviço atualiza e religa."""
+        return self.status_file.with_name("atualizar.flag")
 
     @property
     def secrets_file(self) -> Path:

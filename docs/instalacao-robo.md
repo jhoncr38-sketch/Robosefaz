@@ -30,7 +30,7 @@ O assistente mostra:
 
 Se algum certificado não estiver instalado, o instalador avisa no final. O relatório completo fica em `C:\SIAT-Robo\storage\logs\instalacao.log`.
 
-**Atualizar:** rode o `.exe` de uma versão nova por cima. Ele para o robô, troca os arquivos, mantém as chaves e as notas, e liga o robô de novo.
+**Atualizar:** é automático. Ao ligar o computador, antes de trabalhar, o robô instala a versão nova publicada na aba Releases do GitHub; com o computador ligado direto, instala quando fica 10 minutos parado. Pelo ícone do relógio também há **Atualizar agora**. O instalador é conferido pelo SHA-256 antes de rodar. Para atualizar à mão, rode o `.exe` novo por cima: as chaves e as notas são mantidas.
 
 **Desinstalar:** em Configurações → Aplicativos → **SIAT Robô** → Desinstalar. As notas em `storage\downloads` **não são apagadas**.
 

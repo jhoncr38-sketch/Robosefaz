@@ -14,6 +14,32 @@ import { WORKER_API_URL, workerHealth } from "@/lib/worker-api";
 
 export const metadata: Metadata = { title: "Configurações" };
 
+// Versão publicada mais recente do robô (aba Releases do GitHub), revalidada a cada hora.
+const RELEASES_REPO = process.env.ROBOT_RELEASES_REPO || "jhoncr38-sketch/Robosefaz";
+
+async function latestRobotVersion(): Promise<string | null> {
+  try {
+    const res = await fetch(`https://api.github.com/repos/${RELEASES_REPO}/releases/latest`, {
+      headers: { Accept: "application/vnd.github+json" },
+      next: { revalidate: 3600 },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { tag_name?: string };
+    return data.tag_name ? data.tag_name.replace(/^v/, "") : null;
+  } catch {
+    return null;
+  }
+}
+
+function olderThan(version: string, latest: string): boolean {
+  const a = version.split(".").map(Number);
+  const b = latest.split(".").map(Number);
+  for (let i = 0; i < 3; i += 1) {
+    if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) < (b[i] ?? 0);
+  }
+  return false;
+}
+
 function Check({ ok, label }: { ok: boolean; label: string }) {
   return (
     <div className="flex items-center gap-2 text-sm">
@@ -26,13 +52,21 @@ function Check({ ok, label }: { ok: boolean; label: string }) {
 export default async function SettingsPage() {
   const { profile } = await requireSession();
   const supabase = await createClient();
-  const [settingsRes, hbRes, health] = await Promise.all([
+  const [settingsRes, hbRes, health, latest] = await Promise.all([
     supabase.from("app_settings").select("*").order("key"),
-    supabase.from("worker_heartbeats").select("*").order("last_seen_at", { ascending: false }).limit(10),
+    supabase.from("worker_heartbeats").select("*").order("last_seen_at", { ascending: false }).limit(100),
     workerHealth(),
+    latestRobotVersion(),
   ]);
   const settings = (settingsRes.data ?? []) as AppSetting[];
-  const workers = (hbRes.data ?? []) as WorkerHeartbeat[];
+  // um cartão por computador: o registro mais recente de cada um
+  const seen = new Set<string>();
+  const workers = ((hbRes.data ?? []) as WorkerHeartbeat[]).filter((w) => {
+    const host = w.hostname || w.worker_id;
+    if (seen.has(host)) return false;
+    seen.add(host);
+    return true;
+  });
   const now = new Date().getTime();
 
   return (
@@ -52,28 +86,27 @@ export default async function SettingsPage() {
         </Card>
 
         <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">API do worker</CardTitle>
-              <CardDescription className="font-mono text-xs">{WORKER_API_URL}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {health ? (
-                <>
-                  <Check ok={health.status === "ok"} label={`Status: ${health.status}`} />
-                  <Check ok={health.database} label="Banco de dados (Supabase)" />
-                  <Check ok={health.browser} label="Navegador (Playwright)" />
-                </>
-              ) : (
-                <Check ok={false} label="API indisponível — inicie com: uvicorn app.main:app --port 8000" />
-              )}
-            </CardContent>
-          </Card>
+          {health ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">API do worker</CardTitle>
+                <CardDescription className="font-mono text-xs">{WORKER_API_URL}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Check ok={health.status === "ok"} label={`Status: ${health.status}`} />
+                <Check ok={health.database} label="Banco de dados (Supabase)" />
+                <Check ok={health.browser} label="Navegador (Playwright)" />
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Workers</CardTitle>
-              <CardDescription>Processos `python -m app.worker` conectados (heartbeat a cada 30s).</CardDescription>
+              <CardTitle className="text-base">Computadores com o robô</CardTitle>
+              <CardDescription>
+                Cada robô dá sinal a cada 30 segundos.
+                {latest ? ` Versão mais recente publicada: ${latest}.` : ""}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {workers.length === 0 ? (
@@ -82,22 +115,29 @@ export default async function SettingsPage() {
                 workers.map((w) => {
                   const online = w.status !== "stopped" && now - new Date(w.last_seen_at).getTime() < 120_000;
                   const meta = w.meta as Record<string, unknown>;
+                  const version = typeof meta.version === "string" ? meta.version : null;
+                  const outdated = Boolean(latest && (!version || olderThan(version, latest)));
                   return (
                     <div key={w.worker_id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3">
                       <div className="flex items-center gap-3">
                         <Server className="size-4 text-muted-foreground" />
                         <div>
-                          <p className="font-mono text-xs">{w.worker_id}</p>
+                          <p className="text-sm font-medium">{w.hostname || w.worker_id}</p>
                           <p className="text-xs text-muted-foreground">
-                            modo {w.kind} · visto {formatRelative(w.last_seen_at)}
+                            versão {version ?? "anterior à 1.0.6"} · visto {formatRelative(w.last_seen_at)}
                             {meta.dry_run ? " · DRY-RUN" : ""}
                             {meta.headless === false ? " · navegador visível" : ""}
                           </p>
                         </div>
                       </div>
-                      <ToneBadge tone={online ? (w.status === "busy" ? "blue" : "green") : "gray"}>
-                        {online ? (w.status === "busy" ? "Processando" : "Online") : "Offline"}
-                      </ToneBadge>
+                      <div className="flex items-center gap-2">
+                        {outdated ? (
+                          <ToneBadge tone="yellow">Desatualizado · atualiza sozinho ao ligar ou quando ocioso</ToneBadge>
+                        ) : null}
+                        <ToneBadge tone={online ? (w.status === "busy" ? "blue" : "green") : "gray"}>
+                          {online ? (w.status === "busy" ? "Processando" : "Online") : "Offline"}
+                        </ToneBadge>
+                      </div>
                     </div>
                   );
                 })

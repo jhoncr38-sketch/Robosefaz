@@ -29,6 +29,7 @@ def settings(tmp_path: Path) -> Settings:
         log_file_path="",
         stop_flag_path=str(tmp_path / "parar-robo.flag"),
         status_file_path=str(tmp_path / "worker-status.json"),
+        update_enabled=False,
         automation_dry_run=False,
         automation_screenshots=False,
         manual_action_timeout=2_000,

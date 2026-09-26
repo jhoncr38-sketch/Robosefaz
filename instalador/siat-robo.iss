@@ -129,14 +129,24 @@ begin
   end;
 end;
 
+function FromUpdater(): Boolean;
+begin
+  { /FROMUPDATER=1: chamado pela atualização automática (a tarefa do robô está esperando) }
+  Result := ExpandConstant('{param:FROMUPDATER|0}') = '1';
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Rc: Integer;
+  Extra: String;
 begin
   { para um robô já instalado (em qualquer pasta) antes de trocar os arquivos }
+  Extra := '';
+  if FromUpdater() then
+    Extra := ' -ManterTarefa';
   ExtractTemporaryFile('desinstalar.ps1');
   Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' +
-    ExpandConstant('{tmp}\desinstalar.ps1') + '" -Raiz "' + WizardDirValue + '"',
+    ExpandConstant('{tmp}\desinstalar.ps1') + '" -Raiz "' + WizardDirValue + '"' + Extra,
     '', SW_HIDE, ewWaitUntilTerminated, Rc);
   Result := '';
 end;

@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
 from app.automation.registry import default_registry
+from app import __version__
 from app.config import Settings, get_settings
 from app.downloads.organizer import DownloadFolderUnavailable, DownloadOrganizer
 from app.jobs.base_runner import RunnerDeps
@@ -54,6 +55,7 @@ class Worker:
         self.collector = CollectorRunner(deps)
         self.retention = RetentionService(repo, settings)
         self._next_retention_at: float | None = None
+        self._last_busy = time.monotonic()
 
     async def _sleep(self, seconds: float) -> None:
         try:
@@ -108,6 +110,7 @@ class Worker:
                         "headless": self.settings.automation_headless,
                         "browser_channel": self.settings.browser_channel,
                         "platform": sys.platform,
+                        "version": __version__,
                     },
                 )
             except Exception as exc:
@@ -154,8 +157,35 @@ class Worker:
     async def _local_status(self) -> None:
         while not self.stop_event.is_set():
             busy = self.settings.max_parallel_jobs - self.browser_slots._value  # noqa: SLF001
+            if busy > 0:
+                self._last_busy = time.monotonic()
             self._write_local_status("busy" if busy > 0 else "idle")
             await self._sleep(5)
+
+    async def _update_watch(self) -> None:
+        """Versão nova + robô ocioso há `update_idle_minutes`: encerra com calma para o serviço atualizar."""
+        if not self.settings.update_enabled:
+            return
+        from app.updater import is_newer, latest_release, write_status
+
+        next_check = 0.0
+        latest = None
+        while not self.stop_event.is_set():
+            now = time.monotonic()
+            if now >= next_check:
+                next_check = now + self.settings.update_check_minutes * 60
+                try:
+                    latest = await asyncio.to_thread(latest_release, self.settings)
+                    write_status(self.settings, latest)
+                except Exception as exc:  # noqa: BLE001 - sem internet: tenta na próxima
+                    log.debug("Consulta de atualização falhou: %s", exc)
+            idle_for = now - self._last_busy
+            if latest and is_newer(latest.version) and idle_for >= self.settings.update_idle_minutes * 60:
+                log.warning("Versão %s disponível e robô ocioso: encerrando para atualizar.", latest.version)
+                self.settings.update_flag.write_text(latest.version, encoding="utf-8")
+                self.stop()
+                return
+            await self._sleep(60)
 
     async def _watch_stop_flag(self) -> None:
         """parar-robo.bat cria o arquivo-sinal: encerra com calma (o job atual termina)."""
@@ -163,6 +193,11 @@ class Worker:
         while not self.stop_event.is_set():
             if flag.exists():
                 log.warning("Pedido de parada recebido (%s).", flag)
+                self.stop()
+                return
+            if self.settings.update_flag.exists():
+                # "Atualizar agora" no ícone: termina o trabalho atual e o serviço atualiza
+                log.warning("Pedido de atualização recebido; encerrando após o trabalho atual.")
                 self.stop()
                 return
             await self._sleep(3)
@@ -174,6 +209,7 @@ class Worker:
             asyncio.create_task(self._watch_stop_flag(), name="stop-flag"),
             asyncio.create_task(self._local_status(), name="local-status"),
             asyncio.create_task(self._recovery(), name="recovery"),
+            asyncio.create_task(self._update_watch(), name="update-watch"),
         ]
         if self.mode in ("all", "scheduler"):
             for i in range(self.settings.max_parallel_jobs):
@@ -253,6 +289,7 @@ async def amain(mode: str) -> None:
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_file)
     settings.stop_flag.unlink(missing_ok=True)  # sinal antigo não derruba o worker novo
+    settings.update_flag.unlink(missing_ok=True)  # o serviço já tratou a atualização antes de ligar o robô
     try:
         DownloadOrganizer(settings.downloads_dir).check_available()
         log.info("Downloads serão salvos em %s", settings.downloads_dir)

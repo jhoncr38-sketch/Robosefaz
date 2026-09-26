@@ -57,6 +57,7 @@ class TrayState:
     robot: str = "stopped"  # stopped | idle | busy
     attention: list[str] = field(default_factory=list)
     dry_run: bool = False
+    update_to: str | None = None  # versão nova disponível
 
     @property
     def color(self) -> str:
@@ -92,6 +93,14 @@ def read_local_status(path: Path, now: datetime | None = None) -> tuple[str, boo
     if status not in ("idle", "busy") or (now - updated).total_seconds() > STALE_SECONDS:
         return "stopped", bool(data.get("dry_run"))
     return status, bool(data.get("dry_run"))
+
+
+def read_update_status(settings: Settings) -> str | None:
+    """Versão nova informada pelo robô (storage/update-status.json), se for mais nova que a instalada."""
+    from app.updater import is_newer, read_status
+
+    latest = read_status(settings).get("latest")
+    return latest if latest and is_newer(latest) else None
 
 
 class RemoteWatcher:
@@ -187,6 +196,11 @@ class RobotTray:
                 pystray.MenuItem("Ligar robô", self.start_robot, enabled=lambda _i: self.state.robot == "stopped"),
                 pystray.MenuItem("Parar robô", self.stop_robot, enabled=lambda _i: self.state.robot != "stopped"),
                 pystray.MenuItem("Ver mensagens do robô (log)", self.open_log),
+                pystray.MenuItem(
+                    lambda _i: f"Atualizar agora (versão {self.state.update_to})",
+                    self.update_now,
+                    visible=lambda _i: bool(self.state.update_to),
+                ),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("Fechar este ícone (o robô continua)", self.quit),
             ),
@@ -225,6 +239,18 @@ class RobotTray:
         flag.write_text("parar", encoding="utf-8")
         self.icon.notify("O robô vai terminar o trabalho atual e parar.", "SIAT Robô")
 
+    def update_now(self, *_a) -> None:
+        """O robô termina o trabalho atual; o serviço instala a versão nova e religa."""
+        flag = self.settings.update_flag
+        flag.parent.mkdir(parents=True, exist_ok=True)
+        flag.write_text(self.state.update_to or "", encoding="utf-8")
+        if self.state.robot == "stopped":
+            self.start_robot()  # ao ligar, o serviço já atualiza antes de trabalhar
+        self.icon.notify(
+            "O robô vai terminar o trabalho atual, instalar a versão nova e voltar sozinho em 1 a 2 minutos.",
+            "SIAT Robô",
+        )
+
     def quit(self, *_a) -> None:
         self._stop.set()
         self.icon.stop()
@@ -233,6 +259,14 @@ class RobotTray:
     def _refresh(self) -> None:
         robot, dry_run = read_local_status(self.settings.status_file)
         self.state.robot, self.state.dry_run = robot, dry_run
+        update = read_update_status(self.settings)
+        if update and update != self.state.update_to:
+            self.icon.notify(
+                f"Versão {update} do SIAT Robô disponível. Ela será instalada sozinha quando o robô estiver "
+                "parado, ou clique em Atualizar agora no menu do ícone.",
+                "SIAT Robô",
+            )
+        self.state.update_to = update
         color = self.state.color
         if color != self._last_color:
             self.icon.icon = draw(color)
