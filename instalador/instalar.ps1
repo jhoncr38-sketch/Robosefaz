@@ -242,6 +242,18 @@ Register-ScheduledTask -TaskName $TaskName -Action $acao -Trigger $gatilho -Prin
     -Description 'Robô SIAT Automação: agenda e baixa NFC-e/NF-e.' -Force | Out-Null
 Ok "Tarefa '$TaskName' criada: o robô inicia 1 minuto depois que $usuario entra no Windows"
 
+# link siatrobo://abrir/<id>: o botão "Abrir pasta" do painel abre o Explorer com a nota selecionada
+$Proto = 'HKCU:\Software\Classes\siatrobo'
+$Pyw = Join-Path $Venv 'Scripts\pythonw.exe'
+$Abrir = Join-Path $Worker 'abrir_nota.pyw'
+New-Item -Path "$Proto\shell\open\command" -Force | Out-Null
+Set-Item -Path $Proto -Value 'URL:SIAT Robô'
+New-ItemProperty -Path $Proto -Name 'URL Protocol' -Value '' -PropertyType String -Force | Out-Null
+$Icone = Join-Path $PSScriptRoot 'robo.ico'
+if (Test-Path $Icone) { New-Item -Path "$Proto\DefaultIcon" -Force | Out-Null; Set-Item -Path "$Proto\DefaultIcon" -Value $Icone }
+Set-Item -Path "$Proto\shell\open\command" -Value ('"{0}" "{1}" "%1"' -f $Pyw, $Abrir)
+Ok 'Botão "Abrir pasta" do painel ligado a este computador'
+
 # ------------------------------------------------------------------------------
 Titulo '6/6 Energia'
 Write-Host '  Se o computador entrar em suspensão, o robô para até ele acordar.'

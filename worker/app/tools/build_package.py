@@ -19,6 +19,7 @@ from app.config import PROJECT_ROOT
 INCLUDE_DIRS = ["worker/app", "worker/config", "instalador"]
 INCLUDE_FILES = [
     "worker/requirements.txt",
+    "worker/abrir_nota.pyw",
     ".env.example",
     "instalar-robo.bat",
     "iniciar-robo.bat",

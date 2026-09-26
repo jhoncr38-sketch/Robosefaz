@@ -1,8 +1,10 @@
+import { FolderOpen } from "lucide-react";
 import type { Metadata } from "next";
 
 import { DownloadsTable } from "@/components/downloads-table";
 import { ListFilters } from "@/components/list-filters";
 import { PageHeader } from "@/components/page-header";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireSession } from "@/lib/auth";
 import { formatCompetence, recentCompetences } from "@/lib/competence";
@@ -36,8 +38,15 @@ export default async function DownloadsPage({ searchParams }: PageProps<"/downlo
     <>
       <PageHeader
         title="Downloads"
-        description="Arquivos organizados em storage/downloads/{cliente}/{ano}/{mês}/{tipo}/ na máquina do worker."
+        description="Notas baixadas pelo robô. Os arquivos ficam no computador que fez o download, em storage\downloads\cliente\ano\mês\tipo."
       />
+      <Alert className="mb-4">
+        <FolderOpen />
+        <AlertDescription>
+          O botão <strong>Abrir pasta</strong> funciona no computador onde o SIAT Robô está instalado. Na primeira vez, o
+          navegador pergunta se pode abrir o SIAT Robô: marque <strong>“Sempre permitir”</strong> e clique em Abrir.
+        </AlertDescription>
+      </Alert>
       <div className="mb-4">
         <ListFilters
           filters={[

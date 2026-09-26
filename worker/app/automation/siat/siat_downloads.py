@@ -142,7 +142,11 @@ class SiatExportConsult:
         await self.ctx.reporter.step(JobStatus.ORGANIZING_FILES, "Organizando arquivos")
         try:
             stored = self.ctx.organizer.store(
-                tmp_path, self.ctx.client.client_code, self.ctx.job.competence, task.document_type
+                tmp_path,
+                self.ctx.client.client_code,
+                self.ctx.job.competence,
+                task.document_type,
+                client_name=self.ctx.client.trade_name or self.ctx.client.legal_name,
             )
         except InvalidDownloadError as exc:
             tmp_path.unlink(missing_ok=True)

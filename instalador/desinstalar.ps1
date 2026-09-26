@@ -32,6 +32,9 @@ if (Test-Path $chave) {
     }
 }
 
-if ($RemoverTarefa) { schtasks /Delete /TN $TaskName /F 2>$null | Out-Null }
+if ($RemoverTarefa) {
+    schtasks /Delete /TN $TaskName /F 2>$null | Out-Null
+    Remove-Item -Path 'HKCU:\Software\Classes\siatrobo' -Recurse -Force  # link "Abrir pasta" do painel
+}
 Start-Sleep -Seconds 2
 exit 0

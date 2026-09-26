@@ -167,3 +167,40 @@ class TestContentSniffing:
         src.write_bytes(b"<!DOCTYPE html><html><body>Sessao expirada</body></html>")
         with pytest.raises(InvalidDownloadError):
             DownloadOrganizer(tmp_path / "d").store(src, "CLI000001", "2026-08", DocumentType.NFCE)
+
+
+class TestClientFolderName:
+    """Pasta do cliente com o nome da empresa: 'CLI000001 - LIA PAPELARIA'."""
+
+    def test_store_uses_code_and_name(self, tmp_path: Path) -> None:
+        org = DownloadOrganizer(tmp_path)
+        src = tmp_path / "a.zip"
+        src.write_bytes(b"PK\x03\x04a")
+        stored = org.store(src, "CLI000001", "2026-06", DocumentType.NFCE, client_name="LIA PAPELARIA & VARIEDADE")
+        assert Path(stored.filepath).relative_to(tmp_path).parts == (
+            "CLI000001 - LIA PAPELARIA & VARIEDADE", "2026", "06", "NFCE", "CLI000001_2026-06_NFCE.zip"
+        )
+
+    def test_old_code_only_folder_is_renamed_with_its_files(self, tmp_path: Path) -> None:
+        old = tmp_path / "CLI000002" / "2026" / "08" / "NFCE"
+        old.mkdir(parents=True)
+        (old / "CLI000002_2026-08_NFCE.zip").write_bytes(b"PK\x03\x04old")
+        org = DownloadOrganizer(tmp_path)
+        assert org.sync_client_dir("CLI000002", "SELETO PLANEJADOS") == tmp_path / "CLI000002 - SELETO PLANEJADOS"
+        assert not (tmp_path / "CLI000002").exists()
+        assert (tmp_path / "CLI000002 - SELETO PLANEJADOS" / "2026" / "08" / "NFCE" / "CLI000002_2026-08_NFCE.zip").is_file()
+
+    def test_name_change_renames_and_old_paths_still_found(self, tmp_path: Path) -> None:
+        org = DownloadOrganizer(tmp_path)
+        src = tmp_path / "a.zip"
+        src.write_bytes(b"PK\x03\x04a")
+        stored = org.store(src, "CLI000001", "2026-06", DocumentType.NFCE, client_name="NOME ANTIGO")
+        org.sync_client_dir("CLI000001", "NOME NOVO")
+        assert [d.name for d in tmp_path.iterdir() if d.is_dir()] == ["CLI000001 - NOME NOVO"]
+        # caminho gravado no banco ficou velho: ainda acha pela pasta do código
+        found = org.locate(stored.filepath, "CLI000001", "2026-06", "NFCE", stored.filename)
+        assert found.is_file() and "NOME NOVO" in str(found)
+
+    def test_no_folder_is_created_when_client_has_no_notes(self, tmp_path: Path) -> None:
+        assert DownloadOrganizer(tmp_path).sync_client_dir("CLI000009", "SEM NOTAS") is None
+        assert list(tmp_path.iterdir()) == []

@@ -224,6 +224,17 @@ def _clear_stale_chrome_policy(settings: Settings) -> None:
         log.warning("Não foi possível limpar regras antigas do Chrome: %s", exc)
 
 
+async def _sync_client_folders(settings: Settings, client) -> None:  # noqa: ANN001
+    """Pastas de notas com o nome da empresa (renomeia 'CLI000001' e nomes antigos)."""
+    try:
+        rows = (await client.table("clients").select("client_code, legal_name, trade_name").execute()).data or []
+        organizer = DownloadOrganizer(settings.downloads_dir)
+        for r in rows:
+            organizer.sync_client_dir(r["client_code"], r.get("trade_name") or r.get("legal_name"))
+    except Exception as exc:  # noqa: BLE001 - pasta indisponível/sem internet: tenta no próximo início
+        log.warning("Não foi possível organizar as pastas dos clientes: %s", exc)
+
+
 async def amain(mode: str) -> None:
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_file)
@@ -235,6 +246,7 @@ async def amain(mode: str) -> None:
         log.warning("Pasta de downloads indisponível agora (%s); o collector tentará de novo mais tarde.", exc)
     _clear_stale_chrome_policy(settings)
     client = await get_supabase(settings)
+    await _sync_client_folders(settings, client)
     repo = SupabaseJobRepository(client)
     worker = Worker(repo, settings, mode=mode)
 

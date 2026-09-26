@@ -1,7 +1,11 @@
 """Organização dos arquivos baixados por cliente e competência.
 
-storage/downloads/{client_code}/{year}/{month}/{NFCE|NFE_EMITIDAS|NFE_RECEBIDAS}/
+storage/downloads/{client_code} - {nome da empresa}/{year}/{month}/{NFCE|NFE_EMITIDAS|NFE_RECEBIDAS}/
 Nome: {client_code}_{YYYY-MM}_{TIPO}.zip  (sufixo _2, _3... para lotes múltiplos)
+
+A pasta do cliente começa sempre pelo código (CLI000001 - LIA PAPELARIA): o
+nome pode mudar ou se repetir, o código não. Se o nome mudar no painel, a
+pasta existente é renomeada; pastas antigas só com o código também.
 """
 
 from __future__ import annotations
@@ -15,6 +19,14 @@ from app.utils.competence import Competence
 from app.utils.files import ensure_dir, ensure_within, move_atomic, sha256_file, sniff_kind
 
 _CLIENT_CODE = re.compile(r"^[A-Z0-9]{3,20}$")
+_INVALID_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
+
+
+def safe_folder_name(name: str | None, max_len: int = 60) -> str:
+    """Nome de empresa válido como pasta do Windows (sem < > : " / \\ | ? *)."""
+    cleaned = _INVALID_CHARS.sub(" ", name or "")
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()[:max_len]
+    return cleaned.rstrip(" .")
 
 
 class InvalidDownloadError(ValueError):
@@ -67,12 +79,42 @@ class DownloadOrganizer:
             raise ValueError(f"Nome de arquivo inválido: {filename!r}")
         return ensure_within(self.base_dir, self.folder_for(client_code, competence, document_type) / filename)
 
-    def folder_for(self, client_code: str, competence: str, document_type: DocumentType | str) -> Path:
+    def _existing_client_dirs(self, client_code: str) -> list[Path]:
+        if not self.base_dir.is_dir():
+            return []
+        prefix = re.compile(rf"^{re.escape(client_code)}( - .+)?$")
+        return sorted(d for d in self.base_dir.iterdir() if d.is_dir() and prefix.match(d.name))
+
+    def client_dir(self, client_code: str, client_name: str | None = None) -> Path:
+        """Pasta do cliente: 'CLI000001 - NOME'; sem nome, a pasta que já existir para o código."""
         if not _CLIENT_CODE.match(client_code or ""):
             raise ValueError(f"client_code inválido: {client_code!r}")
+        safe = safe_folder_name(client_name)
+        if safe:
+            return ensure_within(self.base_dir, self.base_dir / f"{client_code} - {safe}")
+        existing = self._existing_client_dirs(client_code)
+        return existing[0] if existing else self.base_dir / client_code
+
+    def sync_client_dir(self, client_code: str, client_name: str | None) -> Path | None:
+        """Renomeia a pasta existente do cliente para 'CÓDIGO - NOME' (nome novo ou pasta antiga só com código)."""
+        desired = self.client_dir(client_code, client_name)
+        existing = [d for d in self._existing_client_dirs(client_code) if d != desired]
+        if not existing:
+            return desired if desired.is_dir() else None
+        if desired.exists():
+            return desired  # já existe a certa; a antiga fica (não mistura arquivos)
+        try:
+            existing[0].rename(desired)
+            return desired
+        except OSError:
+            return existing[0]  # pasta em uso (ex.: aberta no Explorer): tenta de novo depois
+
+    def folder_for(
+        self, client_code: str, competence: str, document_type: DocumentType | str, client_name: str | None = None
+    ) -> Path:
         comp = Competence.parse(competence)
         doc = DocumentType(document_type)
-        folder = self.base_dir / client_code / comp.year_str / comp.month_str / doc.value
+        folder = self.client_dir(client_code, client_name) / comp.year_str / comp.month_str / doc.value
         return ensure_within(self.base_dir, folder)
 
     def filename_for(
@@ -85,9 +127,15 @@ class DownloadOrganizer:
         return f"{client_code}_{comp.key}_{doc.value}{suffix}{ext.lower()}"
 
     def target_for(
-        self, client_code: str, competence: str, document_type: DocumentType | str, *, ext: str = ".zip"
+        self,
+        client_code: str,
+        competence: str,
+        document_type: DocumentType | str,
+        *,
+        ext: str = ".zip",
+        client_name: str | None = None,
     ) -> DownloadTarget:
-        folder = self.folder_for(client_code, competence, document_type)
+        folder = self.folder_for(client_code, competence, document_type, client_name)
         seq = 1
         while True:
             name = self.filename_for(client_code, competence, document_type, sequence=seq, ext=ext)
@@ -96,7 +144,12 @@ class DownloadOrganizer:
             seq += 1
 
     def store(
-        self, source: Path, client_code: str, competence: str, document_type: DocumentType | str
+        self,
+        source: Path,
+        client_code: str,
+        competence: str,
+        document_type: DocumentType | str,
+        client_name: str | None = None,
     ) -> DownloadedFile:
         """Move o arquivo baixado para o destino definitivo, evitando duplicatas idênticas."""
         if not source.exists():
@@ -109,16 +162,28 @@ class DownloadOrganizer:
         ext = {"zip": ".zip", "xml": ".xml"}.get(kind) or source.suffix or ".zip"
         self.check_available()
         try:
-            return self._store(source, client_code, competence, document_type, checksum, ext)
+            if client_name:
+                self.sync_client_dir(client_code, client_name)
+                # pasta antiga em uso (não renomeou): grava nela em vez de criar uma segunda pasta do cliente
+                if not self.client_dir(client_code, client_name).is_dir() and self._existing_client_dirs(client_code):
+                    client_name = None
+            return self._store(source, client_code, competence, document_type, checksum, ext, client_name)
         except DownloadFolderUnavailable:
             raise
         except OSError as exc:
             raise DownloadFolderUnavailable(f"Falha ao gravar em {self.base_dir}: {exc}") from exc
 
     def _store(
-        self, source: Path, client_code: str, competence: str, document_type: DocumentType | str, checksum: str, ext: str
+        self,
+        source: Path,
+        client_code: str,
+        competence: str,
+        document_type: DocumentType | str,
+        checksum: str,
+        ext: str,
+        client_name: str | None = None,
     ) -> DownloadedFile:
-        folder = ensure_dir(self.folder_for(client_code, competence, document_type))
+        folder = ensure_dir(self.folder_for(client_code, competence, document_type, client_name))
 
         for existing in sorted(folder.glob(f"{client_code}_*{ext}")):
             if existing.is_file() and sha256_file(existing) == checksum:
@@ -131,7 +196,7 @@ class DownloadOrganizer:
                     checksum=checksum,
                 )
 
-        target = self.target_for(client_code, competence, document_type, ext=ext)
+        target = self.target_for(client_code, competence, document_type, ext=ext, client_name=client_name)
         final = move_atomic(source, target.path)
         return DownloadedFile(
             document_type=DocumentType(document_type),
