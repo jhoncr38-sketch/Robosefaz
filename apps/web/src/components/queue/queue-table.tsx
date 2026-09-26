@@ -9,7 +9,9 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRealtimeJobs } from "@/hooks/use-realtime-jobs";
+import { SEFAZ_PHASE, useWaitingSince } from "@/hooks/use-waiting-since";
 import { formatCompetence } from "@/lib/competence";
 import { formatDuration } from "@/lib/format";
 import { FINAL_JOB_STATUSES, isJobRunning, JOB_STATUS_LABEL, MANUAL_JOB_STATUSES } from "@/lib/status";
@@ -33,6 +35,33 @@ function matches(tab: Tab, job: AutomationJob): boolean {
   }
 }
 
+/** Tempo em duas partes: quanto o robô trabalhou e há quanto tempo espera a SEFAZ. */
+function JobTime({ job, waitingSince, now }: { job: AutomationJob; waitingSince?: string; now: number }) {
+  if (!job.started_at) return <span className="text-muted-foreground">—</span>;
+  const nowIso = new Date(now).toISOString();
+  if (SEFAZ_PHASE.includes(job.status) && waitingSince) {
+    return (
+      <div className="space-y-0.5 leading-tight">
+        <p>
+          <span className="text-muted-foreground">Robô </span>
+          {formatDuration(job.started_at, waitingSince)}
+        </p>
+        <p className="text-amber-700">
+          <span className="text-amber-700/70">SEFAZ há </span>
+          {formatDuration(waitingSince, nowIso)}
+        </p>
+      </div>
+    );
+  }
+  const label = job.finished_at ? "Total " : "Robô ";
+  return (
+    <p>
+      <span className="text-muted-foreground">{label}</span>
+      {formatDuration(job.started_at, job.finished_at ?? nowIso)}
+    </p>
+  );
+}
+
 function useNow(intervalMs = 1000) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -47,6 +76,7 @@ export function QueueTable({ initialJobs, role }: { initialJobs: AutomationJob[]
   const [tab, setTab] = useState<Tab>("active");
   const now = useNow();
   const visible = useMemo(() => jobs.filter((j) => matches(tab, j)), [jobs, tab]);
+  const waitingSince = useWaitingSince(jobs);
   const manual = jobs.filter((j) => MANUAL_JOB_STATUSES.includes(j.status));
   const counts = useMemo(
     () => ({
@@ -99,59 +129,76 @@ export function QueueTable({ initialJobs, role }: { initialJobs: AutomationJob[]
           <TableHeader>
             <TableRow>
               <TableHead>Cliente</TableHead>
-              <TableHead>Competência</TableHead>
-              <TableHead>Etapa</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-44">Progresso</TableHead>
+              <TableHead className="w-40">Progresso</TableHead>
               <TableHead>Tempo</TableHead>
-              <TableHead className="text-center">Tentativas</TableHead>
-              <TableHead>Última mensagem</TableHead>
+              <TableHead className="hidden xl:table-cell">Última mensagem</TableHead>
               <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {visible.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="py-12 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={6} className="py-12 text-center text-sm text-muted-foreground">
                   Nenhuma tarefa nesta visão.
                 </TableCell>
               </TableRow>
             ) : (
-              visible.map((job) => (
-                <TableRow key={job.id}>
-                  <TableCell>
-                    <p className="font-medium">{job.clients?.trade_name || job.clients?.legal_name || "—"}</p>
-                    <p className="text-xs text-muted-foreground">{job.clients?.client_code}</p>
-                  </TableCell>
-                  <TableCell>{formatCompetence(job.competence)}</TableCell>
-                  <TableCell className="text-sm">{JOB_STATUS_LABEL[job.current_step as AutomationJob["status"]] ?? job.current_step ?? "—"}</TableCell>
-                  <TableCell>
-                    <JobStatusBadge status={job.status} />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Progress value={job.progress} className="h-1.5" />
-                      <span className="w-9 text-right text-xs tabular-nums text-muted-foreground">{job.progress}%</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-xs tabular-nums text-muted-foreground">
-                    {job.started_at
-                      ? formatDuration(job.started_at, job.finished_at ?? new Date(now).toISOString())
-                      : "—"}
-                  </TableCell>
-                  <TableCell className="text-center text-sm tabular-nums">{job.attempts}</TableCell>
-                  <TableCell className="max-w-72 truncate text-xs text-muted-foreground" title={job.last_message ?? ""}>
-                    {job.error_message && job.status === "failed" ? (
-                      <span className="text-red-600">{job.error_message}</span>
-                    ) : (
-                      job.last_message ?? "—"
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <JobActions job={job} role={role} />
-                  </TableCell>
-                </TableRow>
-              ))
+              visible.map((job) => {
+                const step = JOB_STATUS_LABEL[job.current_step as AutomationJob["status"]] ?? job.current_step;
+                const message =
+                  job.error_message && job.status === "failed" ? job.error_message : (job.last_message ?? "");
+                return (
+                  <TableRow key={job.id}>
+                    <TableCell className="max-w-56">
+                      <p className="truncate font-medium">{job.clients?.trade_name || job.clients?.legal_name || "—"}</p>
+                      <p className="text-xs text-muted-foreground tabular-nums">
+                        {job.clients?.client_code} · {formatCompetence(job.competence)}
+                      </p>
+                    </TableCell>
+                    <TableCell>
+                      <JobStatusBadge status={job.status} />
+                      {step && step !== JOB_STATUS_LABEL[job.status] ? (
+                        <p className="mt-1 text-xs text-muted-foreground">{step}</p>
+                      ) : null}
+                      {job.attempts > 1 ? (
+                        <p className="mt-0.5 text-xs text-muted-foreground">Tentativa {job.attempts}</p>
+                      ) : null}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Progress value={job.progress} className="h-1.5" />
+                        <span className="w-9 text-right text-xs tabular-nums text-muted-foreground">{job.progress}%</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs tabular-nums whitespace-nowrap">
+                      <JobTime job={job} waitingSince={waitingSince[job.id]} now={now} />
+                    </TableCell>
+                    <TableCell className="hidden max-w-64 xl:table-cell">
+                      {message ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <p
+                              className={cn(
+                                "line-clamp-2 cursor-default text-xs",
+                                job.status === "failed" ? "text-red-600" : "text-muted-foreground",
+                              )}
+                            >
+                              {message}
+                            </p>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-sm text-xs">{message}</TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <JobActions job={job} role={role} />
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
