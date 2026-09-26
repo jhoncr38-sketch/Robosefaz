@@ -36,6 +36,10 @@ const NUMERIC_SETTINGS = new Set(["collector_interval_minutes", "collector_max_c
 export async function updateSetting(key: string, rawValue: string): Promise<ActionResult> {
   const auth = await authorize("settings:write");
   if ("error" in auth) return { ok: false, error: auth.error };
+  // parâmetros dos robôs valem para todos os escritórios: só o dono da plataforma altera
+  if (!auth.session.profile.is_platform_owner) {
+    return { ok: false, error: "Somente o dono da plataforma altera estes parâmetros." };
+  }
   let value: unknown = rawValue;
   if (NUMERIC_SETTINGS.has(key)) {
     const n = Number(rawValue);

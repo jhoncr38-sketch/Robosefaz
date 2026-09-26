@@ -44,7 +44,7 @@ export function Header({ profile }: { profile: Profile }) {
             </SheetTitle>
           </SheetHeader>
           <div className="py-3">
-            <SidebarNav role={profile.role} onNavigate={() => setOpen(false)} />
+            <SidebarNav role={profile.role} isOwner={profile.is_platform_owner} onNavigate={() => setOpen(false)} />
           </div>
         </SheetContent>
       </Sheet>
@@ -68,6 +68,9 @@ export function Header({ profile }: { profile: Profile }) {
           <DropdownMenuLabel className="font-normal">
             <p className="text-sm font-medium">{profile.name}</p>
             <p className="truncate text-xs text-muted-foreground">{profile.email}</p>
+            {profile.organizations?.name ? (
+              <p className="mt-1 truncate text-xs text-muted-foreground">{profile.organizations.name}</p>
+            ) : null}
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <form action="/auth/signout" method="post">

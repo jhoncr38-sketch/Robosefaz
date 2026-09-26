@@ -11,7 +11,8 @@ export const metadata: Metadata = { title: "Usuários" };
 export default async function UsersPage() {
   const { profile } = await requirePermission("users:manage");
   const supabase = await createClient();
-  const { data } = await supabase.from("profiles").select("*").order("name");
+  // só o escritório de quem está logado (o dono da plataforma enxergaria todos)
+  const { data } = await supabase.from("profiles").select("*").eq("org_id", profile.org_id ?? "").order("name");
   return (
     <>
       <PageHeader title="Usuários" description="Controle de acesso: Administrador, Operador e Visualizador." />

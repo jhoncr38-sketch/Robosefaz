@@ -20,15 +20,35 @@ export const getSession = cache(async (): Promise<Session | null> => {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data: profile } = await supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*, organizations(name, status)")
+    .eq("user_id", user.id)
+    .maybeSingle();
   if (!profile) return null;
   return { userId: user.id, email: user.email ?? profile.email, profile: profile as Profile };
 });
+
+/** Motivo de bloqueio do escritório (sem escritório ou suspenso); o dono da plataforma nunca é bloqueado. */
+function orgBlock(profile: Profile): "no-org" | "suspended" | null {
+  if (profile.is_platform_owner) return null;
+  if (!profile.org_id) return "no-org";
+  if (profile.organizations?.status === "suspended") return "suspended";
+  return null;
+}
 
 export async function requireSession(): Promise<Session> {
   const session = await getSession();
   if (!session) redirect("/login");
   if (!session.profile.active) redirect("/login?error=inactive");
+  const blocked = orgBlock(session.profile);
+  if (blocked) redirect(`/login?error=${blocked}`);
+  return session;
+}
+
+export async function requirePlatformOwner(): Promise<Session> {
+  const session = await requireSession();
+  if (!session.profile.is_platform_owner) redirect("/dashboard?error=forbidden");
   return session;
 }
 
@@ -42,6 +62,7 @@ export async function requirePermission(permission: Permission): Promise<Session
 export async function authorize(permission?: Permission): Promise<{ session: Session } | { error: string }> {
   const session = await getSession();
   if (!session || !session.profile.active) return { error: "Sessão expirada. Faça login novamente." };
+  if (orgBlock(session.profile)) return { error: "O acesso deste escritório está suspenso." };
   if (permission && !can(session.profile.role, permission)) {
     return { error: "Você não tem permissão para esta ação." };
   }

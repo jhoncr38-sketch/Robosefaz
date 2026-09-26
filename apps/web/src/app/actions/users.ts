@@ -17,6 +17,9 @@ export async function createUser(input: z.input<typeof userCreateSchema>): Promi
     return { ok: false, error: "Verifique os campos.", fieldErrors: parsed.error.flatten().fieldErrors };
   }
   const { name, email, role, password } = parsed.data;
+  // o convidado entra no mesmo escritório de quem convidou
+  const orgId = auth.session.profile.org_id;
+  if (!orgId) return { ok: false, error: "Seu usuário não está vinculado a um escritório." };
 
   let admin;
   try {
@@ -32,13 +35,13 @@ export async function createUser(input: z.input<typeof userCreateSchema>): Promi
         password,
         email_confirm: true,
         user_metadata: { name },
-        app_metadata: { role },
+        app_metadata: { role, org_id: orgId },
       })
     : await admin.auth.admin.inviteUserByEmail(email, { data: { name } }).then(async (res) => {
         if (res.error || !res.data.user) return res;
-        await admin.auth.admin.updateUserById(res.data.user.id, { app_metadata: { role } });
-        const supabase = await createClient();
-        await supabase.from("profiles").update({ role, name }).eq("user_id", res.data.user.id);
+        await admin.auth.admin.updateUserById(res.data.user.id, { app_metadata: { role, org_id: orgId } });
+        // o profile nasce sem escritório (o convite é criado antes do app_metadata): a service role vincula
+        await admin.from("profiles").update({ role, name, org_id: orgId }).eq("user_id", res.data.user.id);
         return res;
       });
   if (error) return { ok: false, error: error.message };
@@ -77,7 +80,9 @@ export async function updateUser(
 
   if (parsed.data.role) {
     try {
-      await createAdminClient().auth.admin.updateUserById(data.user_id, { app_metadata: { role: parsed.data.role } });
+      await createAdminClient().auth.admin.updateUserById(data.user_id, {
+        app_metadata: { role: parsed.data.role, org_id: auth.session.profile.org_id },
+      });
     } catch {
       // sem service role no painel: o papel efetivo continua sendo o do profile
     }

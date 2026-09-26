@@ -7,7 +7,6 @@ import { ToneBadge } from "@/components/status-badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireSession } from "@/lib/auth";
 import { formatRelative } from "@/lib/format";
-import { can } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 import type { AppSetting, WorkerHeartbeat } from "@/lib/types";
 import { WORKER_API_URL, workerHealth } from "@/lib/worker-api";
@@ -77,11 +76,13 @@ export default async function SettingsPage() {
           <CardHeader>
             <CardTitle className="text-base">Parâmetros</CardTitle>
             <CardDescription>
-              {can(profile.role, "settings:write") ? "Alterações valem na próxima rodada do worker." : "Somente administradores podem alterar."}
+              {profile.is_platform_owner
+                ? "Valem para os robôs de todos os escritórios, na próxima rodada."
+                : "Parâmetros gerais da plataforma; somente o dono da plataforma altera."}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <SettingsForm settings={settings} editable={can(profile.role, "settings:write")} />
+            <SettingsForm settings={settings} editable={profile.is_platform_owner} />
           </CardContent>
         </Card>
 

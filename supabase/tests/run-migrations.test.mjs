@@ -108,10 +108,12 @@ const newUser = async (email, appMeta = {}, userMeta = {}) =>
   ).rows[0].id;
 
 const ADMIN = await newUser("admin@x.com");
-const OPERATOR = await newUser("op@x.com", { role: "operator" });
-const VIEWER = await newUser("viewer@x.com");
+// escritório do primeiro usuário (o painel informa org_id no app_metadata dos convidados)
+const ORG_A = (await db.query("select org_id from public.profiles where email = 'admin@x.com'")).rows[0].org_id;
+const OPERATOR = await newUser("op@x.com", { role: "operator", org_id: ORG_A });
+const VIEWER = await newUser("viewer@x.com", { org_id: ORG_A });
 // tentativa de escalonamento via user_metadata (controlado pelo próprio usuário)
-await newUser("zz-hacker@x.com", {}, { role: "admin" });
+await newUser("zz-hacker@x.com", {}, { role: "admin", org_id: ORG_A });
 
 console.log("Testes:");
 
@@ -323,6 +325,160 @@ await test("usuário não altera o próprio papel", async () => {
   );
   const r = await as(VIEWER, (tx) => tx.query("update public.profiles set name = 'Novo Nome' where user_id = $1", [VIEWER]));
   assert.equal(r.affectedRows, 1);
+});
+
+// ---------------------------------------------------------------------
+// Organizações: um escritório nunca enxerga nem altera dados de outro
+// ---------------------------------------------------------------------
+let ORG_B;
+let ADMIN_B;
+let CLIENT_B1;
+await test("organizações: primeiro admin é o dono da plataforma; escritório inicial com todos os dados", async () => {
+  const owner = (await db.query("select is_platform_owner from public.profiles where email = 'admin@x.com'")).rows[0];
+  assert.equal(owner.is_platform_owner, true);
+  const others = (await db.query("select count(*)::int n from public.profiles where is_platform_owner and email <> 'admin@x.com'")).rows[0];
+  assert.equal(others.n, 0);
+  const hacker = (await db.query("select org_id from public.profiles where email = 'zz-hacker@x.com'")).rows[0];
+  assert.equal(hacker.org_id, null, "org_id em user_metadata é ignorado");
+  const orphan = (await db.query("select count(*)::int n from public.clients where org_id is null")).rows[0];
+  assert.equal(orphan.n, 0);
+});
+
+await test("só o dono da plataforma cria escritórios", async () => {
+  await rejects(as(OPERATOR, (tx) => tx.query("insert into public.organizations (name) values ('Pirata')")), /row-level security/);
+  const r = await as(ADMIN, (tx) => tx.query("insert into public.organizations (name) values ('Escritório B') returning id"));
+  ORG_B = r.rows[0].id;
+  ADMIN_B = await newUser("admin-b@y.com", { role: "admin", org_id: ORG_B });
+  const p = (await db.query("select org_id, role, is_platform_owner from public.profiles where user_id = $1", [ADMIN_B])).rows[0];
+  assert.deepEqual(p, { org_id: ORG_B, role: "admin", is_platform_owner: false });
+});
+
+await test("escritório B: mesmo CNPJ de A é permitido e o código recomeça em CLI000001", async () => {
+  const r = await as(ADMIN_B, (tx) =>
+    tx.query(
+      "insert into public.clients (legal_name, cnpj, org_id) values ('Empresa A no B', '11222333000181', $1) returning id, client_code, org_id",
+      [ORG_A],
+    ),
+  );
+  CLIENT_B1 = r.rows[0].id;
+  assert.equal(r.rows[0].client_code, "CLI000001");
+  assert.equal(r.rows[0].org_id, ORG_B, "org_id informado pelo usuário é ignorado: vai para o próprio escritório");
+  await rejects(
+    as(ADMIN_B, (tx) => tx.query("insert into public.clients (legal_name, cnpj) values ('Dup', '11222333000181')")),
+    /clients_org_cnpj_key/,
+  );
+});
+
+await test("isolamento de leitura: cada escritório só vê os próprios dados", async () => {
+  for (const table of ["clients", "certificates", "automation_jobs", "automation_tasks", "automation_logs", "downloads", "audit_logs"]) {
+    const b = await as(ADMIN_B, (tx) => tx.query(`select count(*)::int n from public.${table} where org_id <> $1`, [ORG_B]));
+    assert.equal(b.rows[0].n, 0, `B viu dados de outro escritório em ${table}`);
+    const a = await as(ADMIN, (tx) => tx.query(`select count(*)::int n from public.${table} where org_id <> $1`, [ORG_A]));
+    assert.equal(a.rows[0].n, 0, `A (dono da plataforma) viu dados de outro escritório em ${table}`);
+  }
+  const clientsA = await as(VIEWER, (tx) => tx.query("select count(*)::int n from public.clients"));
+  assert.equal(clientsA.rows[0].n, 2);
+  const stats = (await as(ADMIN_B, (tx) => tx.query("select public.dashboard_stats() s"))).rows[0].s;
+  assert.equal(stats.clients_active, 1);
+  const profiles = await as(ADMIN_B, (tx) => tx.query("select email from public.profiles order by email"));
+  assert.deepEqual(profiles.rows.map((r) => r.email), ["admin-b@y.com"]);
+});
+
+await test("isolamento de escrita: B não altera, agenda, cancela nem reprocessa nada de A", async () => {
+  const upd = await as(ADMIN_B, (tx) => tx.query("update public.clients set legal_name = 'HACK' where id = $1", [CLIENT_A]));
+  assert.equal(upd.affectedRows, 0);
+  const del = await as(ADMIN_B, (tx) => tx.query("delete from public.clients where id = $1", [CLIENT_A]));
+  assert.equal(del.affectedRows, 0);
+  await rejects(
+    as(ADMIN_B, (tx) =>
+      tx.query(
+        "insert into public.certificates (client_id, subject_name, valid_until) values ($1, 'x', now() + interval '1 year')",
+        [CLIENT_B],
+      ),
+    ),
+    /row-level security/,
+  );
+  await rejects(
+    as(ADMIN_B, (tx) => tx.query("select public.create_automation_job($1, '2026-07', '{NFCE_EXPORT}')", [CLIENT_A])),
+    /CLIENT_NOT_FOUND/,
+  );
+  await rejects(as(ADMIN_B, (tx) => tx.query("select public.cancel_automation_job($1)", [JOB_A])), /JOB_NOT_FOUND/);
+  await rejects(as(ADMIN_B, (tx) => tx.query("select public.retry_automation_job($1)", [JOB_A])), /JOB_NOT_FOUND/);
+  await db.query("update public.automation_jobs set status = 'manual_action_required' where id = $1", [JOB_A]);
+  await rejects(as(ADMIN_B, (tx) => tx.query("select public.confirm_manual_action($1)", [JOB_A])), /INVALID_STATE/);
+  const batch = await as(ADMIN_B, (tx) =>
+    tx.query("select public.create_automation_jobs_batch($1, '2026-07', '{NFE_ISSUED_EXPORT}') r", [[CLIENT_A]]),
+  );
+  assert.equal(batch.rows[0].r[0].job_id, null);
+  const name = (await db.query("select legal_name from public.clients where id = $1", [CLIENT_A])).rows[0].legal_name;
+  assert.equal(name, "Empresa A LTDA");
+});
+
+await test("B não se move para outro escritório nem vira dono da plataforma", async () => {
+  await as(ADMIN_B, (tx) =>
+    tx.query("update public.profiles set org_id = $1, is_platform_owner = true where user_id = $2", [ORG_A, ADMIN_B]),
+  );
+  const p = (await db.query("select org_id, is_platform_owner from public.profiles where user_id = $1", [ADMIN_B])).rows[0];
+  assert.deepEqual(p, { org_id: ORG_B, is_platform_owner: false });
+  const org = await as(ADMIN_B, (tx) => tx.query("update public.organizations set max_clients = 9999 where id = $1", [ORG_B]));
+  assert.equal(org.affectedRows, 0, "limite do plano só o dono da plataforma altera");
+});
+
+await test("job de B: tarefas/logs herdam o escritório; notificações só para B", async () => {
+  const r = await as(ADMIN_B, (tx) =>
+    tx.query("select public.create_automation_job($1, '2026-08', '{NFE_ISSUED_EXPORT}') r", [CLIENT_B1]),
+  );
+  const jobB = r.rows[0].r.job_id;
+  await as("service_role", (tx) =>
+    tx.query("insert into public.automation_logs (job_id, message) values ($1, 'robô antigo sem org_id')", [jobB]),
+  );
+  const orgs = (
+    await db.query(
+      "select (select org_id from public.automation_jobs where id = $1) j, (select array_agg(distinct org_id) from public.automation_tasks where job_id = $1) t, (select array_agg(distinct org_id) from public.automation_logs where job_id = $1) l",
+      [jobB],
+    )
+  ).rows[0];
+  assert.equal(orgs.j, ORG_B);
+  assert.deepEqual(orgs.t, [ORG_B]);
+  assert.deepEqual(orgs.l, [ORG_B]);
+  await db.query("update public.automation_jobs set created_by = null where id = $1", [jobB]);
+  await db.query("update public.automation_jobs set status = 'completed' where id = $1", [jobB]);
+  const leaked = (
+    await db.query(
+      "select count(*)::int n from public.notifications n join public.profiles p on p.user_id = n.user_id where n.link = $1 and p.org_id <> $2",
+      [`/history/${jobB}`, ORG_B],
+    )
+  ).rows[0].n;
+  assert.equal(leaked, 0, "aviso do job de B chegou a outro escritório");
+  const got = (
+    await db.query("select count(*)::int n from public.notifications where user_id = $1 and link = $2", [ADMIN_B, `/history/${jobB}`])
+  ).rows[0].n;
+  assert.equal(got, 1);
+});
+
+await test("limite do plano e escritório suspenso", async () => {
+  await as(ADMIN, (tx) => tx.query("update public.organizations set max_clients = 1 where id = $1", [ORG_B]));
+  await rejects(
+    as(ADMIN_B, (tx) => tx.query("insert into public.clients (legal_name, cnpj) values ('Outra', '11444777000161')")),
+    /PLAN_LIMIT/,
+  );
+  await as(ADMIN, (tx) => tx.query("update public.organizations set status = 'suspended' where id = $1", [ORG_B]));
+  const seen = await as(ADMIN_B, (tx) => tx.query("select count(*)::int n from public.clients"));
+  assert.equal(seen.rows[0].n, 0, "escritório suspenso não acessa nada");
+  await rejects(
+    as(ADMIN_B, (tx) => tx.query("select public.create_automation_job($1, '2026-06', '{NFE_ISSUED_EXPORT}')", [CLIENT_B1])),
+    /FORBIDDEN/,
+  );
+  const ownerStill = await as(ADMIN, (tx) => tx.query("select count(*)::int n from public.clients"));
+  assert.equal(ownerStill.rows[0].n, 2);
+  await as(ADMIN, (tx) => tx.query("update public.organizations set status = 'active', max_clients = null where id = $1", [ORG_B]));
+});
+
+await test("painel do dono: números por escritório, sem acesso para os demais", async () => {
+  await rejects(as(ADMIN_B, (tx) => tx.query("select * from public.platform_organizations()")), /FORBIDDEN/);
+  const rows = (await as(ADMIN, (tx) => tx.query("select name, clients, users from public.platform_organizations()"))).rows;
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.find((r) => r.name === "Escritório B"), { name: "Escritório B", clients: 1, users: 1 });
 });
 
 console.log(`\n${passed} teste(s) de banco passaram${process.exitCode ? " (com falhas)" : ""}.`);

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node run-migrations.test.mjs"
+    "test": "node run-migrations.test.mjs && node backfill.test.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.0"

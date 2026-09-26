@@ -51,8 +51,27 @@ export interface Profile {
   email: string;
   role: UserRole;
   active: boolean;
+  org_id: string | null;
+  is_platform_owner: boolean;
+  organizations?: { name: string; status: OrganizationStatus } | null;
   created_at: string;
   updated_at: string;
+}
+
+export type OrganizationStatus = "active" | "suspended";
+
+/** Escritório com os números exibidos ao dono da plataforma (RPC platform_organizations). */
+export interface PlatformOrganization {
+  id: string;
+  name: string;
+  status: OrganizationStatus;
+  max_clients: number | null;
+  notes: string | null;
+  created_at: string;
+  users: number;
+  clients: number;
+  jobs_30d: number;
+  last_activity: string | null;
 }
 
 export interface Client {

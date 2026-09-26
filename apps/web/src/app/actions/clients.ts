@@ -8,7 +8,8 @@ import type { ActionResult, Client } from "@/lib/types";
 import { clientSchema, type ClientInput } from "@/lib/validation";
 
 function dbError(message: string, code?: string): string {
-  if (code === "23505" || /clients_cnpj_key/.test(message)) return "Já existe um cliente com este CNPJ.";
+  if (/PLAN_LIMIT/.test(message)) return message.replace(/^PLAN_LIMIT:\s*/, "Limite atingido: ") + ".";
+  if (code === "23505" || /clients_(org_)?cnpj_key/.test(message)) return "Já existe um cliente com este CNPJ.";
   if (/row-level security/.test(message)) return "Você não tem permissão para esta ação.";
   if (/clients_cnpj_valid/.test(message)) return "CNPJ inválido.";
   return message;

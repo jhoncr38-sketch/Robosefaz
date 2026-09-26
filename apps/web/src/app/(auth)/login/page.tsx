@@ -8,6 +8,8 @@ const ERRORS: Record<string, string> = {
   config: "Supabase não configurado. Defina NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY.",
   inactive: "Seu usuário está inativo. Procure um administrador.",
   auth: "Link de autenticação inválido ou expirado.",
+  suspended: "O acesso do seu escritório está suspenso. Entre em contato com o suporte.",
+  "no-org": "Seu usuário ainda não está vinculado a um escritório. Peça um novo convite ao administrador.",
 };
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {

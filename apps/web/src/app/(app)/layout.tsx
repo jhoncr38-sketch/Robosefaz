@@ -6,7 +6,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { profile } = await requireSession();
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar role={profile.role} />
+      <Sidebar role={profile.role} isOwner={profile.is_platform_owner} orgName={profile.organizations?.name ?? null} />
       <div className="lg:pl-60">
         <Header profile={profile} />
         <main className="mx-auto w-full max-w-[1400px] px-4 py-6 lg:px-8">{children}</main>

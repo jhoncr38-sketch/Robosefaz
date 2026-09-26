@@ -4,6 +4,7 @@ import {
   Building2,
   Download,
   History,
+  Landmark,
   LayoutDashboard,
   ListOrdered,
   Settings,
@@ -19,6 +20,8 @@ export interface NavItem {
   label: string;
   icon: LucideIcon;
   permission?: Permission;
+  /** só o dono da plataforma vê */
+  ownerOnly?: boolean;
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -32,4 +35,5 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/errors", label: "Erros", icon: AlertTriangle },
   { href: "/users", label: "Usuários", icon: Users, permission: "users:manage" },
   { href: "/settings", label: "Configurações", icon: Settings },
+  { href: "/organizations", label: "Escritórios", icon: Landmark, ownerOnly: true },
 ];

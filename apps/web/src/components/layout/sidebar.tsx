@@ -9,11 +9,21 @@ import { can } from "@/lib/permissions";
 import type { UserRole } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export function SidebarNav({ role, onNavigate }: { role: UserRole; onNavigate?: () => void }) {
+export function SidebarNav({
+  role,
+  isOwner = false,
+  onNavigate,
+}: {
+  role: UserRole;
+  isOwner?: boolean;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   return (
     <nav className="flex flex-col gap-0.5 px-3">
-      {NAV_ITEMS.filter((item) => !item.permission || can(role, item.permission)).map((item) => {
+      {NAV_ITEMS.filter(
+        (item) => (!item.permission || can(role, item.permission)) && (!item.ownerOnly || isOwner),
+      ).map((item) => {
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
         const Icon = item.icon;
         return (
@@ -51,16 +61,21 @@ export function Brand() {
   );
 }
 
-export function Sidebar({ role }: { role: UserRole }) {
+export function Sidebar({ role, isOwner, orgName }: { role: UserRole; isOwner: boolean; orgName: string | null }) {
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r bg-sidebar lg:flex">
       <div className="flex h-14 items-center border-b">
         <Brand />
       </div>
       <div className="flex-1 overflow-y-auto py-4">
-        <SidebarNav role={role} />
+        <SidebarNav role={role} isOwner={isOwner} />
       </div>
-      <div className="border-t px-5 py-3 text-[11px] text-muted-foreground">v1.0 · Playwright + Supabase</div>
+      <div className="border-t px-5 py-3">
+        <p className="truncate text-xs font-medium" title={orgName ?? undefined}>
+          {orgName ?? "Sem escritório"}
+        </p>
+        <p className="text-[11px] text-muted-foreground">{isOwner ? "Dono da plataforma" : "Escritório"}</p>
+      </div>
     </aside>
   );
 }
