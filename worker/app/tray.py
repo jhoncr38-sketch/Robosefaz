@@ -28,6 +28,7 @@ from pathlib import Path
 
 import pystray
 
+from app import __version__
 from app.config import PROJECT_ROOT, Settings, get_settings
 from app.logs.job_logger import configure_logging
 from app.tray_icons import draw
@@ -182,6 +183,7 @@ class RobotTray:
             "SIAT Robô",
             menu=pystray.Menu(
                 pystray.MenuItem(lambda _i: self.state.text, None, enabled=False),
+                pystray.MenuItem(f"Versão {__version__}", None, enabled=False),
                 pystray.MenuItem(
                     lambda _i: f"Precisam de atenção ({len(self.state.attention)})",
                     pystray.Menu(
