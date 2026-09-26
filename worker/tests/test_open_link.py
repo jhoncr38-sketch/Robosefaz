@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from app.downloads.organizer import DownloadOrganizer
-from app.open_link import parse_link, resolve_file
+from app.open_link import explorer_select_command, parse_link, resolve_file
 
 ID = "38bdf65b-5240-46dd-9733-b621cdcfc57a"
 
@@ -58,3 +58,8 @@ def test_never_opens_non_note_files(tmp_path: Path) -> None:
 
 def test_missing_file_returns_none(tmp_path: Path) -> None:
     assert resolve_file(_row(str(tmp_path / "CLI000001_2026-06_NFCE.zip")), DownloadOrganizer(tmp_path)) is None
+
+
+def test_explorer_command_quotes_only_the_path(tmp_path: Path) -> None:
+    path = tmp_path / "CLI000002 - SELETO PLANEJADOS" / "2026" / "05" / "NFCE" / "CLI000002_2026-05_NFCE.zip"
+    assert explorer_select_command(path) == f'explorer.exe /select,"{path}"'

@@ -44,6 +44,20 @@ def resolve_file(row: dict, organizer: DownloadOrganizer) -> Path | None:
     return local if _NOTE_FILE.match(local.name) and local.is_file() else None
 
 
+def explorer_select_command(path: Path) -> str:
+    """Linha de comando do Explorer com o arquivo selecionado.
+
+    O Explorer só entende /select com as aspas em volta do CAMINHO
+    (/select,"C:\\...\\CLI000001 - EMPRESA\\x.zip"). Passar uma lista ao
+    subprocess põe aspas no argumento inteiro e, com espaços no caminho, o
+    Explorer ignora o pedido e abre Documentos. Caminhos do Windows não têm aspas.
+    """
+    text = str(path)
+    if '"' in text:
+        raise ValueError("Caminho inválido")
+    return f'explorer.exe /select,"{text}"'
+
+
 def _message(text: str, error: bool = False) -> None:
     flags = 0x10 if error else 0x40  # MB_ICONERROR | MB_ICONINFORMATION
     ctypes.windll.user32.MessageBoxW(None, text, TITLE, flags | 0x10000)  # MB_SETFOREGROUND
@@ -78,7 +92,7 @@ def open_download(download_id: str, settings: Settings) -> None:
             "Abri a pasta de notas deste computador."
         )
         return
-    subprocess.Popen(["explorer.exe", f"/select,{path}"])  # noqa: S603, S607
+    subprocess.Popen(explorer_select_command(path))  # noqa: S603
 
 
 def main(argv: list[str] | None = None) -> None:
