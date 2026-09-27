@@ -133,7 +133,12 @@ export default async function SettingsPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         {outdated ? (
-                          <ToneBadge tone="yellow">Desatualizado · atualiza sozinho ao ligar ou quando ocioso</ToneBadge>
+                          // antes da 1.0.6 o robô não tinha atualização automática (e não informava a versão)
+                          version ? (
+                            <ToneBadge tone="yellow">Desatualizado · atualiza sozinho ao ligar ou quando ocioso</ToneBadge>
+                          ) : (
+                            <ToneBadge tone="red">Desatualizado · instale a versão nova à mão neste computador</ToneBadge>
+                          )
                         ) : null}
                         <ToneBadge tone={online ? (w.status === "busy" ? "blue" : "green") : "gray"}>
                           {online ? (w.status === "busy" ? "Processando" : "Online") : "Offline"}
