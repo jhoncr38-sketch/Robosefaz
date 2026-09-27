@@ -46,18 +46,18 @@ function CertificateCell({ status, validUntil }: { status: CertificateStatus | n
         <span
           className={cn(
             "flex items-center gap-[5px] text-xs",
-            status === "valid" ? "text-[#1c7a47]" : status === "expiring" ? "text-[#9a6205]" : "text-[#b42323]",
+            status === "valid" ? "text-(--c-1c7a47)" : status === "expiring" ? "text-(--c-9a6205)" : "text-(--c-b42323)",
           )}
         >
           {ok ? <ShieldCheck className="size-[13px]" /> : <ShieldAlert className="size-[13px]" />}
           {CERT_LABEL[status]}
         </span>
       ) : (
-        <span className="flex items-center gap-[5px] text-xs text-[#b42323]">
+        <span className="flex items-center gap-[5px] text-xs text-(--c-b42323)">
           <ShieldAlert className="size-[13px]" /> Não configurado
         </span>
       )}
-      {validUntil ? <span className="text-[11px] text-[#9a9b94]">até {formatDate(validUntil)}</span> : null}
+      {validUntil ? <span className="text-[11px] text-(--c-9a9b94)">até {formatDate(validUntil)}</span> : null}
     </div>
   );
 }
@@ -90,18 +90,18 @@ export function ClientsTable({ rows, initialQuery = "" }: { rows: ClientRow[]; i
 
   return (
     <section className="overflow-hidden rounded-xl border bg-card">
-      <div className="flex flex-wrap items-center gap-2.5 border-b border-[#efefeb] px-3.5 py-3">
+      <div className="flex flex-wrap items-center gap-2.5 border-b border-(--c-efefeb) px-3.5 py-3">
         <div className="flex h-8 min-w-[200px] flex-1 items-center gap-2 rounded-[7px] border border-input px-2.5 focus-within:border-ring">
-          <Search className="size-3.5 text-[#9a9b94]" />
+          <Search className="size-3.5 text-(--c-9a9b94)" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Buscar por nome, código ou CNPJ"
             aria-label="Buscar por nome, código ou CNPJ"
-            className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[#9a9b94]"
+            className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-(--c-9a9b94)"
           />
         </div>
-        <div className="flex gap-1 rounded-[7px] bg-[#f3f3f0] p-0.5" role="tablist">
+        <div className="flex gap-1 rounded-[7px] bg-(--c-f3f3f0) p-0.5" role="tablist">
           {filters.map(([key, label, count]) => (
             <button
               key={key}
@@ -111,10 +111,10 @@ export function ClientsTable({ rows, initialQuery = "" }: { rows: ClientRow[]; i
               onClick={() => setFilter(key)}
               className={cn(
                 "rounded-[5px] px-2.5 py-[5px] text-xs whitespace-nowrap",
-                filter === key ? "bg-white text-foreground shadow-[0_1px_2px_rgba(0,0,0,.08)]" : "text-muted-foreground",
+                filter === key ? "bg-card text-foreground shadow-[0_1px_2px_rgba(0,0,0,.08)]" : "text-muted-foreground",
               )}
             >
-              {label} <span className="font-mono text-[#9a9b94]">{count}</span>
+              {label} <span className="font-mono text-(--c-9a9b94)">{count}</span>
             </button>
           ))}
         </div>
@@ -127,7 +127,7 @@ export function ClientsTable({ rows, initialQuery = "" }: { rows: ClientRow[]; i
           <div
             className={cn(
               ROW_GRID,
-              "border-b border-[#efefeb] bg-[#fafaf8] px-4 py-[9px] text-[11.5px] tracking-[0.04em] text-[#7a7b75] uppercase",
+              "border-b border-(--c-efefeb) bg-(--c-fafaf8) px-4 py-[9px] text-[11.5px] tracking-[0.04em] text-(--c-7a7b75) uppercase",
             )}
           >
             <span>Cliente</span>
@@ -141,7 +141,7 @@ export function ClientsTable({ rows, initialQuery = "" }: { rows: ClientRow[]; i
               href={`/clients/${r.id}`}
               className={cn(
                 ROW_GRID,
-                "items-center border-b border-[#f2f2ef] px-4 py-2.5 text-foreground last:border-b-0 hover:bg-[#fafaf8] hover:no-underline",
+                "items-center border-b border-(--c-f2f2ef) px-4 py-2.5 text-foreground last:border-b-0 hover:bg-(--c-fafaf8) hover:no-underline",
                 !r.active && "opacity-60",
               )}
             >
@@ -149,17 +149,17 @@ export function ClientsTable({ rows, initialQuery = "" }: { rows: ClientRow[]; i
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="truncate text-[13px] font-medium">{r.trade_name || r.legal_name}</span>
                   {!r.active ? (
-                    <span className="shrink-0 rounded bg-[#f1f1ef] px-1.5 py-px text-[10.5px] text-[#6b6b66]">Inativo</span>
+                    <span className="shrink-0 rounded bg-(--c-f1f1ef) px-1.5 py-px text-[10.5px] text-(--c-6b6b66)">Inativo</span>
                   ) : null}
                 </span>
-                <span className="truncate text-[11.5px] text-[#7a7b75]">
+                <span className="truncate text-[11.5px] text-(--c-7a7b75)">
                   <span className="font-mono">{r.client_code}</span>
                   {r.trade_name ? ` · ${r.legal_name}` : ""}
                 </span>
               </div>
               <div className="hidden flex-col gap-px md:flex">
-                <span className="font-mono text-[12.5px] text-[#4a4b46]">{formatCNPJ(r.cnpj)}</span>
-                <span className="font-mono text-[11px] text-[#9a9b94]">IE {r.state_registration ?? "—"}</span>
+                <span className="font-mono text-[12.5px] text-(--c-4a4b46)">{formatCNPJ(r.cnpj)}</span>
+                <span className="font-mono text-[11px] text-(--c-9a9b94)">IE {r.state_registration ?? "—"}</span>
               </div>
               <div className="hidden md:block">
                 <CertificateCell status={r.certificate_status} validUntil={r.certificate_valid_until} />
@@ -168,12 +168,12 @@ export function ClientsTable({ rows, initialQuery = "" }: { rows: ClientRow[]; i
                 {r.last_job ? (
                   <>
                     <JobStatusBadge status={r.last_job.status as JobStatus} />
-                    <span className="text-[11px] whitespace-nowrap text-[#9a9b94]">
+                    <span className="text-[11px] whitespace-nowrap text-(--c-9a9b94)">
                       {formatCompetence(r.last_job.competence)} · {formatRelative(r.last_job.created_at)}
                     </span>
                   </>
                 ) : (
-                  <span className="text-xs text-[#9a9b94]">Nunca</span>
+                  <span className="text-xs text-(--c-9a9b94)">Nunca</span>
                 )}
               </div>
             </Link>

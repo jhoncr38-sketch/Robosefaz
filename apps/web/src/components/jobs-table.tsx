@@ -67,21 +67,21 @@ export function JobsTable({
               sub={`${formatDateTime(job.created_at)} · ${who(job)}`}
             />
           )}
-          <span className="hidden truncate text-xs text-[#4a4b46] xl:block">{who(job)}</span>
-          <span className="hidden text-xs text-[#4a4b46] tabular-nums md:block">{formatDateTime(job.created_at)}</span>
-          <span className="hidden font-mono text-[12.5px] text-[#4a4b46] md:block">{formatCompetence(job.competence)}</span>
+          <span className="hidden truncate text-xs text-(--c-4a4b46) xl:block">{who(job)}</span>
+          <span className="hidden text-xs text-(--c-4a4b46) tabular-nums md:block">{formatDateTime(job.created_at)}</span>
+          <span className="hidden font-mono text-[12.5px] text-(--c-4a4b46) md:block">{formatCompetence(job.competence)}</span>
           <span className="hidden xl:block">
             <OpTags ops={job.operations} />
           </span>
           <div className="flex min-w-0 flex-col items-end gap-0.5 md:items-start">
             <JobStatusBadge status={job.status} />
             {job.error_code ? (
-              <span className="max-w-full truncate text-[11px] text-[#b42323]">
+              <span className="max-w-full truncate text-[11px] text-(--c-b42323)">
                 {ERROR_CODE_LABEL[job.error_code] ?? job.error_code}
               </span>
             ) : null}
           </div>
-          <span className="hidden text-right font-mono text-[11.5px] text-[#7a7b75] md:block">
+          <span className="hidden text-right font-mono text-[11.5px] text-(--c-7a7b75) md:block">
             {job.started_at ? formatDuration(job.started_at, job.finished_at ?? job.updated_at) : "—"}
           </span>
         </ListRow>

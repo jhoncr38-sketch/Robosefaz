@@ -31,7 +31,7 @@ export function SidebarNav({
         if (items.length === 0) return null;
         return (
           <div key={group.label} className="flex flex-col gap-0.5">
-            <p className="px-2.5 py-1 text-[10.5px] font-medium tracking-[0.06em] text-[#9a9b94] uppercase">
+            <p className="px-2.5 py-1 text-[10.5px] font-medium tracking-[0.06em] text-(--c-9a9b94) uppercase">
               {group.label}
             </p>
             {items.map((item) => {
@@ -47,7 +47,7 @@ export function SidebarNav({
                     "flex items-center gap-2.5 rounded-[7px] px-2.5 py-[7px] text-[13.5px] transition-colors",
                     active
                       ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                      : "text-sidebar-foreground hover:bg-[#f2f3ef]",
+                      : "text-sidebar-foreground hover:bg-(--c-f2f3ef)",
                   )}
                 >
                   <Icon className="size-[15px] shrink-0" />
@@ -56,7 +56,7 @@ export function SidebarNav({
                     <span
                       className={cn(
                         "rounded-[10px] px-1.5 py-px font-mono text-[11px]",
-                        item.badgeWarn ? "bg-[#fdf4e3] text-[#9a6205]" : "bg-[#f0f0ec] text-[#6b6c66]",
+                        item.badgeWarn ? "bg-(--c-fdf4e3) text-(--c-9a6205)" : "bg-(--c-f0f0ec) text-(--c-6b6c66)",
                       )}
                     >
                       {badge}
@@ -78,9 +78,9 @@ export function Brand() {
       <Image src="/brand/logo-mark.png" alt="" width={34} height={34} priority className="size-[34px]" />
       <div className="leading-tight">
         <p className="text-sm font-semibold">
-          <span className="text-[#1fa37a]">JR</span> Sistema
+          <span className="text-(--c-1fa37a)">JR</span> Sistema
         </p>
-        <p className="text-[11px] text-[#7a7b75]">Automação SIAT · SEFAZ-PI</p>
+        <p className="text-[11px] text-(--c-7a7b75)">Automação SIAT · SEFAZ-PI</p>
       </div>
     </Link>
   );
@@ -93,18 +93,18 @@ function OfficeFooter({ orgName, isOwner }: { orgName: string | null; isOwner: b
         <p className="truncate text-[12.5px] font-medium" title={orgName ?? undefined}>
           {orgName ?? "Sem escritório"}
         </p>
-        <p className="text-[11px] text-[#7a7b75]">{isOwner ? "Dono da plataforma" : "Escritório"}</p>
+        <p className="text-[11px] text-(--c-7a7b75)">{isOwner ? "Dono da plataforma" : "Escritório"}</p>
       </div>
-      {isOwner ? <ChevronsUpDown className="size-3.5 text-[#9a9b94]" /> : null}
+      {isOwner ? <ChevronsUpDown className="size-3.5 text-(--c-9a9b94)" /> : null}
     </>
   );
   // só o dono da plataforma tem outros escritórios para ver
   return isOwner ? (
-    <Link href="/organizations" className="flex items-center gap-2.5 border-t border-[#efefeb] px-4 py-3 hover:bg-[#fafaf8]">
+    <Link href="/organizations" className="flex items-center gap-2.5 border-t border-(--c-efefeb) px-4 py-3 hover:bg-(--c-fafaf8)">
       {body}
     </Link>
   ) : (
-    <div className="flex items-center gap-2.5 border-t border-[#efefeb] px-4 py-3">{body}</div>
+    <div className="flex items-center gap-2.5 border-t border-(--c-efefeb) px-4 py-3">{body}</div>
   );
 }
 
@@ -121,7 +121,7 @@ export function Sidebar({
 }) {
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col border-r bg-sidebar lg:flex">
-      <div className="border-b border-[#efefeb] px-4 pt-4 pb-3.5">
+      <div className="border-b border-(--c-efefeb) px-4 pt-4 pb-3.5">
         <Brand />
       </div>
       <div className="no-scrollbar flex-1 overflow-x-hidden overflow-y-auto py-2">

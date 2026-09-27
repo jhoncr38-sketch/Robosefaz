@@ -74,7 +74,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         description="Visão geral das automações do SIAT Web"
         actions={
           canRun ? (
-            <Button asChild className="h-9 gap-2 px-3.5 text-[13.5px] hover:bg-[#196640]">
+            <Button asChild className="h-9 gap-2 px-3.5 text-[13.5px] hover:bg-(--c-196640)">
               <Link href={`/automation?competence=${competence}`} className="hover:no-underline">
                 <CalendarPlus className="size-[15px]" /> Processar competência
               </Link>

@@ -281,7 +281,7 @@ export function OrganizationsManager({ orgs, ownOrgId }: { orgs: PlatformOrganiz
                       </>
                     }
                   />
-                  <span className="text-[11.5px] text-[#7a7b75] xl:hidden">
+                  <span className="text-[11.5px] text-(--c-7a7b75) xl:hidden">
                     {org.clients}/{org.max_clients ?? "∞"} empresas · {org.users} usuários · {org.devices} computadores ·{" "}
                     {org.jobs_30d} agend. 30d
                   </span>
@@ -296,13 +296,13 @@ export function OrganizationsManager({ orgs, ownOrgId }: { orgs: PlatformOrganiz
                   </ToneBadge>
                 </div>
                 <Num>
-                  <span className={atLimit ? "font-medium text-[#b4530f]" : undefined}>{org.clients}</span>
-                  <span className="text-[#9a9b94]">/{org.max_clients ?? "∞"}</span>
+                  <span className={atLimit ? "font-medium text-(--c-b4530f)" : undefined}>{org.clients}</span>
+                  <span className="text-(--c-9a9b94)">/{org.max_clients ?? "∞"}</span>
                 </Num>
                 <Num>{org.users}</Num>
                 <Num>{org.devices}</Num>
                 <Num>{org.jobs_30d}</Num>
-                <span className="hidden text-xs text-[#7a7b75] tabular-nums xl:block">
+                <span className="hidden text-xs text-(--c-7a7b75) tabular-nums xl:block">
                   {org.last_activity ? formatDateTime(org.last_activity) : "—"}
                 </span>
                 <div className="hidden justify-end gap-2 xl:flex">

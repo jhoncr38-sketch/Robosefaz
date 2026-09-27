@@ -79,3 +79,17 @@ def test_summary_texts() -> None:
 
     assert summary("2026-06", [parse_message(ALERT)]) == "EFD 06/2026: processada com malha fiscal (alerta) (original)."  # type: ignore[list-item]
     assert summary("2026-07", [parse_message(NOT_PROCESSED)]) == "EFD 07/2026: NÃO processada (original)."  # type: ignore[list-item]
+
+
+def test_rejected_retificadora_keeps_original() -> None:
+    from app.efd.parser import parse_message
+
+    original_ok = parse_message(RETIFICADORA.replace("Finalidade: RETIFICADORA", "Finalidade: ORIGINAL"))
+    retif_rejected = parse_message(
+        NOT_PROCESSED.replace("Finalidade: ORIGINAL", "Finalidade: RETIFICADORA").replace(
+            "Data Processamento: 10/08/2026", "Data Processamento: 20/08/2026"
+        )
+    )
+    assert summary("2026-07", [original_ok, retif_rejected]) == (  # type: ignore[list-item]
+        "EFD 07/2026: retificadora NÃO processada; vale a original processada."
+    )

@@ -27,7 +27,7 @@ function FileCell({ d, className }: { d: DownloadRow; className?: string }) {
         <span className="truncate font-mono text-xs">{d.filename}</span>
         <Tooltip>
           <TooltipTrigger asChild>
-            <button type="button" className="shrink-0 text-[#9a9b94] hover:text-foreground" aria-label="Detalhes do arquivo">
+            <button type="button" className="shrink-0 text-(--c-9a9b94) hover:text-foreground" aria-label="Detalhes do arquivo">
               <Info className="size-3.5" />
             </button>
           </TooltipTrigger>
@@ -43,7 +43,7 @@ function FileCell({ d, className }: { d: DownloadRow; className?: string }) {
           </TooltipContent>
         </Tooltip>
       </div>
-      <span className="text-[11px] text-[#9a9b94] tabular-nums">
+      <span className="text-[11px] text-(--c-9a9b94) tabular-nums">
         {formatBytes(d.size)} · baixado em {formatDateTime(d.downloaded_at)}
       </span>
     </div>
@@ -90,9 +90,9 @@ export function DownloadsTable({ rows, showClient = true }: { rows: DownloadRow[
           ) : (
             <FileCell d={d} className="flex md:hidden" />
           )}
-          <span className="hidden font-mono text-[12.5px] text-[#4a4b46] md:block">{formatCompetence(d.competence)}</span>
+          <span className="hidden font-mono text-[12.5px] text-(--c-4a4b46) md:block">{formatCompetence(d.competence)}</span>
           <span className="hidden md:block">
-            <span className="rounded bg-[#f2f2ef] px-1.5 py-0.5 text-xs whitespace-nowrap text-[#4a4b46]">
+            <span className="rounded bg-(--c-f2f2ef) px-1.5 py-0.5 text-xs whitespace-nowrap text-(--c-4a4b46)">
               {DOCUMENT_LABEL[d.document_type]}
             </span>
           </span>

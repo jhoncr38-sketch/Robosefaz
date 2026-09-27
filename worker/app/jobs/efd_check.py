@@ -37,6 +37,14 @@ def summary(competence: str, messages: list[EfdMessage]) -> str:
     final = latest(messages)
     if final is None:
         return f"EFD {comp}: nenhuma mensagem de processamento no DT-e."
+    if final.situation == EfdSituation.NOT_PROCESSED and (final.finalidade or "").upper() == "RETIFICADORA":
+        valid = latest([m for m in messages if m.situation != EfdSituation.NOT_PROCESSED])
+        if valid is not None:
+            # retificadora rejeitada não substitui nada: continua valendo a anterior
+            return (
+                f"EFD {comp}: retificadora NÃO processada; vale a "
+                f"{(valid.finalidade or 'declaração').lower()} {SITUATION_TEXT[valid.situation]}."
+            )
     text = f"EFD {comp}: {SITUATION_TEXT[final.situation]}"
     if final.finalidade:
         text += f" ({final.finalidade.lower()})"

@@ -256,7 +256,7 @@ $Abrir = Join-Path $Worker 'abrir_nota.pyw'
 New-Item -Path "$Proto\shell\open\command" -Force | Out-Null
 Set-Item -Path $Proto -Value 'URL:JR Sistema Robô'
 New-ItemProperty -Path $Proto -Name 'URL Protocol' -Value '' -PropertyType String -Force | Out-Null
-$Icone = Join-Path $PSScriptRoot 'robo.ico'
+$Icone = Join-Path $PSScriptRoot 'jr-sistema.ico'
 if (Test-Path $Icone) { New-Item -Path "$Proto\DefaultIcon" -Force | Out-Null; Set-Item -Path "$Proto\DefaultIcon" -Value $Icone }
 Set-Item -Path "$Proto\shell\open\command" -Value ('"{0}" "{1}" "%1"' -f $Pyw, $Abrir)
 Ok 'Botão "Abrir pasta" do painel ligado a este computador'

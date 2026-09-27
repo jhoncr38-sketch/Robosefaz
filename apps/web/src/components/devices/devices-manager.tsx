@@ -162,8 +162,8 @@ export function DevicesManager({ devices, canManage, now }: { devices: Device[];
                   )}
                 </div>
                 <span className="hidden font-mono text-[12.5px] md:block">{d.robot_version ?? "—"}</span>
-                <span className="hidden text-xs text-[#7a7b75] md:block">{seen}</span>
-                <span className="hidden text-xs text-[#7a7b75] tabular-nums md:block">{formatDateTime(d.activated_at)}</span>
+                <span className="hidden text-xs text-(--c-7a7b75) md:block">{seen}</span>
+                <span className="hidden text-xs text-(--c-7a7b75) tabular-nums md:block">{formatDateTime(d.activated_at)}</span>
                 <div className="flex justify-end">{canManage ? <RevokeButton device={d} /> : null}</div>
               </ListRow>
             );

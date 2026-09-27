@@ -46,7 +46,7 @@ export function LoginForm({ initialError, next }: { initialError?: string; next:
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1.5">
-        <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.02em] text-[#13294b]">Bem-vindo de volta</h1>
+        <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.02em] text-(--c-13294b)">Bem-vindo de volta</h1>
         <p className="text-sm text-muted-foreground">Entre para acompanhar automações, certificados e downloads.</p>
       </div>
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
@@ -58,7 +58,7 @@ export function LoginForm({ initialError, next }: { initialError?: string; next:
         <div className="space-y-1.5">
           <Label htmlFor="email">E-mail</Label>
           <div className="relative">
-            <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[#9a9b94]" />
+            <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-(--c-9a9b94)" />
             <Input
               id="email"
               type="email"
@@ -80,7 +80,7 @@ export function LoginForm({ initialError, next }: { initialError?: string; next:
             </Link>
           </div>
           <div className="relative">
-            <Lock className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[#9a9b94]" />
+            <Lock className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-(--c-9a9b94)" />
             <Input
               id="password"
               type={showPassword ? "text" : "password"}
@@ -94,7 +94,7 @@ export function LoginForm({ initialError, next }: { initialError?: string; next:
               type="button"
               onClick={() => setShowPassword((v) => !v)}
               aria-label={showPassword ? "Esconder senha" : "Mostrar senha"}
-              className="absolute top-1/2 right-2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-[#9a9b94] hover:text-foreground"
+              className="absolute top-1/2 right-2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-(--c-9a9b94) hover:text-foreground"
             >
               {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </button>
@@ -103,7 +103,7 @@ export function LoginForm({ initialError, next }: { initialError?: string; next:
         </div>
         <Button
           type="submit"
-          className="mt-2 h-11 w-full gap-2 bg-gradient-to-r from-[#1f7a4d] to-[#1fa37a] text-[15px] hover:from-[#196640] hover:to-[#1b8f6a]"
+          className="mt-2 h-11 w-full gap-2 bg-gradient-to-r from-(--c-1f7a4d) to-(--c-1fa37a) text-[15px] hover:from-(--c-196640) hover:to-(--c-1b8f6a)"
           disabled={isSubmitting}
         >
           {isSubmitting ? <Loader2 className="animate-spin" /> : null}
@@ -111,7 +111,7 @@ export function LoginForm({ initialError, next }: { initialError?: string; next:
           {!isSubmitting ? <ArrowRight className="size-4" /> : null}
         </Button>
       </form>
-      <p className="text-center text-xs text-[#9a9b94]">Não tem acesso? Peça ao administrador do seu escritório.</p>
+      <p className="text-center text-xs text-(--c-9a9b94)">Não tem acesso? Peça ao administrador do seu escritório.</p>
     </div>
   );
 }

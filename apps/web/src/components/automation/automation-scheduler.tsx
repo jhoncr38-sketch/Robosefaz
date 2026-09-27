@@ -68,7 +68,7 @@ function opsForClient(client: PlannerClient, ops: ExportTaskType[]): ExportTaskT
 
 function StepLabel({ n, children }: { n: number; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-1.5 text-[11.5px] text-[#7a7b75]">
+    <div className="flex items-center gap-1.5 text-[11.5px] text-(--c-7a7b75)">
       <span className="grid size-4 place-items-center rounded-full bg-primary text-[10px] font-semibold text-white">{n}</span>
       {children}
     </div>
@@ -256,7 +256,7 @@ export function AutomationScheduler({
                 type="button"
                 aria-label="Competência anterior"
                 onClick={() => changeCompetence(prevComp)}
-                className="grid h-8 w-[30px] place-items-center rounded-[7px] border border-input hover:bg-[#f2f3ef]"
+                className="grid h-8 w-[30px] place-items-center rounded-[7px] border border-input hover:bg-(--c-f2f3ef)"
               >
                 <ChevronLeft className="size-3.5" />
               </button>
@@ -268,18 +268,18 @@ export function AutomationScheduler({
                 aria-label="Próxima competência"
                 onClick={() => changeCompetence(nextComp)}
                 disabled={!nextComp || nextComp > maxCompetence}
-                className="grid h-8 w-[30px] place-items-center rounded-[7px] border border-input hover:bg-[#f2f3ef] disabled:cursor-not-allowed disabled:opacity-40"
+                className="grid h-8 w-[30px] place-items-center rounded-[7px] border border-input hover:bg-(--c-f2f3ef) disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <ChevronRight className="size-3.5" />
               </button>
               {bounds ? (
-                <span className="ml-2 text-xs text-[#7a7b75]">
+                <span className="ml-2 text-xs text-(--c-7a7b75)">
                   {bounds.start} a {bounds.end}
                 </span>
               ) : null}
             </div>
           </div>
-          <div className="hidden w-px self-stretch bg-[#efefeb] sm:block" />
+          <div className="hidden w-px self-stretch bg-(--c-efefeb) sm:block" />
           <div className="flex flex-col gap-1.5">
             <StepLabel n={2}>Operações</StepLabel>
             <div className="flex flex-wrap gap-1.5">
@@ -297,7 +297,7 @@ export function AutomationScheduler({
                     }}
                     className={cn(
                       "flex h-8 items-center gap-[7px] rounded-[7px] border px-3 text-[13px]",
-                      on ? "border-[#9fd3b5] bg-[#eef7f1] text-[#17603b]" : "border-input bg-white text-[#7a7b75]",
+                      on ? "border-(--c-9fd3b5) bg-(--c-eef7f1) text-(--c-17603b)" : "border-input bg-card text-(--c-7a7b75)",
                     )}
                   >
                     <Box className="size-3.5" />
@@ -311,21 +311,21 @@ export function AutomationScheduler({
 
         {/* 3: clientes */}
         <section className="overflow-hidden rounded-xl border bg-card">
-          <div className="flex flex-wrap items-center gap-2.5 border-b border-[#efefeb] px-3.5 py-3">
+          <div className="flex flex-wrap items-center gap-2.5 border-b border-(--c-efefeb) px-3.5 py-3">
             <div className="mr-1">
               <StepLabel n={3}>Clientes</StepLabel>
             </div>
             <div className="flex h-8 min-w-[200px] flex-1 items-center gap-2 rounded-[7px] border border-input px-2.5 focus-within:border-ring">
-              <Search className="size-3.5 text-[#9a9b94]" />
+              <Search className="size-3.5 text-(--c-9a9b94)" />
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Buscar cliente, código ou CNPJ"
                 aria-label="Buscar cliente, código ou CNPJ"
-                className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[#9a9b94]"
+                className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-(--c-9a9b94)"
               />
             </div>
-            <div className="flex gap-1 rounded-[7px] bg-[#f3f3f0] p-0.5" role="tablist">
+            <div className="flex gap-1 rounded-[7px] bg-(--c-f3f3f0) p-0.5" role="tablist">
               {filters.map(([key, label, count]) => (
                 <button
                   key={key}
@@ -335,10 +335,10 @@ export function AutomationScheduler({
                   onClick={() => setFilter(key)}
                   className={cn(
                     "rounded-[5px] px-2.5 py-[5px] text-xs whitespace-nowrap",
-                    filter === key ? "bg-white text-foreground shadow-[0_1px_2px_rgba(0,0,0,.08)]" : "text-muted-foreground",
+                    filter === key ? "bg-card text-foreground shadow-[0_1px_2px_rgba(0,0,0,.08)]" : "text-muted-foreground",
                   )}
                 >
-                  {label} <span className="font-mono text-[#9a9b94]">{count}</span>
+                  {label} <span className="font-mono text-(--c-9a9b94)">{count}</span>
                 </button>
               ))}
             </div>
@@ -347,7 +347,7 @@ export function AutomationScheduler({
           <div
             className={cn(
               ROW_GRID,
-              "items-center border-b border-[#efefeb] bg-[#fafaf8] px-3.5 py-[9px] text-[11.5px] tracking-[0.04em] text-[#7a7b75] uppercase",
+              "items-center border-b border-(--c-efefeb) bg-(--c-fafaf8) px-3.5 py-[9px] text-[11.5px] tracking-[0.04em] text-(--c-7a7b75) uppercase",
             )}
           >
             <button
@@ -357,7 +357,7 @@ export function AutomationScheduler({
               disabled={visibleSelectable.length === 0}
               className={cn(
                 "box-border grid size-4 place-items-center rounded border-[1.5px] text-white disabled:opacity-40",
-                someOn ? "border-primary bg-primary" : "border-[#cfcfca] bg-white",
+                someOn ? "border-primary bg-primary" : "border-(--c-cfcfca) bg-card",
               )}
             >
               {allOn ? <Check className="size-[11px]" /> : someOn ? <Minus className="size-[11px]" /> : null}
@@ -370,7 +370,7 @@ export function AutomationScheduler({
 
           <div className="max-h-[62vh] overflow-y-auto">
             {visible.length === 0 ? (
-              <p className="p-8 text-center text-[13px] text-[#7a7b75]">Nenhum cliente encontrado.</p>
+              <p className="p-8 text-center text-[13px] text-(--c-7a7b75)">Nenhum cliente encontrado.</p>
             ) : (
               visible.map((r) => {
                 const on = !r.locked && selected.has(r.client.id);
@@ -391,52 +391,52 @@ export function AutomationScheduler({
                     }}
                     className={cn(
                       ROW_GRID,
-                      "items-center border-b border-[#f2f2ef] px-3.5 py-2.5 outline-none last:border-b-0 focus-visible:bg-[#f3faf6]",
-                      r.locked ? "cursor-not-allowed opacity-[.62]" : "cursor-pointer hover:bg-[#fafaf8]",
-                      on && "bg-[#f3faf6] hover:bg-[#f3faf6]",
+                      "items-center border-b border-(--c-f2f2ef) px-3.5 py-2.5 outline-none last:border-b-0 focus-visible:bg-(--c-f3faf6)",
+                      r.locked ? "cursor-not-allowed opacity-[.62]" : "cursor-pointer hover:bg-(--c-fafaf8)",
+                      on && "bg-(--c-f3faf6) hover:bg-(--c-f3faf6)",
                     )}
                   >
                     <span
                       className={cn(
                         "box-border grid size-4 place-items-center rounded border-[1.5px] text-white",
-                        on ? "border-primary bg-primary" : r.locked ? "border-[#cfcfca] bg-[#f3f3f0]" : "border-[#cfcfca] bg-white",
+                        on ? "border-primary bg-primary" : r.locked ? "border-(--c-cfcfca) bg-(--c-f3f3f0)" : "border-(--c-cfcfca) bg-card",
                       )}
                     >
-                      {on ? <Check className="size-[11px]" /> : r.locked ? <Lock className="size-[9px] text-[#9a9b94]" /> : null}
+                      {on ? <Check className="size-[11px]" /> : r.locked ? <Lock className="size-[9px] text-(--c-9a9b94)" /> : null}
                     </span>
                     <div className="flex min-w-0 flex-col gap-px">
                       <span className="truncate text-[13px] font-medium">{c.trade_name || c.legal_name}</span>
-                      <span className="font-mono text-[11.5px] text-[#7a7b75]">{c.client_code}</span>
+                      <span className="font-mono text-[11.5px] text-(--c-7a7b75)">{c.client_code}</span>
                     </div>
-                    <span className="hidden font-mono text-[12.5px] text-[#4a4b46] md:block">{formatCNPJ(c.cnpj)}</span>
+                    <span className="hidden font-mono text-[12.5px] text-(--c-4a4b46) md:block">{formatCNPJ(c.cnpj)}</span>
                     <div className="hidden flex-col gap-px md:flex">
                       {r.certOk ? (
-                        <span className="flex items-center gap-[5px] text-xs text-[#1c7a47]">
+                        <span className="flex items-center gap-[5px] text-xs text-(--c-1c7a47)">
                           <ShieldCheck className="size-[13px]" />
                           {c.certificate_status === "expiring" ? "Vencendo" : "Válido"}
                         </span>
                       ) : (
-                        <span className="flex items-center gap-[5px] text-xs text-[#b42323]">
+                        <span className="flex items-center gap-[5px] text-xs text-(--c-b42323)">
                           <ShieldAlert className="size-[13px]" />
                           {c.certificate_status === "expired" ? "Vencido" : "Sem certificado"}
                         </span>
                       )}
                       {c.certificate_valid_until ? (
-                        <span className="text-[11px] text-[#9a9b94]">até {formatDate(c.certificate_valid_until)}</span>
+                        <span className="text-[11px] text-(--c-9a9b94)">até {formatDate(c.certificate_valid_until)}</span>
                       ) : null}
                     </div>
                     <div className="flex min-w-0 flex-col items-start gap-0.5">
                       {loading ? (
-                        <span className="text-xs text-[#9a9b94]">…</span>
+                        <span className="text-xs text-(--c-9a9b94)">…</span>
                       ) : r.status === "none" ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-[5px] border border-dashed border-[#d9d9d4] px-2 py-px text-xs whitespace-nowrap text-[#7a7b75]">
-                          <span className="size-1.5 rounded-full bg-[#c9c9c4]" />
+                        <span className="inline-flex items-center gap-1.5 rounded-[5px] border border-dashed border-(--c-d9d9d4) px-2 py-px text-xs whitespace-nowrap text-(--c-7a7b75)">
+                          <span className="size-1.5 rounded-full bg-(--c-c9c9c4)" />
                           {COMPETENCE_STATUS_LABEL.none}
                         </span>
                       ) : (
                         <ToneBadge tone={COMPETENCE_STATUS_TONE[r.status]}>{COMPETENCE_STATUS_LABEL[r.status]}</ToneBadge>
                       )}
-                      {r.hint && !loading ? <span className="text-[11px] text-[#9a9b94]">{r.hint}</span> : null}
+                      {r.hint && !loading ? <span className="text-[11px] text-(--c-9a9b94)">{r.hint}</span> : null}
                     </div>
                   </div>
                 );
@@ -452,22 +452,22 @@ export function AutomationScheduler({
           <div className="flex flex-col gap-3.5 px-[18px] py-4">
             <p className="text-[14.5px] font-semibold">Resumo do agendamento</p>
             <div className="grid grid-cols-2 gap-2">
-              <div className="flex flex-col gap-0.5 rounded-lg bg-[#fafaf8] p-2.5">
+              <div className="flex flex-col gap-0.5 rounded-lg bg-(--c-fafaf8) p-2.5">
                 <span className="text-[22px] font-semibold tabular-nums">{chosen.length}</span>
-                <span className="text-[11.5px] text-[#7a7b75]">clientes</span>
+                <span className="text-[11.5px] text-(--c-7a7b75)">clientes</span>
               </div>
-              <div className="flex flex-col gap-0.5 rounded-lg bg-[#fafaf8] p-2.5">
+              <div className="flex flex-col gap-0.5 rounded-lg bg-(--c-fafaf8) p-2.5">
                 <span className="text-[22px] font-semibold tabular-nums">{exportCount}</span>
-                <span className="text-[11.5px] text-[#7a7b75]">exportações</span>
+                <span className="text-[11.5px] text-(--c-7a7b75)">exportações</span>
               </div>
             </div>
             <dl className="flex flex-col gap-2 text-[12.5px]">
               <div className="flex justify-between gap-3">
-                <dt className="text-[#7a7b75]">Competência</dt>
+                <dt className="text-(--c-7a7b75)">Competência</dt>
                 <dd className="font-mono">{formatCompetence(competence)}</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="text-[#7a7b75]">Operações</dt>
+                <dt className="text-(--c-7a7b75)">Operações</dt>
                 <dd className="text-right">
                   {operations.length
                     ? EXPORT_OPERATIONS.filter((o) => operations.includes(o.value)).map((o) => o.label).join(", ")
@@ -475,11 +475,11 @@ export function AutomationScheduler({
                 </dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="text-[#7a7b75]">Tempo estimado</dt>
+                <dt className="text-(--c-7a7b75)">Tempo estimado</dt>
                 <dd className="text-right">{chosen.length ? `~${Math.ceil(chosen.length * 1.5)} min + retorno SEFAZ` : "—"}</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="text-[#7a7b75]">Ignorados (já solicitados)</dt>
+                <dt className="text-(--c-7a7b75)">Ignorados (já solicitados)</dt>
                 <dd>{ignored}</dd>
               </div>
             </dl>
@@ -499,7 +499,7 @@ export function AutomationScheduler({
               type="button"
               disabled={!canProcess}
               onClick={() => (force ? setConfirmOpen(true) : submit())}
-              className="flex h-10 items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-white hover:bg-[#196640] disabled:cursor-not-allowed disabled:bg-[#a9cdb8]"
+              className="flex h-10 items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-white hover:bg-(--c-196640) disabled:cursor-not-allowed disabled:bg-(--c-a9cdb8)"
             >
               {pending ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
               Processar {chosen.length} cliente(s)
@@ -509,8 +509,8 @@ export function AutomationScheduler({
           {canForce ? (
             <div
               className={cn(
-                "flex items-start gap-2.5 border-t border-[#efefeb] px-[18px] py-3",
-                force ? "bg-[#fdf6e9]" : "bg-[#fafaf8]",
+                "flex items-start gap-2.5 border-t border-(--c-efefeb) px-[18px] py-3",
+                force ? "bg-(--c-fdf6e9)" : "bg-(--c-fafaf8)",
               )}
             >
               <button
@@ -524,7 +524,7 @@ export function AutomationScheduler({
                 }}
                 className={cn(
                   "relative mt-px h-[18px] w-[30px] shrink-0 rounded-full transition-colors",
-                  force ? "bg-[#d98e0b]" : "bg-[#d4d4cf]",
+                  force ? "bg-(--c-d98e0b)" : "bg-(--c-d4d4cf)",
                 )}
               >
                 <span
@@ -536,7 +536,7 @@ export function AutomationScheduler({
               </button>
               <div className="flex flex-col gap-0.5">
                 <span className="text-[12.5px] font-medium">Forçar reagendamento</span>
-                <span className="text-[11.5px] text-[#7a7b75]">
+                <span className="text-[11.5px] text-(--c-7a7b75)">
                   Libera clientes já solicitados. Pode gerar pedido duplicado no SIAT.
                 </span>
               </div>
@@ -546,11 +546,11 @@ export function AutomationScheduler({
 
         <section className="flex flex-col gap-2.5 rounded-xl border bg-card px-[18px] py-3.5">
           <p className="flex items-center gap-1.5 text-[13px] font-semibold">
-            <Info className="size-3.5 text-[#7a7b75]" /> Como funciona
+            <Info className="size-3.5 text-(--c-7a7b75)" /> Como funciona
           </p>
           {HOW_IT_WORKS.map((t, i) => (
-            <div key={t} className="flex gap-2.5 text-xs leading-[1.45] text-[#4a4b46]">
-              <span className="font-mono text-[#9a9b94]">{String(i + 1).padStart(2, "0")}</span>
+            <div key={t} className="flex gap-2.5 text-xs leading-[1.45] text-(--c-4a4b46)">
+              <span className="font-mono text-(--c-9a9b94)">{String(i + 1).padStart(2, "0")}</span>
               <span>{t}</span>
             </div>
           ))}
@@ -591,7 +591,7 @@ function ResultBox({ result, clients }: { result: BatchSummary; clients: Planner
   };
   const errors = result.results.filter((r) => !r.job_id && !r.duplicate);
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg bg-[#eef7f1] px-2.5 py-[9px] text-[12.5px] text-[#1c5e3c]">
+    <div className="flex flex-col gap-1.5 rounded-lg bg-(--c-eef7f1) px-2.5 py-[9px] text-[12.5px] text-(--c-1c5e3c)">
       <div className="flex items-start gap-2">
         <CircleCheck className="mt-px size-3.5 shrink-0" />
         <span className="flex-1">
@@ -604,10 +604,10 @@ function ResultBox({ result, clients }: { result: BatchSummary; clients: Planner
         </span>
       </div>
       {result.duplicates > 0 ? (
-        <p className="pl-[22px] text-[#6b6c66]">{result.duplicates} já estavam agendados e foram ignorados.</p>
+        <p className="pl-[22px] text-(--c-6b6c66)">{result.duplicates} já estavam agendados e foram ignorados.</p>
       ) : null}
       {errors.map((r) => (
-        <p key={r.client_id} className="pl-[22px] text-[#b42323]">
+        <p key={r.client_id} className="pl-[22px] text-(--c-b42323)">
           {name(r.client_id)}: {r.message ?? r.error}
         </p>
       ))}

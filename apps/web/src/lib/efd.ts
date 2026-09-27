@@ -4,13 +4,20 @@
 import type { Tone } from "@/lib/status";
 import type { EfdDeclaration, EfdSituation, JobStatus } from "@/lib/types";
 
-export type EfdRowState = EfdSituation | "checking" | "no_message" | "check_failed" | "not_checked";
+export type EfdRowState =
+  | EfdSituation
+  | "retif_rejected"
+  | "checking"
+  | "no_message"
+  | "check_failed"
+  | "not_checked";
 
 export const EFD_STATE_LABEL: Record<EfdRowState, string> = {
   processed: "Processada",
   alert: "Processada com malha",
   pending: "Processada com pendência",
   not_processed: "Não processada",
+  retif_rejected: "Retificadora não processada",
   checking: "Consultando",
   no_message: "Sem mensagem no DT-e",
   check_failed: "Erro na consulta",
@@ -22,6 +29,7 @@ export const EFD_STATE_TONE: Record<Exclude<EfdRowState, "not_checked">, Tone> =
   alert: "yellow",
   pending: "orange",
   not_processed: "red",
+  retif_rejected: "red",
   checking: "blue",
   no_message: "gray",
   check_failed: "red",
@@ -53,12 +61,22 @@ export function latestDeclaration(decls: EfdDeclaration[]): EfdDeclaration | nul
 }
 
 /**
+ * Retificadora rejeitada não substitui nada: devolve a declaração processada que continua valendo.
+ */
+export function stillValidAfterRejectedRetif(decls: EfdDeclaration[]): EfdDeclaration | null {
+  const decl = latestDeclaration(decls);
+  if (!decl || decl.situation !== "not_processed" || (decl.finalidade ?? "").toUpperCase() !== "RETIFICADORA") return null;
+  return latestDeclaration(decls.filter((d) => d.situation !== "not_processed"));
+}
+
+/**
  * Situação do cliente: consulta em andamento > declaração lida > resultado da última consulta.
  */
 export function efdRowState(decls: EfdDeclaration[], jobs: EfdCheckJob[]): EfdRowState {
   const lastJob = [...jobs].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
   if (lastJob && !FINAL.includes(lastJob.status)) return "checking";
   const decl = latestDeclaration(decls);
+  if (decl && stillValidAfterRejectedRetif(decls)) return "retif_rejected";
   if (decl) return decl.situation;
   if (!lastJob) return "not_checked";
   if (lastJob.status === "completed") return "no_message";
@@ -67,5 +85,11 @@ export function efdRowState(decls: EfdDeclaration[], jobs: EfdCheckJob[]): EfdRo
 }
 
 export function isProblem(state: EfdRowState): boolean {
-  return state === "alert" || state === "pending" || state === "not_processed" || state === "check_failed";
+  return (
+    state === "alert" ||
+    state === "pending" ||
+    state === "not_processed" ||
+    state === "retif_rejected" ||
+    state === "check_failed"
+  );
 }

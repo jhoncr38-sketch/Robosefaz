@@ -444,7 +444,9 @@ def cap_painel_acesso() -> list:
             "O menu fica à esquerda, em três grupos: <b>Operação</b>, <b>Cadastros</b> e <b>Sistema</b>. Os "
             "números ao lado dos itens mostram quantos agendamentos estão na fila, quantas notas foram baixadas "
             "e quantos clientes estão ativos. No alto, a busca (<b>Ctrl+K</b>) encontra um cliente pelo nome, "
-            "código ou CNPJ, e o selo <b>Robô ativo</b> mostra se algum computador com o robô está ligado."
+            "código ou CNPJ, e o selo <b>Robô ativo</b> mostra se algum computador com o robô está ligado. "
+            "Clicando no seu nome, em <b>Tema</b>, dá para usar o modo <b>Noturno</b> (ou <b>Automático</b>, "
+            "igual ao Windows); a escolha vale para aquele navegador."
         ),
         table(
             [

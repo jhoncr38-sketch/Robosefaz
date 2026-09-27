@@ -84,7 +84,7 @@ export default async function CertificatesPage() {
                       <span className="truncate text-xs" title={c.subject_name}>
                         {c.subject_name}
                       </span>
-                      <span className="truncate text-[11px] text-[#9a9b94]">
+                      <span className="truncate text-[11px] text-(--c-9a9b94)">
                         {c.issuer ?? "—"}
                         {c.serial_number ? ` · série ${c.serial_number}` : ""}
                       </span>
@@ -92,7 +92,7 @@ export default async function CertificatesPage() {
                     <div className="hidden flex-col gap-px md:flex">
                       <span className="text-xs tabular-nums">{formatDate(c.valid_until)}</span>
                       {c.active && days !== null ? (
-                        <span className="text-[11px] text-[#9a9b94]">{days > 0 ? `${days} dia(s)` : "vencido"}</span>
+                        <span className="text-[11px] text-(--c-9a9b94)">{days > 0 ? `${days} dia(s)` : "vencido"}</span>
                       ) : null}
                     </div>
                     <div className="flex justify-end md:justify-start">
@@ -101,14 +101,14 @@ export default async function CertificatesPage() {
                     <div className="hidden flex-col items-start gap-0.5 xl:flex">
                       <ToneBadge tone={c.has_secret ? "green" : "gray"}>{c.has_secret ? "Senha no cofre" : "Sem senha"}</ToneBadge>
                       {c.requires_manual_selection ? (
-                        <span className="text-[11px] text-[#b4530f]">seleção manual</span>
+                        <span className="text-[11px] text-(--c-b4530f)">seleção manual</span>
                       ) : c.browser_profile ? (
-                        <span className="font-mono text-[11px] text-[#9a9b94]">perfil {c.browser_profile.slice(0, 8)}…</span>
+                        <span className="font-mono text-[11px] text-(--c-9a9b94)">perfil {c.browser_profile.slice(0, 8)}…</span>
                       ) : null}
                     </div>
                   </ListRow>
                   {admin ? (
-                    <div className="flex flex-wrap justify-end gap-1.5 border-b border-[#f2f2ef] px-4 pb-2.5">
+                    <div className="flex flex-wrap justify-end gap-1.5 border-b border-(--c-f2f2ef) px-4 pb-2.5">
                       <CertificateFormDialog
                         certificate={c}
                         clients={clientOptions}

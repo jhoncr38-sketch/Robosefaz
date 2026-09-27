@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { efdRowState, isProblem, latestDeclaration, type EfdCheckJob } from "../src/lib/efd.ts";
+import { efdRowState, isProblem, latestDeclaration, stillValidAfterRejectedRetif, type EfdCheckJob } from "../src/lib/efd.ts";
 import type { EfdDeclaration } from "../src/lib/types.ts";
 
 function decl(epe: string, situation: EfdDeclaration["situation"], processedAt: string, finalidade = "ORIGINAL"): EfdDeclaration {
@@ -53,5 +53,15 @@ describe("Consulta EFD", () => {
       (["processed", "alert", "pending", "not_processed", "check_failed", "no_message"] as const).map(isProblem),
       [false, true, true, true, true, false],
     );
+  });
+
+  it("retificadora rejeitada: continua valendo a original processada", () => {
+    const originalOk = decl("93104700001", "processed", "2026-08-10T18:20:49Z");
+    const retifRejected = decl("93104700002", "not_processed", "2026-08-20T18:00:00Z", "RETIFICADORA");
+    assert.equal(stillValidAfterRejectedRetif([originalOk, retifRejected])?.epe_number, "93104700001");
+    assert.equal(efdRowState([originalOk, retifRejected], []), "retif_rejected");
+    assert.equal(isProblem("retif_rejected"), true);
+    // original rejeitada sem nada processado antes continua "Não processada"
+    assert.equal(efdRowState([original], []), "not_processed");
   });
 });

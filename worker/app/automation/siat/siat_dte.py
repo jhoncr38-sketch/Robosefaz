@@ -130,7 +130,8 @@ class SiatDte:
         except Exception:  # noqa: BLE001 - filtro é conveniência, não requisito
             return None
 
-    async def _prepare_list(self, competence: str) -> None:
+    async def _prepare_list(self, competence: str) -> bool:
+        """Filtros da caixa; True se a busca pela competência foi aplicada."""
         all_rx = self.sel.rx("dte_list_all")
         listed = await self._choose(self.sel.rx("dte_list_label"), lambda opts: next((o for o in opts if all_rx.search(o)), None))
 
@@ -149,6 +150,8 @@ class SiatDte:
             await search.press("Enter")
             await wait_idle(self.page)
             await asyncio.sleep(0.5)
+            return True
+        return False
 
     # -- leitura -----------------------------------------------------------------
     async def read_efd(self, competence: str) -> list[DteMessage]:
@@ -164,22 +167,25 @@ class SiatDte:
         self.page.on("dialog", on_dialog)
         try:
             await self.open_inbox()
-            await self._prepare_list(competence)
-            return await self._read_pages(competence)
+            searched = await self._prepare_list(competence)
+            # com a busca aplicada as mensagens da competência cabem na 1ª página
+            return await self._read_pages(competence, max_pages=1 if searched else MAX_PAGES)
         finally:
             try:
                 self.page.remove_listener("dialog", on_dialog)
             except Exception:  # noqa: BLE001
                 pass
 
-    async def _read_pages(self, competence: str) -> list[DteMessage]:
+    async def _read_pages(self, competence: str, max_pages: int = MAX_PAGES) -> list[DteMessage]:
         found: list[DteMessage] = []
         seen: set[str] = set()
-        for page_no in range(1, MAX_PAGES + 1):
+        for page_no in range(1, max_pages + 1):
             new_on_page = await self._read_visible(competence, found, seen)
             await self.ctx.logger.debug(
                 f"DT-e página {page_no}: {new_on_page} mensagem(ns) da EFD {competence} lida(s).", step="checking_processing"
             )
+            if page_no >= max_pages:
+                break
             nxt = await find_clickable(self.page, self.sel.rx("dte_next_page"), timeout_ms=500)
             if nxt is None:
                 break

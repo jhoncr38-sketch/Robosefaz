@@ -44,10 +44,10 @@ export function RobotStatusPill() {
       title={on ? "Algum computador com o robô deu sinal nos últimos 2 minutos" : "Nenhum computador com o robô ligado"}
       className={cn(
         "hidden h-[30px] shrink-0 items-center gap-2 rounded-[15px] border px-3 text-[12.5px] whitespace-nowrap hover:no-underline sm:flex",
-        on ? "border-[#d3ebdc] bg-[#eef7f1] text-[#1c5e3c]" : "border-[#e3e3df] bg-[#f3f3f0] text-[#6b6c66]",
+        on ? "border-(--c-d3ebdc) bg-(--c-eef7f1) text-(--c-1c5e3c)" : "border-(--c-e3e3df) bg-(--c-f3f3f0) text-(--c-6b6c66)",
       )}
     >
-      {on ? <span className="live-dot" /> : <span className="size-2 rounded-full bg-[#a3a39e]" />}
+      {on ? <span className="live-dot" /> : <span className="size-2 rounded-full bg-(--c-a3a39e)" />}
       {state === "unknown" ? "Robô…" : state === "busy" ? "Robô processando" : on ? "Robô ativo" : "Robô desligado"}
     </Link>
   );

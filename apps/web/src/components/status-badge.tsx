@@ -12,23 +12,23 @@ import type { CertificateStatus, JobStatus, TaskStatus } from "@/lib/types";
 
 // cores das pílulas do redesenho (fundo / texto / ponto)
 const TONE_CLASS: Record<Tone, string> = {
-  gray: "bg-[#f1f1ef] text-[#6b6b66]",
-  blue: "bg-[#e8f1fd] text-[#1d5fb8]",
-  yellow: "bg-[#fdf4e3] text-[#9a6205]",
-  green: "bg-[#e8f6ee] text-[#1c7a47]",
-  red: "bg-[#fdecec] text-[#b42323]",
-  orange: "bg-[#fdeee3] text-[#b4530f]",
-  purple: "bg-[#f3eefc] text-[#6b3fb8]",
+  gray: "bg-(--c-f1f1ef) text-(--c-6b6b66)",
+  blue: "bg-(--c-e8f1fd) text-(--c-1d5fb8)",
+  yellow: "bg-(--c-fdf4e3) text-(--c-9a6205)",
+  green: "bg-(--c-e8f6ee) text-(--c-1c7a47)",
+  red: "bg-(--c-fdecec) text-(--c-b42323)",
+  orange: "bg-(--c-fdeee3) text-(--c-b4530f)",
+  purple: "bg-(--c-f3eefc) text-(--c-6b3fb8)",
 };
 
 const DOT_CLASS: Record<Tone, string> = {
-  gray: "bg-[#a3a39e]",
-  blue: "bg-[#3b82e0] animate-pulse",
-  yellow: "bg-[#e0a019]",
-  green: "bg-[#2ea062]",
-  red: "bg-[#dc3b3b]",
-  orange: "bg-[#f97316] animate-pulse",
-  purple: "bg-[#8b5cf6]",
+  gray: "bg-(--c-a3a39e)",
+  blue: "bg-(--c-3b82e0) animate-pulse",
+  yellow: "bg-(--c-e0a019)",
+  green: "bg-(--c-2ea062)",
+  red: "bg-(--c-dc3b3b)",
+  orange: "bg-(--c-f97316) animate-pulse",
+  purple: "bg-(--c-8b5cf6)",
 };
 
 export function ToneBadge({ tone, children, className }: { tone: Tone; children: React.ReactNode; className?: string }) {

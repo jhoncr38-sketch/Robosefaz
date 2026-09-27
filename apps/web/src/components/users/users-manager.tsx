@@ -135,7 +135,7 @@ function UserRow({ user, isSelf }: { user: Profile; isSelf: boolean }) {
         className="basis-full md:basis-auto"
         title={
           <>
-            {user.name} {isSelf ? <span className="text-xs font-normal text-[#7a7b75]">(você)</span> : null}
+            {user.name} {isSelf ? <span className="text-xs font-normal text-(--c-7a7b75)">(você)</span> : null}
           </>
         }
         sub={user.email}
@@ -156,7 +156,7 @@ function UserRow({ user, isSelf }: { user: Profile; isSelf: boolean }) {
         <Switch checked={user.active} onCheckedChange={(v) => change({ active: v })} disabled={pending || isSelf} />
         <ToneBadge tone={user.active ? "green" : "gray"}>{user.active ? "Ativo" : "Inativo"}</ToneBadge>
       </div>
-      <span className="hidden text-xs text-[#7a7b75] tabular-nums md:block">{formatDateTime(user.created_at)}</span>
+      <span className="hidden text-xs text-(--c-7a7b75) tabular-nums md:block">{formatDateTime(user.created_at)}</span>
     </ListRow>
   );
 }

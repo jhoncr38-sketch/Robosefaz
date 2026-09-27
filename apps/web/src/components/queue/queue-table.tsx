@@ -45,8 +45,8 @@ function JobTime({ job, waitingSince, now }: { job: AutomationJob; waitingSince?
           <span className="text-muted-foreground">Robô </span>
           {formatDuration(job.started_at, waitingSince)}
         </p>
-        <p className="text-[#9a6205]">
-          <span className="text-[#9a6205]/70">SEFAZ há </span>
+        <p className="text-(--c-9a6205)">
+          <span className="text-(--c-9a6205)/70">SEFAZ há </span>
           {formatDuration(waitingSince, nowIso)}
         </p>
       </div>
@@ -77,8 +77,8 @@ export function QueueTable({ initialJobs, role }: { initialJobs: AutomationJob[]
   return (
     <div className="space-y-4">
       {manual.map((job) => (
-        <div key={job.id} className="flex gap-3 rounded-xl border border-[#f6d5bd] bg-[#fdf3ea] px-4 py-3.5 text-[#7a3a0c]">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[#d9630f]" />
+        <div key={job.id} className="flex gap-3 rounded-xl border border-(--c-f6d5bd) bg-(--c-fdf3ea) px-4 py-3.5 text-(--c-7a3a0c)">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-(--c-d9630f)" />
           <div className="min-w-0 flex-1 space-y-1 text-[13px]">
             <p className="font-semibold">A automação está aguardando sua intervenção.</p>
             <p>
@@ -107,7 +107,7 @@ export function QueueTable({ initialJobs, role }: { initialJobs: AutomationJob[]
             ]}
           />
           <span className="flex-1" />
-          <span className={cn("flex items-center gap-1.5 text-xs", connected ? "text-[#1c7a47]" : "text-muted-foreground")}>
+          <span className={cn("flex items-center gap-1.5 text-xs", connected ? "text-(--c-1c7a47)" : "text-muted-foreground")}>
             <Radio className={cn("size-3.5", connected && "animate-pulse")} />
             {connected ? "Tempo real conectado" : "Conectando..."}
           </span>
@@ -139,15 +139,15 @@ export function QueueTable({ initialJobs, role }: { initialJobs: AutomationJob[]
                 <div className="flex min-w-0 flex-col items-start gap-0.5">
                   <JobStatusBadge status={job.status} />
                   {step && step !== JOB_STATUS_LABEL[job.status] ? (
-                    <span className="max-w-full truncate text-[11px] text-[#7a7b75]">{step}</span>
+                    <span className="max-w-full truncate text-[11px] text-(--c-7a7b75)">{step}</span>
                   ) : null}
-                  {job.attempts > 1 ? <span className="text-[11px] text-[#7a7b75]">Tentativa {job.attempts}</span> : null}
+                  {job.attempts > 1 ? <span className="text-[11px] text-(--c-7a7b75)">Tentativa {job.attempts}</span> : null}
                 </div>
                 <div className="hidden items-center gap-2 md:flex">
-                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#f0f0ec]">
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-(--c-f0f0ec)">
                     <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${job.progress}%` }} />
                   </div>
-                  <span className="w-8 text-right font-mono text-[11px] text-[#7a7b75]">{job.progress}%</span>
+                  <span className="w-8 text-right font-mono text-[11px] text-(--c-7a7b75)">{job.progress}%</span>
                 </div>
                 <div className="hidden text-xs tabular-nums md:block">
                   <JobTime job={job} waitingSince={waitingSince[job.id]} now={now} />
@@ -159,7 +159,7 @@ export function QueueTable({ initialJobs, role }: { initialJobs: AutomationJob[]
                         <p
                           className={cn(
                             "line-clamp-2 cursor-default text-xs",
-                            job.status === "failed" ? "text-[#b42323]" : "text-[#7a7b75]",
+                            job.status === "failed" ? "text-(--c-b42323)" : "text-(--c-7a7b75)",
                           )}
                         >
                           {message}
@@ -168,7 +168,7 @@ export function QueueTable({ initialJobs, role }: { initialJobs: AutomationJob[]
                       <TooltipContent className="max-w-sm text-xs">{message}</TooltipContent>
                     </Tooltip>
                   ) : (
-                    <span className="text-xs text-[#9a9b94]">—</span>
+                    <span className="text-xs text-(--c-9a9b94)">—</span>
                   )}
                 </div>
                 <JobActions job={job} role={role} />

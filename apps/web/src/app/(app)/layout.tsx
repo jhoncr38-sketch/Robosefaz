@@ -1,6 +1,7 @@
 import { Header } from "@/components/layout/header";
 import type { NavCounts } from "@/components/layout/nav-items";
 import { Sidebar } from "@/components/layout/sidebar";
+import { ThemeSync } from "@/components/theme/theme";
 import { requireSession } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { DashboardStats } from "@/lib/types";
@@ -19,6 +20,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen bg-background">
+      <ThemeSync />
       <Sidebar
         role={profile.role}
         isOwner={profile.is_platform_owner}

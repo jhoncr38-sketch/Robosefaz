@@ -25,7 +25,7 @@ export function GlobalSearch() {
   return (
     <form
       role="search"
-      className="flex h-[34px] w-full max-w-[380px] items-center gap-2 rounded-lg border border-input bg-[#fafaf8] px-2.5 text-[13px] focus-within:border-ring focus-within:bg-white"
+      className="flex h-[34px] w-full max-w-[380px] items-center gap-2 rounded-lg border border-input bg-(--c-fafaf8) px-2.5 text-[13px] focus-within:border-ring focus-within:bg-card"
       onSubmit={(e) => {
         e.preventDefault();
         const term = q.trim();
@@ -33,16 +33,16 @@ export function GlobalSearch() {
         ref.current?.blur();
       }}
     >
-      <Search className="size-3.5 shrink-0 text-[#9a9b94]" />
+      <Search className="size-3.5 shrink-0 text-(--c-9a9b94)" />
       <input
         ref={ref}
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Buscar cliente, código ou CNPJ"
         aria-label="Buscar cliente, código ou CNPJ"
-        className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-[#9a9b94]"
+        className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-(--c-9a9b94)"
       />
-      <kbd className="hidden shrink-0 rounded border border-input bg-white px-1.5 py-px font-mono text-[11px] whitespace-nowrap text-[#9a9b94] md:block">
+      <kbd className="hidden shrink-0 rounded border border-input bg-card px-1.5 py-px font-mono text-[11px] whitespace-nowrap text-(--c-9a9b94) md:block">
         Ctrl K
       </kbd>
     </form>

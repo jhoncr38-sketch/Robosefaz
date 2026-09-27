@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { THEME_BOOT_SCRIPT } from "@/lib/theme-boot";
 
 import "./globals.css";
 
@@ -16,7 +17,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    // o tema escuro é aplicado antes da hidratação (classe "dark" no <html>)
+    <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
       {/* extensões do navegador (ex.: ColorZilla) injetam atributos no <body> */}
       <body className="min-h-full" suppressHydrationWarning>
         <TooltipProvider delayDuration={200}>{children}</TooltipProvider>

@@ -13,10 +13,10 @@ export function ListCard({ className, children }: { className?: string; children
 /** Título do card (ex.: "Jobs com erro") com contador e ações opcionais. */
 export function ListTitle({ title, count, children }: { title: string; count?: number; children?: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center gap-3 border-b border-[#efefeb] px-4 py-3.5">
+    <div className="flex flex-wrap items-center gap-3 border-b border-(--c-efefeb) px-4 py-3.5">
       <p className="flex-1 text-[14.5px] font-semibold">
         {title}
-        {count !== undefined ? <span className="ml-2 font-mono text-xs font-normal text-[#9a9b94]">{count}</span> : null}
+        {count !== undefined ? <span className="ml-2 font-mono text-xs font-normal text-(--c-9a9b94)">{count}</span> : null}
       </p>
       {children}
     </div>
@@ -24,7 +24,7 @@ export function ListTitle({ title, count, children }: { title: string; count?: n
 }
 
 export function ListToolbar({ children }: { children: React.ReactNode }) {
-  return <div className="flex flex-wrap items-center gap-2.5 border-b border-[#efefeb] px-3.5 py-3">{children}</div>;
+  return <div className="flex flex-wrap items-center gap-2.5 border-b border-(--c-efefeb) px-3.5 py-3">{children}</div>;
 }
 
 export function ListHead({ grid, children }: { grid: string; children: React.ReactNode }) {
@@ -32,7 +32,7 @@ export function ListHead({ grid, children }: { grid: string; children: React.Rea
     <div
       className={cn(
         grid,
-        "items-center border-b border-[#efefeb] bg-[#fafaf8] px-4 py-[9px] text-[11.5px] tracking-[0.04em] text-[#7a7b75] uppercase",
+        "items-center border-b border-(--c-efefeb) bg-(--c-fafaf8) px-4 py-[9px] text-[11.5px] tracking-[0.04em] text-(--c-7a7b75) uppercase",
       )}
     >
       {children}
@@ -40,7 +40,7 @@ export function ListHead({ grid, children }: { grid: string; children: React.Rea
   );
 }
 
-const ROW = "items-center border-b border-[#f2f2ef] px-4 py-2.5 text-[13px] text-foreground last:border-b-0";
+const ROW = "items-center border-b border-(--c-f2f2ef) px-4 py-2.5 text-[13px] text-foreground last:border-b-0";
 
 /** Linha da lista; com `href`, a linha inteira é um link. */
 export function ListRow({
@@ -56,7 +56,7 @@ export function ListRow({
 }) {
   if (href) {
     return (
-      <Link href={href} className={cn(grid, ROW, "hover:bg-[#fafaf8] hover:no-underline", className)}>
+      <Link href={href} className={cn(grid, ROW, "hover:bg-(--c-fafaf8) hover:no-underline", className)}>
         {children}
       </Link>
     );
@@ -69,13 +69,13 @@ export function PrimaryCell({ title, sub, className }: { title: React.ReactNode;
   return (
     <div className={cn("flex min-w-0 flex-col gap-px", className)}>
       <span className="truncate text-[13px] font-medium">{title}</span>
-      {sub ? <span className="truncate text-[11.5px] text-[#7a7b75]">{sub}</span> : null}
+      {sub ? <span className="truncate text-[11.5px] text-(--c-7a7b75)">{sub}</span> : null}
     </div>
   );
 }
 
 export function Muted({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <span className={cn("text-xs text-[#7a7b75]", className)}>{children}</span>;
+  return <span className={cn("text-xs text-(--c-7a7b75)", className)}>{children}</span>;
 }
 
 export function Segmented<T extends string>({
@@ -88,7 +88,7 @@ export function Segmented<T extends string>({
   options: [T, string, number?][];
 }) {
   return (
-    <div className="flex flex-wrap gap-1 rounded-[7px] bg-[#f3f3f0] p-0.5" role="tablist">
+    <div className="flex flex-wrap gap-1 rounded-[7px] bg-(--c-f3f3f0) p-0.5" role="tablist">
       {options.map(([key, label, count]) => (
         <button
           key={key}
@@ -98,11 +98,11 @@ export function Segmented<T extends string>({
           onClick={() => onChange(key)}
           className={cn(
             "rounded-[5px] px-2.5 py-[5px] text-xs whitespace-nowrap",
-            value === key ? "bg-white text-foreground shadow-[0_1px_2px_rgba(0,0,0,.08)]" : "text-muted-foreground",
+            value === key ? "bg-card text-foreground shadow-[0_1px_2px_rgba(0,0,0,.08)]" : "text-muted-foreground",
           )}
         >
           {label}
-          {count !== undefined ? <span className="ml-1 font-mono text-[#9a9b94]">{count}</span> : null}
+          {count !== undefined ? <span className="ml-1 font-mono text-(--c-9a9b94)">{count}</span> : null}
         </button>
       ))}
     </div>
@@ -120,7 +120,7 @@ export function OpTags({ ops }: { ops: (ExportTaskType | "EFD_CHECK")[] }) {
   return (
     <span className="flex flex-wrap gap-1">
       {ops.map((o) => (
-        <span key={o} className="rounded bg-[#f2f2ef] px-[5px] py-0.5 font-mono text-[10.5px] whitespace-nowrap text-[#4a4b46]">
+        <span key={o} className="rounded bg-(--c-f2f2ef) px-[5px] py-0.5 font-mono text-[10.5px] whitespace-nowrap text-(--c-4a4b46)">
           {OP_TAG[o] ?? o}
         </span>
       ))}
@@ -144,13 +144,13 @@ export function SearchBox({
 }) {
   return (
     <div className="flex h-8 min-w-[200px] flex-1 items-center gap-2 rounded-[7px] border border-input px-2.5 focus-within:border-ring">
-      <Search className="size-3.5 text-[#9a9b94]" />
+      <Search className="size-3.5 text-(--c-9a9b94)" />
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         aria-label={placeholder}
-        className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[#9a9b94]"
+        className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-(--c-9a9b94)"
       />
     </div>
   );
