@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ListHead, ListRow, PrimaryCell } from "@/components/data-list";
 import { DownloadsTable } from "@/components/downloads-table";
 import { JobLogs } from "@/components/job-logs";
 import { ContinueButton, JobActions } from "@/components/queue/job-actions";
@@ -10,7 +11,6 @@ import { JobStatusBadge, TaskStatusBadge, ToneBadge } from "@/components/status-
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { requireSession } from "@/lib/auth";
 import { formatCNPJ } from "@/lib/cnpj";
 import { formatCompetence } from "@/lib/competence";
@@ -30,6 +30,10 @@ function Info({ label, children }: { label: string; children: React.ReactNode })
     </div>
   );
 }
+
+// sem rolagem lateral: no celular, tipo e status; datas, protocolo e mensagem em telas maiores
+const TASK_GRID =
+  "grid grid-cols-[minmax(0,1fr)_auto] gap-3 md:grid-cols-[minmax(0,1fr)_160px_110px_120px] xl:grid-cols-[minmax(0,1fr)_160px_110px_120px_120px_56px_minmax(0,1.4fr)]";
 
 export default async function JobDetailPage({ params }: PageProps<"/history/[id]">) {
   const { id } = await params;
@@ -128,43 +132,47 @@ export default async function JobDetailPage({ params }: PageProps<"/history/[id]
           <CardTitle className="text-base">Tarefas</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="pl-4">Tipo</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Protocolo / ID externo</TableHead>
-                <TableHead>Solicitado</TableHead>
-                <TableHead>Finalizado</TableHead>
-                <TableHead>Retentativas</TableHead>
-                <TableHead className="pr-4">Mensagem</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {tasks.map((t) => (
-                <TableRow key={t.id} className={t.superseded ? "opacity-50" : undefined}>
-                  <TableCell className="pl-4 font-medium">
+          <ListHead grid={TASK_GRID}>
+            <span>Tipo</span>
+            <span className="text-right md:text-left">Status</span>
+            <span className="hidden md:block">Protocolo</span>
+            <span className="hidden md:block">Solicitado</span>
+            <span className="hidden xl:block">Finalizado</span>
+            <span className="hidden text-center xl:block">Retent.</span>
+            <span className="hidden xl:block">Mensagem</span>
+          </ListHead>
+          {tasks.map((t) => (
+            <ListRow key={t.id} grid={TASK_GRID} className={t.superseded ? "opacity-50" : undefined}>
+              <PrimaryCell
+                title={
+                  <>
                     {TASK_TYPE_LABEL[t.task_type]}
-                    {t.superseded ? <span className="ml-1 text-xs text-muted-foreground">(substituída)</span> : null}
-                  </TableCell>
-                  <TableCell>
-                    {t.result?.no_notes ? (
-                      <ToneBadge tone="gray">Sem notas no período</ToneBadge>
-                    ) : (
-                      <TaskStatusBadge status={t.status} />
-                    )}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">{t.external_request_id ?? "—"}</TableCell>
-                  <TableCell className="text-xs">{formatDateTime(t.requested_at ?? t.started_at)}</TableCell>
-                  <TableCell className="text-xs">{formatDateTime(t.finished_at)}</TableCell>
-                  <TableCell className="text-center">{t.retry_count}</TableCell>
-                  <TableCell className="max-w-80 truncate pr-4 text-xs text-muted-foreground" title={t.error_message ?? ""}>
-                    {t.error_message ?? "—"}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                    {t.superseded ? <span className="ml-1 text-xs font-normal text-[#7a7b75]">(substituída)</span> : null}
+                  </>
+                }
+                sub={
+                  <span className="md:hidden">
+                    {t.external_request_id ? `ID ${t.external_request_id} · ` : ""}
+                    {formatDateTime(t.requested_at ?? t.started_at)}
+                  </span>
+                }
+              />
+              <div className="flex justify-end md:justify-start">
+                {t.result?.no_notes ? (
+                  <ToneBadge tone="gray">Sem notas no período</ToneBadge>
+                ) : (
+                  <TaskStatusBadge status={t.status} />
+                )}
+              </div>
+              <span className="hidden font-mono text-xs md:block">{t.external_request_id ?? "—"}</span>
+              <span className="hidden text-xs tabular-nums md:block">{formatDateTime(t.requested_at ?? t.started_at)}</span>
+              <span className="hidden text-xs tabular-nums xl:block">{formatDateTime(t.finished_at)}</span>
+              <span className="hidden text-center font-mono text-xs xl:block">{t.retry_count}</span>
+              <span className="hidden truncate text-xs text-[#7a7b75] xl:block" title={t.error_message ?? ""}>
+                {t.error_message ?? "—"}
+              </span>
+            </ListRow>
+          ))}
         </CardContent>
       </Card>
 

@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { createActivationCode, revokeDevice } from "@/app/actions/devices";
+import { ListCard, ListHead, ListRow, PrimaryCell } from "@/components/data-list";
 import { EmptyState } from "@/components/page-header";
 import { ToneBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
@@ -17,11 +18,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import type { Device } from "@/lib/types";
 
 const RELEASES_URL = "https://github.com/jhoncr38-sketch/siat-robo-releases/releases/latest";
+
+// sem rolagem lateral: no celular, computador (com versão e sinal embaixo), situação e ação
+const GRID =
+  "grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 md:grid-cols-[minmax(0,1.3fr)_110px_80px_minmax(0,1fr)_130px_120px]";
 
 function online(device: Device, now: number): boolean {
   return device.status === "active" && !!device.last_seen_at && now - new Date(device.last_seen_at).getTime() < 120_000;
@@ -132,47 +136,39 @@ export function DevicesManager({ devices, canManage, now }: { devices: Device[];
           description="Adicione o computador onde o robô vai rodar. Ele precisa ter os certificados dos clientes instalados."
         />
       ) : (
-        <div className="overflow-x-auto rounded-xl border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Computador</TableHead>
-                <TableHead>Situação</TableHead>
-                <TableHead>Versão do robô</TableHead>
-                <TableHead>Último sinal</TableHead>
-                <TableHead>Ativado em</TableHead>
-                {canManage ? <TableHead className="text-right">Ação</TableHead> : null}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {devices.map((d) => {
-                const on = online(d, now);
-                return (
-                  <TableRow key={d.id}>
-                    <TableCell className="font-medium">{d.name}</TableCell>
-                    <TableCell>
-                      {d.status === "revoked" ? (
-                        <ToneBadge tone="gray">Desativado</ToneBadge>
-                      ) : (
-                        <ToneBadge tone={on ? "green" : "yellow"}>{on ? "Online" : "Offline"}</ToneBadge>
-                      )}
-                    </TableCell>
-                    <TableCell className="tabular-nums">{d.robot_version ?? "—"}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {d.last_seen_at ? formatRelative(d.last_seen_at) : "nunca"}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{formatDateTime(d.activated_at)}</TableCell>
-                    {canManage ? (
-                      <TableCell className="text-right">
-                        <RevokeButton device={d} />
-                      </TableCell>
-                    ) : null}
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+        <ListCard>
+          <ListHead grid={GRID}>
+            <span>Computador</span>
+            <span>Situação</span>
+            <span className="hidden md:block">Versão</span>
+            <span className="hidden md:block">Último sinal</span>
+            <span className="hidden md:block">Ativado em</span>
+            <span />
+          </ListHead>
+          {devices.map((d) => {
+            const on = online(d, now);
+            const seen = d.last_seen_at ? formatRelative(d.last_seen_at) : "nunca";
+            return (
+              <ListRow key={d.id} grid={GRID}>
+                <PrimaryCell
+                  title={d.name}
+                  sub={<span className="md:hidden">versão {d.robot_version ?? "—"} · sinal {seen}</span>}
+                />
+                <div>
+                  {d.status === "revoked" ? (
+                    <ToneBadge tone="gray">Desativado</ToneBadge>
+                  ) : (
+                    <ToneBadge tone={on ? "green" : "yellow"}>{on ? "Online" : "Offline"}</ToneBadge>
+                  )}
+                </div>
+                <span className="hidden font-mono text-[12.5px] md:block">{d.robot_version ?? "—"}</span>
+                <span className="hidden text-xs text-[#7a7b75] md:block">{seen}</span>
+                <span className="hidden text-xs text-[#7a7b75] tabular-nums md:block">{formatDateTime(d.activated_at)}</span>
+                <div className="flex justify-end">{canManage ? <RevokeButton device={d} /> : null}</div>
+              </ListRow>
+            );
+          })}
+        </ListCard>
       )}
     </div>
   );

@@ -1,15 +1,13 @@
 "use client";
 
 import { AlertTriangle, Radio } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
+import { ListCard, ListEmptyText, ListHead, ListRow, ListToolbar, PrimaryCell, Segmented } from "@/components/data-list";
 import { ContinueButton, JobActions } from "@/components/queue/job-actions";
 import { JobStatusBadge } from "@/components/status-badge";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Progress } from "@/components/ui/progress";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useNow } from "@/hooks/use-now";
 import { useRealtimeJobs } from "@/hooks/use-realtime-jobs";
 import { SEFAZ_PHASE, useWaitingSince } from "@/hooks/use-waiting-since";
 import { formatCompetence } from "@/lib/competence";
@@ -36,8 +34,9 @@ function matches(tab: Tab, job: AutomationJob): boolean {
 }
 
 /** Tempo em duas partes: quanto o robô trabalhou e há quanto tempo espera a SEFAZ. */
-function JobTime({ job, waitingSince, now }: { job: AutomationJob; waitingSince?: string; now: number }) {
+function JobTime({ job, waitingSince, now }: { job: AutomationJob; waitingSince?: string; now: number | null }) {
   if (!job.started_at) return <span className="text-muted-foreground">—</span>;
+  if (now === null) return null;
   const nowIso = new Date(now).toISOString();
   if (SEFAZ_PHASE.includes(job.status) && waitingSince) {
     return (
@@ -46,8 +45,8 @@ function JobTime({ job, waitingSince, now }: { job: AutomationJob; waitingSince?
           <span className="text-muted-foreground">Robô </span>
           {formatDuration(job.started_at, waitingSince)}
         </p>
-        <p className="text-amber-700">
-          <span className="text-amber-700/70">SEFAZ há </span>
+        <p className="text-[#9a6205]">
+          <span className="text-[#9a6205]/70">SEFAZ há </span>
           {formatDuration(waitingSince, nowIso)}
         </p>
       </div>
@@ -62,14 +61,9 @@ function JobTime({ job, waitingSince, now }: { job: AutomationJob; waitingSince?
   );
 }
 
-function useNow(intervalMs = 1000) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(id);
-  }, [intervalMs]);
-  return now;
-}
+// no celular: cliente, status e ações; progresso, tempo e mensagem aparecem em telas maiores
+const GRID =
+  "grid grid-cols-[minmax(0,1fr)_auto_32px] gap-3 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1.1fr)_120px_130px_32px] xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_120px_130px_minmax(0,1.6fr)_32px]";
 
 export function QueueTable({ initialJobs, role }: { initialJobs: AutomationJob[]; role: UserRole }) {
   const { jobs, connected } = useRealtimeJobs(initialJobs);
@@ -78,131 +72,111 @@ export function QueueTable({ initialJobs, role }: { initialJobs: AutomationJob[]
   const visible = useMemo(() => jobs.filter((j) => matches(tab, j)), [jobs, tab]);
   const waitingSince = useWaitingSince(jobs);
   const manual = jobs.filter((j) => MANUAL_JOB_STATUSES.includes(j.status));
-  const counts = useMemo(
-    () => ({
-      active: jobs.filter((j) => matches("active", j)).length,
-      waiting: jobs.filter((j) => matches("waiting", j)).length,
-      manual: jobs.filter((j) => matches("manual", j)).length,
-      finished: jobs.filter((j) => matches("finished", j)).length,
-      all: jobs.length,
-    }),
-    [jobs],
-  );
+  const count = (t: Tab) => jobs.filter((j) => matches(t, j)).length;
 
   return (
     <div className="space-y-4">
       {manual.map((job) => (
-        <Alert key={job.id} className="border-orange-200 bg-orange-50 text-orange-900">
-          <AlertTriangle className="text-orange-600" />
-          <AlertTitle>A automação está aguardando sua intervenção.</AlertTitle>
-          <AlertDescription className="text-orange-900/90">
+        <div key={job.id} className="flex gap-3 rounded-xl border border-[#f6d5bd] bg-[#fdf3ea] px-4 py-3.5 text-[#7a3a0c]">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[#d9630f]" />
+          <div className="min-w-0 flex-1 space-y-1 text-[13px]">
+            <p className="font-semibold">A automação está aguardando sua intervenção.</p>
             <p>
               <strong>{job.clients?.trade_name || job.clients?.legal_name}</strong> · {formatCompetence(job.competence)} —{" "}
               {job.manual_action_message ?? job.last_message}
             </p>
-            <p className="text-xs">Realize a ação no navegador aberto na máquina do robô e depois clique em continuar.</p>
-            <div className="mt-2">
+            <p className="text-xs opacity-80">Realize a ação no navegador aberto na máquina do robô e depois clique em continuar.</p>
+            <div className="pt-1">
               <ContinueButton job={job} role={role} />
             </div>
-          </AlertDescription>
-        </Alert>
+          </div>
+        </div>
       ))}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
-          <TabsList>
-            <TabsTrigger value="active">Em andamento ({counts.active})</TabsTrigger>
-            <TabsTrigger value="waiting">Aguardando SEFAZ ({counts.waiting})</TabsTrigger>
-            <TabsTrigger value="manual">Intervenção ({counts.manual})</TabsTrigger>
-            <TabsTrigger value="finished">Finalizados ({counts.finished})</TabsTrigger>
-            <TabsTrigger value="all">Todos ({counts.all})</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <span className={cn("flex items-center gap-1.5 text-xs", connected ? "text-emerald-700" : "text-muted-foreground")}>
-          <Radio className={cn("size-3.5", connected && "animate-pulse")} />
-          {connected ? "Tempo real conectado" : "Conectando..."}
-        </span>
-      </div>
-
-      <div className="overflow-x-auto rounded-xl border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Cliente</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="w-40">Progresso</TableHead>
-              <TableHead>Tempo</TableHead>
-              <TableHead className="hidden xl:table-cell">Última mensagem</TableHead>
-              <TableHead className="w-10" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {visible.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="py-12 text-center text-sm text-muted-foreground">
-                  Nenhuma tarefa nesta visão.
-                </TableCell>
-              </TableRow>
-            ) : (
-              visible.map((job) => {
-                const step = JOB_STATUS_LABEL[job.current_step as AutomationJob["status"]] ?? job.current_step;
-                const message =
-                  job.error_message && job.status === "failed" ? job.error_message : (job.last_message ?? "");
-                return (
-                  <TableRow key={job.id}>
-                    <TableCell className="max-w-56">
-                      <p className="truncate font-medium">{job.clients?.trade_name || job.clients?.legal_name || "—"}</p>
-                      <p className="text-xs text-muted-foreground tabular-nums">
-                        {job.clients?.client_code} · {formatCompetence(job.competence)}
-                      </p>
-                    </TableCell>
-                    <TableCell>
-                      <JobStatusBadge status={job.status} />
-                      {step && step !== JOB_STATUS_LABEL[job.status] ? (
-                        <p className="mt-1 text-xs text-muted-foreground">{step}</p>
-                      ) : null}
-                      {job.attempts > 1 ? (
-                        <p className="mt-0.5 text-xs text-muted-foreground">Tentativa {job.attempts}</p>
-                      ) : null}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Progress value={job.progress} className="h-1.5" />
-                        <span className="w-9 text-right text-xs tabular-nums text-muted-foreground">{job.progress}%</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs tabular-nums whitespace-nowrap">
-                      <JobTime job={job} waitingSince={waitingSince[job.id]} now={now} />
-                    </TableCell>
-                    <TableCell className="hidden max-w-64 xl:table-cell">
-                      {message ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <p
-                              className={cn(
-                                "line-clamp-2 cursor-default text-xs",
-                                job.status === "failed" ? "text-red-600" : "text-muted-foreground",
-                              )}
-                            >
-                              {message}
-                            </p>
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-sm text-xs">{message}</TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <JobActions job={job} role={role} />
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <ListCard>
+        <ListToolbar>
+          <Segmented
+            value={tab}
+            onChange={setTab}
+            options={[
+              ["active", "Em andamento", count("active")],
+              ["waiting", "Aguardando SEFAZ", count("waiting")],
+              ["manual", "Intervenção", count("manual")],
+              ["finished", "Finalizados", count("finished")],
+              ["all", "Todos", jobs.length],
+            ]}
+          />
+          <span className="flex-1" />
+          <span className={cn("flex items-center gap-1.5 text-xs", connected ? "text-[#1c7a47]" : "text-muted-foreground")}>
+            <Radio className={cn("size-3.5", connected && "animate-pulse")} />
+            {connected ? "Tempo real conectado" : "Conectando..."}
+          </span>
+        </ListToolbar>
+        <ListHead grid={GRID}>
+          <span>Cliente</span>
+          <span>Status</span>
+          <span className="hidden md:block">Progresso</span>
+          <span className="hidden md:block">Tempo</span>
+          <span className="hidden xl:block">Última mensagem</span>
+          <span />
+        </ListHead>
+        {visible.length === 0 ? (
+          <ListEmptyText>Nenhuma tarefa nesta visão.</ListEmptyText>
+        ) : (
+          visible.map((job) => {
+            const step = JOB_STATUS_LABEL[job.current_step as AutomationJob["status"]] ?? job.current_step;
+            const message = job.error_message && job.status === "failed" ? job.error_message : (job.last_message ?? "");
+            return (
+              <ListRow key={job.id} grid={GRID}>
+                <PrimaryCell
+                  title={job.clients?.trade_name || job.clients?.legal_name || "—"}
+                  sub={
+                    <>
+                      <span className="font-mono">{job.clients?.client_code}</span> · {formatCompetence(job.competence)}
+                    </>
+                  }
+                />
+                <div className="flex min-w-0 flex-col items-start gap-0.5">
+                  <JobStatusBadge status={job.status} />
+                  {step && step !== JOB_STATUS_LABEL[job.status] ? (
+                    <span className="max-w-full truncate text-[11px] text-[#7a7b75]">{step}</span>
+                  ) : null}
+                  {job.attempts > 1 ? <span className="text-[11px] text-[#7a7b75]">Tentativa {job.attempts}</span> : null}
+                </div>
+                <div className="hidden items-center gap-2 md:flex">
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#f0f0ec]">
+                    <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${job.progress}%` }} />
+                  </div>
+                  <span className="w-8 text-right font-mono text-[11px] text-[#7a7b75]">{job.progress}%</span>
+                </div>
+                <div className="hidden text-xs tabular-nums md:block">
+                  <JobTime job={job} waitingSince={waitingSince[job.id]} now={now} />
+                </div>
+                <div className="hidden min-w-0 xl:block">
+                  {message ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <p
+                          className={cn(
+                            "line-clamp-2 cursor-default text-xs",
+                            job.status === "failed" ? "text-[#b42323]" : "text-[#7a7b75]",
+                          )}
+                        >
+                          {message}
+                        </p>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-sm text-xs">{message}</TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <span className="text-xs text-[#9a9b94]">—</span>
+                  )}
+                </div>
+                <JobActions job={job} role={role} />
+              </ListRow>
+            );
+          })
+        )}
+      </ListCard>
     </div>
   );
 }

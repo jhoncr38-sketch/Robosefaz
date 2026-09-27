@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { createUser, updateUser } from "@/app/actions/users";
+import { ListCard, ListHead, ListRow, PrimaryCell } from "@/components/data-list";
 import { ToneBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +22,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/format";
 import { ROLE_LABEL } from "@/lib/permissions";
 import type { Profile, UserRole } from "@/lib/types";
@@ -113,6 +113,9 @@ function CreateUserDialog() {
   );
 }
 
+// sem rolagem lateral: no celular a linha quebra (usuário em cima, perfil e status embaixo)
+const GRID = "flex flex-wrap gap-3 md:grid md:grid-cols-[minmax(0,1.5fr)_190px_150px_130px]";
+
 function UserRow({ user, isSelf }: { user: Profile; isSelf: boolean }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -127,35 +130,34 @@ function UserRow({ user, isSelf }: { user: Profile; isSelf: boolean }) {
   }
 
   return (
-    <TableRow>
-      <TableCell>
-        <p className="font-medium">
-          {user.name} {isSelf ? <span className="text-xs text-muted-foreground">(você)</span> : null}
-        </p>
-        <p className="text-xs text-muted-foreground">{user.email}</p>
-      </TableCell>
-      <TableCell>
-        <Select value={user.role} onValueChange={(v) => change({ role: v as UserRole })} disabled={pending || isSelf}>
-          <SelectTrigger className="w-44">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {(Object.keys(ROLE_LABEL) as UserRole[]).map((r) => (
-              <SelectItem key={r} value={r}>
-                {ROLE_LABEL[r]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </TableCell>
-      <TableCell>
-        <div className="flex items-center gap-2">
-          <Switch checked={user.active} onCheckedChange={(v) => change({ active: v })} disabled={pending || isSelf} />
-          <ToneBadge tone={user.active ? "green" : "gray"}>{user.active ? "Ativo" : "Inativo"}</ToneBadge>
-        </div>
-      </TableCell>
-      <TableCell className="text-xs text-muted-foreground">{formatDateTime(user.created_at)}</TableCell>
-    </TableRow>
+    <ListRow grid={GRID}>
+      <PrimaryCell
+        className="basis-full md:basis-auto"
+        title={
+          <>
+            {user.name} {isSelf ? <span className="text-xs font-normal text-[#7a7b75]">(você)</span> : null}
+          </>
+        }
+        sub={user.email}
+      />
+      <Select value={user.role} onValueChange={(v) => change({ role: v as UserRole })} disabled={pending || isSelf}>
+        <SelectTrigger className="h-8 w-44">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {(Object.keys(ROLE_LABEL) as UserRole[]).map((r) => (
+            <SelectItem key={r} value={r}>
+              {ROLE_LABEL[r]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <div className="flex items-center gap-2">
+        <Switch checked={user.active} onCheckedChange={(v) => change({ active: v })} disabled={pending || isSelf} />
+        <ToneBadge tone={user.active ? "green" : "gray"}>{user.active ? "Ativo" : "Inativo"}</ToneBadge>
+      </div>
+      <span className="hidden text-xs text-[#7a7b75] tabular-nums md:block">{formatDateTime(user.created_at)}</span>
+    </ListRow>
   );
 }
 
@@ -165,23 +167,17 @@ export function UsersManager({ users, selfId }: { users: Profile[]; selfId: stri
       <div className="flex justify-end">
         <CreateUserDialog />
       </div>
-      <div className="overflow-x-auto rounded-xl border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Usuário</TableHead>
-              <TableHead>Perfil</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Criado em</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {users.map((u) => (
-              <UserRow key={u.id} user={u} isSelf={u.id === selfId} />
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      <ListCard>
+        <ListHead grid="hidden md:grid md:grid-cols-[minmax(0,1.5fr)_190px_150px_130px] md:gap-3">
+          <span>Usuário</span>
+          <span>Perfil</span>
+          <span>Status</span>
+          <span>Criado em</span>
+        </ListHead>
+        {users.map((u) => (
+          <UserRow key={u.id} user={u} isSelf={u.id === selfId} />
+        ))}
+      </ListCard>
     </div>
   );
 }

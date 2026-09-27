@@ -1,11 +1,11 @@
 import { FolderOpen } from "lucide-react";
 import type { Metadata } from "next";
 
+import { ListCard, ListToolbar } from "@/components/data-list";
 import { DownloadsTable } from "@/components/downloads-table";
 import { ListFilters } from "@/components/list-filters";
 import { PageHeader } from "@/components/page-header";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Card, CardContent } from "@/components/ui/card";
 import { requireSession } from "@/lib/auth";
 import { formatCompetence, recentCompetences } from "@/lib/competence";
 import { DOCUMENT_LABEL } from "@/lib/status";
@@ -47,7 +47,8 @@ export default async function DownloadsPage({ searchParams }: PageProps<"/downlo
           navegador pergunta se pode abrir o SIAT Robô: marque <strong>“Sempre permitir”</strong> e clique em Abrir.
         </AlertDescription>
       </Alert>
-      <div className="mb-4">
+      <ListCard>
+        <ListToolbar>
         <ListFilters
           filters={[
             {
@@ -68,12 +69,9 @@ export default async function DownloadsPage({ searchParams }: PageProps<"/downlo
             },
           ]}
         />
-      </div>
-      <Card className="py-0">
-        <CardContent className="p-0">
-          <DownloadsTable rows={rows} />
-        </CardContent>
-      </Card>
+        </ListToolbar>
+        <DownloadsTable rows={rows} />
+      </ListCard>
     </>
   );
 }

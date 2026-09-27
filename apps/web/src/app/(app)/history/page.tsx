@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
+import { ListCard, ListToolbar } from "@/components/data-list";
 import { JobsTable } from "@/components/jobs-table";
 import { ListFilters } from "@/components/list-filters";
 import { PageHeader } from "@/components/page-header";
-import { Card, CardContent } from "@/components/ui/card";
 import { requireSession } from "@/lib/auth";
 import { formatCompetence, recentCompetences } from "@/lib/competence";
 import { JOB_SELECT, loadProfilesMap } from "@/lib/queries";
@@ -32,7 +32,8 @@ export default async function HistoryPage({ searchParams }: PageProps<"/history"
   return (
     <>
       <PageHeader title="Histórico" description="Todas as execuções do robô, com usuário, resultado e duração." />
-      <div className="mb-4">
+      <ListCard>
+        <ListToolbar>
         <ListFilters
           filters={[
             {
@@ -53,12 +54,9 @@ export default async function HistoryPage({ searchParams }: PageProps<"/history"
             },
           ]}
         />
-      </div>
-      <Card className="py-0">
-        <CardContent className="p-0">
-          <JobsTable jobs={(data ?? []) as AutomationJob[]} users={users} />
-        </CardContent>
-      </Card>
+        </ListToolbar>
+        <JobsTable jobs={(data ?? []) as AutomationJob[]} users={users} />
+      </ListCard>
     </>
   );
 }
