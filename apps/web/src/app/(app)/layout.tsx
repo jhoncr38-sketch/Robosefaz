@@ -27,9 +27,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         orgName={profile.organizations?.name ?? null}
         counts={counts}
       />
-      <div className="flex min-w-0 flex-col lg:pl-[232px]">
+      <div className="flex min-h-screen min-w-0 flex-col lg:pl-[232px]">
         <Header profile={profile} counts={counts} />
         <main className="w-full max-w-[1360px] p-4 lg:p-6">{children}</main>
+        <footer className="mt-auto w-full max-w-[1360px] px-4 pt-2 pb-5 text-xs text-muted-foreground lg:px-6">
+          JR Sistema © {new Date().getFullYear()}
+        </footer>
       </div>
     </div>
   );

@@ -15,6 +15,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </div>
         <p className="mt-8 flex items-center justify-center gap-1.5 text-xs text-(--c-9a9b94)">
           <ShieldCheck className="size-3.5" /> Acesso seguro e protegido
+          <span aria-hidden>·</span> JR Sistema © {new Date().getFullYear()}
         </p>
       </div>
 
