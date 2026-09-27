@@ -30,7 +30,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="flex min-h-screen min-w-0 flex-col lg:pl-[232px]">
         <Header profile={profile} counts={counts} />
         <main className="w-full max-w-[1360px] p-4 lg:p-6">{children}</main>
-        <footer className="mt-auto w-full max-w-[1360px] px-4 pt-2 pb-5 text-center text-xs text-muted-foreground lg:px-6">
+        <footer className="mt-auto w-full px-4 pt-2 pb-5 text-center text-xs text-muted-foreground lg:-ml-[232px] lg:w-[calc(100%+232px)]">
           JR Sistema © {new Date().getFullYear()}
         </footer>
       </div>
