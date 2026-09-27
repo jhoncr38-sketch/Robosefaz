@@ -42,9 +42,6 @@ export function GlobalSearch() {
         aria-label="Buscar cliente, código ou CNPJ"
         className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-(--c-9a9b94)"
       />
-      <kbd className="hidden shrink-0 rounded border border-input bg-card px-1.5 py-px font-mono text-[11px] whitespace-nowrap text-(--c-9a9b94) md:block">
-        Ctrl K
-      </kbd>
     </form>
   );
 }
