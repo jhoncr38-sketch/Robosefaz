@@ -168,6 +168,7 @@ class ExportStatus(StrEnum):
     PENDING = "pending"
     PROCESSING = "processing"
     PROCESSED = "processed"
+    EMPTY = "empty"  # "Processado sem notas": não houve nota no período (nada a baixar)
     ERROR = "error"
     NOT_FOUND = "not_found"
 

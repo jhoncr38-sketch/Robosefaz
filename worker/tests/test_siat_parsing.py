@@ -101,6 +101,7 @@ class TestLegacyExportList:
             ("Aguardando processamento", ExportStatus.PROCESSING),
             ("Em processamento", ExportStatus.PROCESSING),
             ("Processado com erro", ExportStatus.ERROR),
+            ("Processado sem notas", ExportStatus.EMPTY),  # texto real do SIAT (NFC-e sem emissão no período)
             ("Cancelado", ExportStatus.ERROR),
             ("???", ExportStatus.PENDING),
         ],

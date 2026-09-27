@@ -393,3 +393,20 @@ class TestActivity:
         deps.activity.last_active = 0.0  # "parado desde sempre"
         assert await SchedulerRunner(deps).run_once()
         assert deps.activity.last_active > 0.0 and not deps.activity.busy
+
+
+async def test_processed_without_notes_completes_without_download(repo: FakeRepo, provider: FakeProvider, deps) -> None:  # noqa: ANN001
+    """SIAT "Processado sem notas": nada a baixar; conclui sem erro e avisa na mensagem."""
+    _, job = _setup(repo, status="waiting_sefaz", task_status=TaskStatus.SCHEDULED)
+    provider.statuses = {
+        DocumentType.NFCE: ExportStatus.EMPTY,
+        DocumentType.NFE_EMITIDAS: ExportStatus.PROCESSED,
+        DocumentType.NFE_RECEBIDAS: ExportStatus.PROCESSED,
+    }
+    await CollectorRunner(deps).run_once()
+    j = repo.job(job.id)
+    assert j["status"] == "completed"
+    assert j["last_message"] == "Concluído (NFC-e sem notas no período)"
+    assert sorted(d["document_type"] for d in repo.downloads) == ["NFE_EMITIDAS", "NFE_RECEBIDAS"]
+    assert "download:NFCE" not in provider.calls
+    assert _statuses(repo, job.id)[TaskType.NFCE_EXPORT] == TaskStatus.COMPLETED

@@ -137,6 +137,8 @@ class SiatSelectors:
     )
 
     # --- Situação dos agendamentos ------------------------------------------
+    # situação real do SIAT quando não houve nota no período (a linha fica sem botão Download)
+    export_status_empty: str = r"sem\s+notas|nenhuma\s+nota|sem\s+registros|sem\s+documentos"
     export_status_processed: str = r"processad[oa]|conclu[íi]d[oa]|dispon[íi]vel|finalizad[oa]"
     export_status_processing: str = r"aguardando|em\s+processamento|processando|pendente|agendad[oa]|na\s+fila"
     export_status_error: str = r"erro|falha|cancelad[oa]|rejeitad[oa]|expirad[oa]"

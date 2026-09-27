@@ -28,6 +28,9 @@ def classify_status(text: str, sel: SiatSelectors | None = None) -> ExportStatus
     # "erro" primeiro para não confundir "processado com erro"
     if sel.rx("export_status_error").search(text):
         return ExportStatus.ERROR
+    # "Processado sem notas" antes de "processado": não há arquivo para baixar
+    if sel.rx("export_status_empty").search(text):
+        return ExportStatus.EMPTY
     if sel.rx("export_status_processed").search(text):
         return ExportStatus.PROCESSED
     if sel.rx("export_status_processing").search(text):

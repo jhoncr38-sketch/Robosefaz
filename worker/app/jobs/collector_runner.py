@@ -19,6 +19,8 @@ DOWNLOAD_SOFT_ERRORS = frozenset({ErrorCode.SELECTOR_NOT_FOUND, ErrorCode.DOWNLO
 DOWNLOAD_MAX_FAILURES = 5
 DOWNLOAD_BACKOFF_MINUTES = (5, 15, 30, 60)
 
+DOC_LABEL = {"NFCE": "NFC-e", "NFE_EMITIDAS": "NF-e emitidas", "NFE_RECEBIDAS": "NF-e recebidas"}
+
 FINAL_TASK_STATUSES = frozenset(
     {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.SKIPPED, TaskStatus.CANCELLED, TaskStatus.DRY_RUN}
 )
@@ -131,6 +133,20 @@ class CollectorRunner(BaseRunner):
                         )
                         await self.repo.update_task(task.id, status=TaskStatus.COMPLETED.value, finished_at=now_utc())
                         task.status = TaskStatus.COMPLETED
+                    elif st.status == ExportStatus.EMPTY:
+                        # SIAT: "Processado sem notas" -> não houve nota no período; nada a baixar
+                        await self.repo.update_task(
+                            task.id,
+                            status=TaskStatus.COMPLETED.value,
+                            finished_at=now_utc(),
+                            result={"no_notes": True, "raw_status": st.raw_status},
+                        )
+                        task.status = TaskStatus.COMPLETED
+                        task.result = {"no_notes": True}
+                        await logger.info(
+                            f"{task.task_type}: processado sem notas no período (nada a baixar).",
+                            step="checking_processing",
+                        )
                     elif st.status == ExportStatus.ERROR:
                         await self.repo.update_task(
                             task.id,
@@ -220,6 +236,9 @@ class CollectorRunner(BaseRunner):
             if any(t.status == TaskStatus.COMPLETED for t in exports):
                 failed = [t for t in exports if t.status == TaskStatus.FAILED]
                 msg = "Concluído" if not failed else f"Concluído com {len(failed)} exportação(ões) com erro"
+                empty = [DOC_LABEL.get(str(t.document_type), str(t.document_type)) for t in exports if t.result.get("no_notes")]
+                if empty:
+                    msg += f" ({', '.join(empty)} sem notas no período)"
                 await reporter.set_final(JobStatus.COMPLETED, finished_at=now_utc(), last_message=msg)
                 await logger.info(msg, step="completed")
             else:

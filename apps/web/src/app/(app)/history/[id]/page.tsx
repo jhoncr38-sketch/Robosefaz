@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 import { DownloadsTable } from "@/components/downloads-table";
 import { JobLogs } from "@/components/job-logs";
 import { ContinueButton, JobActions } from "@/components/queue/job-actions";
-import { JobStatusBadge, TaskStatusBadge } from "@/components/status-badge";
+import { JobStatusBadge, TaskStatusBadge, ToneBadge } from "@/components/status-badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -148,7 +148,11 @@ export default async function JobDetailPage({ params }: PageProps<"/history/[id]
                     {t.superseded ? <span className="ml-1 text-xs text-muted-foreground">(substituída)</span> : null}
                   </TableCell>
                   <TableCell>
-                    <TaskStatusBadge status={t.status} />
+                    {t.result?.no_notes ? (
+                      <ToneBadge tone="gray">Sem notas no período</ToneBadge>
+                    ) : (
+                      <TaskStatusBadge status={t.status} />
+                    )}
                   </TableCell>
                   <TableCell className="font-mono text-xs">{t.external_request_id ?? "—"}</TableCell>
                   <TableCell className="text-xs">{formatDateTime(t.requested_at ?? t.started_at)}</TableCell>
