@@ -583,6 +583,13 @@ await test("robô grava só no próprio escritório (logs, tarefas, downloads, s
     ["automation_logs", "insert into public.automation_logs (job_id, message) values ($1, 'com returning') returning *", [jobOfB]],
     ["automation_tasks", "insert into public.automation_tasks (job_id, client_id, task_type, competence) values ($1, $2, 'CHECK_PROCESSING', '2026-05') returning *", [jobOfB, CLIENT_B1]],
     ["automation_jobs", "update public.automation_jobs set last_message = 'robô' where id = $1 returning *", [jobOfB]],
+    // registro de download com upsert: a 2ª vez (mesmo arquivo) cai no ON CONFLICT DO UPDATE
+    ...[1, 2].map(() => [
+      "downloads",
+      "insert into public.downloads (client_id, job_id, document_type, competence, filename, filepath, checksum) values ($1, $2, 'NFCE', '2026-05', 'x.zip', 'C:/x.zip', repeat('b', 64)) on conflict (client_id, competence, document_type, checksum) do update set filepath = excluded.filepath returning *",
+      [CLIENT_B1, jobOfB],
+    ]),
+    ["audit_logs", "insert into public.audit_logs (action, entity, client_id) values ('certificate.secret_saved', 'certificate', $1) returning *", [CLIENT_B1]],
   ]) {
     const r = await as(DEVICE_B.authId, (tx) => tx.query(sql, params));
     assert.equal(r.rows.length, 1, `robô não conseguiu gravar em ${table} com RETURNING`);
