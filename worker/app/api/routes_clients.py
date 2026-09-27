@@ -6,7 +6,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 
-from app.api.deps import CurrentUser, require_admin, require_viewer, settings_dep
+from app.api.deps import CurrentUser, require_operator, require_viewer, settings_dep
 from app.clients.profile_setup import profile_setup_service
 from app.config import Settings
 from app.downloads.organizer import DownloadOrganizer
@@ -19,7 +19,7 @@ router = APIRouter(tags=["clients"])
 @router.post("/clients/{client_id}/browser-profile/open")
 async def open_browser_profile(
     client_id: str,
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_operator),
     settings: Settings = Depends(settings_dep),
 ) -> dict:
     sb = await get_supabase(settings)

@@ -23,7 +23,15 @@ const MATRIX: Record<UserRole, Permission[]> = {
     "users:manage",
     "audit:read",
   ],
-  operator: ["automation:run", "automation:cancel"],
+  // operador: cadastra/edita empresas e certificados, agenda, força, reprocessa e cancela
+  operator: [
+    "clients:write",
+    "certificates:write",
+    "automation:run",
+    "automation:force",
+    "automation:retry",
+    "automation:cancel",
+  ],
   viewer: [],
 };
 

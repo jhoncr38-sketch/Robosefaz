@@ -56,11 +56,29 @@ async def current_user(
     user = resp.user if resp else None
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sessão inválida ou expirada")
-    res = await sb.table("profiles").select("name,email,role,active").eq("user_id", user.id).limit(1).execute()
-    if not res.data or not res.data[0].get("active"):
+    p = await _profile(settings, sb, token, user.id)
+    if not p or not p.get("active"):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Usuário inativo ou sem perfil")
-    p = res.data[0]
+    if settings.auth_mode == "device":
+        # computador ativado: só atende usuários do escritório dele
+        org = (await sb.rpc("device_org_id", {}).execute()).data
+        if not org or p.get("org_id") != org:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Usuário de outro escritório")
     return CurrentUser(id=user.id, email=p.get("email") or user.email or "", name=p.get("name") or "", role=p["role"], token=token)
+
+
+async def _profile(settings: Settings, sb: Any, token: str, user_id: str) -> dict | None:
+    """Perfil lido com o login do PRÓPRIO usuário (o computador ativado não lê perfis)."""
+    if settings.auth_mode != "device":
+        res = await sb.table("profiles").select("name,email,role,active,org_id").eq("user_id", user_id).limit(1).execute()
+        return res.data[0] if res.data else None
+    url = f"{settings.supabase_url.rstrip('/')}/rest/v1/profiles"
+    headers = {"apikey": settings.supabase_anon_key, "Authorization": f"Bearer {token}"}
+    params = {"select": "name,email,role,active,org_id", "user_id": f"eq.{user_id}", "limit": "1"}
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.get(url, headers=headers, params=params)
+    rows = r.json() if r.status_code == 200 else []
+    return rows[0] if rows else None
 
 
 def require_role(minimum: str) -> Callable[..., Awaitable[CurrentUser]]:

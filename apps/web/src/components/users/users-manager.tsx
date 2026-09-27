@@ -28,7 +28,7 @@ import type { Profile, UserRole } from "@/lib/types";
 
 const ROLE_HELP: Record<UserRole, string> = {
   admin: "Cadastros, certificados, automações, reprocessamento, configurações e usuários.",
-  operator: "Inicia automações e consulta clientes, downloads e histórico.",
+  operator: "Cadastra e edita empresas e certificados, agenda, força e reprocessa automações.",
   viewer: "Somente leitura.",
 };
 

@@ -54,7 +54,8 @@ def test_requires_token(make_client) -> None:  # noqa: ANN001
     [
         ("viewer", "/jobs/abc/cancel", 403),
         ("operator", "/jobs/abc/cancel", 200),
-        ("operator", "/jobs/abc/retry", 403),
+        ("viewer", "/jobs/abc/retry", 403),
+        ("operator", "/jobs/abc/retry", 200),
         ("admin", "/jobs/abc/retry", 200),
         ("viewer", "/jobs/abc/confirm", 403),
         ("operator", "/jobs/abc/confirm", 200),
@@ -95,7 +96,9 @@ def test_client_automation_validation(make_client) -> None:  # noqa: ANN001
     ).status_code == 201
 
 
-def test_certificate_endpoints_admin_only(make_client) -> None:  # noqa: ANN001
+def test_certificate_endpoints_need_operator(make_client) -> None:  # noqa: ANN001
+    viewer, _ = make_client("viewer")
+    assert viewer.get("/certificates/store").status_code == 403
+    assert viewer.post("/certificates/inspect", files={"file": ("a.pfx", b"x")}).status_code == 403
     operator, _ = make_client("operator")
-    assert operator.get("/certificates/store").status_code == 403
-    assert operator.post("/certificates/inspect", files={"file": ("a.pfx", b"x")}).status_code == 403
+    assert operator.get("/certificates/store").status_code != 403

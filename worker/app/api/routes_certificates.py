@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import Response
 
-from app.api.deps import CurrentUser, require_admin, settings_dep
+from app.api.deps import CurrentUser, require_operator, settings_dep
 from app.api.schemas import PolicyApplyRequest, SecretRequest
 from app.certificates.chrome_policy import ChromeCertificatePolicyService, PolicyWriteNotAllowed
 from app.certificates.pfx_inspector import PfxError, inspect_pfx
@@ -46,7 +46,7 @@ async def _audit(settings: Settings, user: CurrentUser, action: str, cert: Certi
 async def inspect_certificate(
     file: UploadFile = File(...),
     password: str = Form(default=""),
-    _user: CurrentUser = Depends(require_admin),
+    _user: CurrentUser = Depends(require_operator),
 ) -> dict:
     """Lê metadados do PFX em memória. O arquivo e a senha NÃO são armazenados."""
     data = await file.read(MAX_PFX_BYTES + 1)
@@ -65,7 +65,7 @@ async def inspect_certificate(
 async def save_secret(
     certificate_id: str,
     body: SecretRequest,
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_operator),
     settings: Settings = Depends(settings_dep),
 ) -> None:
     cert = await _load_certificate(settings, certificate_id)
@@ -82,7 +82,7 @@ async def save_secret(
 @router.delete("/{certificate_id}/secret", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_secret(
     certificate_id: str,
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_operator),
     settings: Settings = Depends(settings_dep),
 ) -> None:
     cert = await _load_certificate(settings, certificate_id)
@@ -96,7 +96,7 @@ async def delete_secret(
 
 
 @router.get("/store")
-async def windows_store(_user: CurrentUser = Depends(require_admin)) -> list[dict]:
+async def windows_store(_user: CurrentUser = Depends(require_operator)) -> list[dict]:
     """Certificados instalados em Cert:\\CurrentUser\\My na máquina do worker (somente metadados)."""
     certs = await list_user_certificates()
     return [
@@ -124,7 +124,7 @@ def _policy_service(settings: Settings) -> ChromeCertificatePolicyService:
 @router.get("/{certificate_id}/chrome-policy")
 async def chrome_policy_preview(
     certificate_id: str,
-    _user: CurrentUser = Depends(require_admin),
+    _user: CurrentUser = Depends(require_operator),
     settings: Settings = Depends(settings_dep),
 ) -> dict:
     cert = await _load_certificate(settings, certificate_id)
@@ -142,7 +142,7 @@ async def chrome_policy_preview(
 @router.get("/{certificate_id}/chrome-policy.reg")
 async def chrome_policy_reg(
     certificate_id: str,
-    _user: CurrentUser = Depends(require_admin),
+    _user: CurrentUser = Depends(require_operator),
     settings: Settings = Depends(settings_dep),
 ) -> Response:
     cert = await _load_certificate(settings, certificate_id)
@@ -160,7 +160,7 @@ async def chrome_policy_reg(
 async def chrome_policy_apply(
     certificate_id: str,
     body: PolicyApplyRequest,
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_operator),
     settings: Settings = Depends(settings_dep),
 ) -> dict:
     cert = await _load_certificate(settings, certificate_id)

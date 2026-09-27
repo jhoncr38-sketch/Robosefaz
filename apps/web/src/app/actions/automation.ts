@@ -33,7 +33,7 @@ export async function createJobs(input: z.input<typeof automationRequestSchema>)
   const parsed = automationRequestSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   if (parsed.data.force && !can(auth.session.profile.role, "automation:force")) {
-    return { ok: false, error: "Somente administradores podem forçar novo agendamento." };
+    return { ok: false, error: "Seu perfil não pode forçar novo agendamento." };
   }
 
   const supabase = await createClient();
@@ -79,7 +79,7 @@ export async function createClientJob(input: {
   const parsed = singleSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   if (parsed.data.force && !can(auth.session.profile.role, "automation:force")) {
-    return { ok: false, error: "Somente administradores podem forçar novo agendamento." };
+    return { ok: false, error: "Seu perfil não pode forçar novo agendamento." };
   }
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("create_automation_job", {

@@ -158,15 +158,22 @@ await test("CNPJ inválido é rejeitado", async () => {
   );
 });
 
-await test("RLS: viewer/operator não cadastram clientes; anon não lê nada", async () => {
+await test("RLS: visualizador não cadastra; operador cadastra/edita mas não exclui; anon não lê nada", async () => {
   await rejects(
     as(VIEWER, (tx) => tx.query("insert into public.clients (legal_name, cnpj) values ('X', '04252011000110')")),
     /row-level security/,
   );
-  await rejects(
-    as(OPERATOR, (tx) => tx.query("insert into public.clients (legal_name, cnpj) values ('X', '04252011000110')")),
-    /row-level security/,
+  const op = await as(OPERATOR, (tx) =>
+    tx.query("insert into public.clients (legal_name, cnpj) values ('Do Operador', '04252011000110') returning id"),
   );
+  const opClient = op.rows[0].id;
+  const edit = await as(OPERATOR, (tx) => tx.query("update public.clients set trade_name = 'Editado' where id = $1", [opClient]));
+  assert.equal(edit.affectedRows, 1);
+  const viewerEdit = await as(VIEWER, (tx) => tx.query("update public.clients set trade_name = 'X' where id = $1", [opClient]));
+  assert.equal(viewerEdit.affectedRows, 0);
+  const del = await as(OPERATOR, (tx) => tx.query("delete from public.clients where id = $1", [opClient]));
+  assert.equal(del.affectedRows, 0, "operador não exclui empresa");
+  await as(ADMIN, (tx) => tx.query("delete from public.clients where id = $1", [opClient]));
   await rejects(as("anon", (tx) => tx.query("select * from public.clients")), /permission denied/);
   const { rows } = await as(VIEWER, (tx) => tx.query("select count(*)::int n from public.clients"));
   assert.equal(rows[0].n, 2);
@@ -213,12 +220,12 @@ await test("duplicidade: segunda solicitação retorna 'Exportação já agendad
   assert.equal(res.rows[0].r.message, "Exportação já agendada.");
 });
 
-await test("forçar novo agendamento: só admin", async () => {
+await test("forçar novo agendamento: operador pode, visualizador não", async () => {
   await rejects(
-    as(OPERATOR, (tx) => tx.query("select public.create_automation_job($1, '2026-08', '{NFCE_EXPORT}', true)", [CLIENT_A])),
-    /somente administradores/,
+    as(VIEWER, (tx) => tx.query("select public.create_automation_job($1, '2026-08', '{NFCE_EXPORT}', true)", [CLIENT_A])),
+    /FORBIDDEN/,
   );
-  const res = await as(ADMIN, (tx) =>
+  const res = await as(OPERATOR, (tx) =>
     tx.query("select public.create_automation_job($1, '2026-08', '{NFCE_EXPORT}', true) r", [CLIENT_A]),
   );
   assert.equal(res.rows[0].r.duplicate, false);
@@ -280,11 +287,11 @@ await test("notificação e auditoria ao concluir; confirmação manual; cancela
   );
 });
 
-await test("reprocessar: só admin; job volta para a fila", async () => {
+await test("reprocessar: operador pode, visualizador não; job volta para a fila", async () => {
   await db.query("update public.automation_jobs set status = 'failed', locked_by = null where id = $1", [JOB_A]);
   await db.query("update public.automation_tasks set status = 'failed' where job_id = $1", [JOB_A]);
-  await rejects(as(OPERATOR, (tx) => tx.query("select public.retry_automation_job($1)", [JOB_A])), /FORBIDDEN/);
-  await as(ADMIN, (tx) => tx.query("select public.retry_automation_job($1)", [JOB_A]));
+  await rejects(as(VIEWER, (tx) => tx.query("select public.retry_automation_job($1)", [JOB_A])), /FORBIDDEN/);
+  await as(OPERATOR, (tx) => tx.query("select public.retry_automation_job($1)", [JOB_A]));
   const { rows } = await db.query("select status, attempts from public.automation_jobs where id = $1", [JOB_A]);
   assert.deepEqual(rows[0], { status: "queued", attempts: 0 });
   const tasks = (await db.query("select status from public.automation_tasks where job_id = $1 order by status", [JOB_A])).rows.map((r) => r.status);

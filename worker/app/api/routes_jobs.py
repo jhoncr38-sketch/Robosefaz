@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.api.deps import CurrentUser, require_admin, require_operator, require_viewer, settings_dep, user_rpc
+from app.api.deps import CurrentUser, require_operator, require_viewer, settings_dep, user_rpc
 from app.api.schemas import ClientAutomationRequest, CreateJobsRequest
 from app.config import Settings
 from app.services.supabase_client import get_supabase
@@ -103,7 +103,7 @@ async def client_automation(
 
 @router.post("/jobs/{job_id}/retry")
 async def retry_job(
-    job_id: str, user: CurrentUser = Depends(require_admin), settings: Settings = Depends(settings_dep)
+    job_id: str, user: CurrentUser = Depends(require_operator), settings: Settings = Depends(settings_dep)
 ) -> dict:
     return await user_rpc(settings, user, "retry_automation_job", {"p_job_id": job_id})
 

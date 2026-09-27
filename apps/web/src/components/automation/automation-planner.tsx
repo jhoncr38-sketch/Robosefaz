@@ -154,7 +154,7 @@ export function AutomationPlanner({
           {canForce ? (
             <label className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
               <Switch checked={force} onCheckedChange={setForce} />
-              Forçar novo agendamento mesmo se já existir (somente admin)
+              Forçar novo agendamento mesmo se já existir (pode gerar pedido duplicado no SIAT)
             </label>
           ) : null}
         </div>
