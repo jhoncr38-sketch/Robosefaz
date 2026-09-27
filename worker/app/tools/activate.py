@@ -103,7 +103,7 @@ def activate(code: str, settings: Settings, panel_url: str | None = None, client
 def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    parser = argparse.ArgumentParser(description="Ativar este computador no SIAT Robô")
+    parser = argparse.ArgumentParser(description="Ativar este computador no JR Sistema Robô")
     parser.add_argument("code", nargs="?", help="código de 8 caracteres (Computadores → Adicionar computador)")
     parser.add_argument("--painel", help="endereço do painel (padrão: PANEL_URL)")
     parser.add_argument("--json", action="store_true", help="saída em JSON (instalador)")
@@ -112,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
 
     code = args.code
     if not code:
-        print("Ativar este computador no SIAT Robô")
+        print("Ativar este computador no JR Sistema Robô")
         print("No painel: Computadores → Adicionar computador. Digite o código mostrado (ex.: ABCD-EFGH).")
         code = input("Código de ativação: ").strip()
     try:

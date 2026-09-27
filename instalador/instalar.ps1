@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.1
 <#
-  Instalador do robô SIAT Automação (executado por instalar-robo.bat, como administrador).
+  Instalador do JR Sistema Robô (executado por instalar-robo.bat, como administrador).
 
   Etapas (nada é alterado sem avisar; itens do sistema pedem confirmação):
    1. Python 3.12 e Google Chrome (instala pelo winget, se faltar e você concordar)
@@ -96,7 +96,7 @@ function Achar-Python312 {
 
 
 Write-Host ''
-Write-Host '  Instalador do robô SIAT Automação' -ForegroundColor White
+Write-Host '  Instalador do JR Sistema Robô' -ForegroundColor White
 Write-Host "  Pasta do sistema: $Raiz"
 Write-Host "  Usuário do Windows: $env:USERDOMAIN\$env:USERNAME"
 Write-Host ''
@@ -246,7 +246,7 @@ $config = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoing
     -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -StartWhenAvailable `
     -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
 Register-ScheduledTask -TaskName $TaskName -Action $acao -Trigger $gatilho -Principal $principal -Settings $config `
-    -Description 'Robô SIAT Automação: agenda e baixa NFC-e/NF-e.' -Force | Out-Null
+    -Description 'JR Sistema Robô: agenda e baixa NFC-e/NF-e no SIAT.' -Force | Out-Null
 Ok "Tarefa '$TaskName' criada: o robô inicia 1 minuto depois que $usuario entra no Windows"
 
 # link siatrobo://abrir/<id>: o botão "Abrir pasta" do painel abre o Explorer com a nota selecionada
@@ -254,7 +254,7 @@ $Proto = 'HKCU:\Software\Classes\siatrobo'
 $Pyw = Join-Path $Venv 'Scripts\pythonw.exe'
 $Abrir = Join-Path $Worker 'abrir_nota.pyw'
 New-Item -Path "$Proto\shell\open\command" -Force | Out-Null
-Set-Item -Path $Proto -Value 'URL:SIAT Robô'
+Set-Item -Path $Proto -Value 'URL:JR Sistema Robô'
 New-ItemProperty -Path $Proto -Name 'URL Protocol' -Value '' -PropertyType String -Force | Out-Null
 $Icone = Join-Path $PSScriptRoot 'robo.ico'
 if (Test-Path $Icone) { New-Item -Path "$Proto\DefaultIcon" -Force | Out-Null; Set-Item -Path "$Proto\DefaultIcon" -Value $Icone }

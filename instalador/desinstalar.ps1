@@ -19,7 +19,7 @@ if (Test-Path -LiteralPath $Raiz) {
 }
 if (-not $ManterTarefa) { schtasks /End /TN $TaskName 2>$null | Out-Null }
 
-# robô (-m app.worker) e ícone (-m app.tray) de qualquer instalação do SIAT Robô
+# robô (-m app.worker) e ícone (-m app.tray) de qualquer instalação do JR Sistema Robô
 Get-CimInstance Win32_Process -Filter "Name='python.exe' OR Name='pythonw.exe'" |
     Where-Object { $_.CommandLine -match '-m\s+app\.(worker|tray)\b' } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force }

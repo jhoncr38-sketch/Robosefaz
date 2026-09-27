@@ -84,7 +84,7 @@ function AddDeviceButton() {
               Na tela <strong>Ativar este computador</strong> do instalador, digite o código acima.
             </li>
             <li>
-              Computador que já tem o robô: menu Iniciar → SIAT Robô → <strong>Ativar este computador</strong>.
+              Computador que já tem o robô: menu Iniciar → JR Sistema → <strong>Ativar este computador</strong>.
             </li>
           </ol>
           <DialogFooter>

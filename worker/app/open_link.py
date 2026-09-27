@@ -23,7 +23,7 @@ from app.downloads.organizer import DownloadOrganizer
 
 _LINK = re.compile(r"^siatrobo://abrir/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/?$", re.IGNORECASE)
 _NOTE_FILE = re.compile(r"^[A-Z0-9]{3,20}_\d{4}-\d{2}_(NFCE|NFE_EMITIDAS|NFE_RECEBIDAS)(_\d+)?\.(zip|xml)$", re.IGNORECASE)
-TITLE = "SIAT Robô"
+TITLE = "JR Sistema Robô"
 
 
 def parse_link(link: str) -> str | None:
@@ -67,7 +67,7 @@ def open_download(download_id: str, settings: Settings) -> None:
     from app.services.supabase_client import create_sync_client
 
     if not settings.supabase_configured:
-        _message("Este computador não está ativado. Ative-o pelo menu Iniciar → SIAT Robô.", error=True)
+        _message("Este computador não está ativado. Ative-o pelo menu Iniciar → JR Sistema.", error=True)
         return
     db = create_sync_client(settings)
     rows = (

@@ -96,7 +96,7 @@ def check_task(r: Report) -> None:
 
 async def check_supabase_and_certs(settings: Settings, r: Report) -> None:
     if settings.auth_mode is None:
-        r.fail("Computador não ativado. Menu Iniciar → SIAT Robô → Ativar este computador.")
+        r.fail("Computador não ativado. Menu Iniciar → JR Sistema → Ativar este computador.")
         return
     if settings.auth_mode == "service":
         r.warn("Usando a chave-mestra (instalação antiga). Ative este computador com um código do painel.")

@@ -52,8 +52,10 @@ pdfmetrics.registerFont(TTFont("Segoe-Bold", str(FONTS / "segoeuib.ttf")))
 pdfmetrics.registerFont(TTFont("Mono", str(FONTS / "consola.ttf")))
 pdfmetrics.registerFontFamily("Segoe", normal="Segoe", bold="Segoe-Bold", italic="Segoe", boldItalic="Segoe-Bold")
 
-BRAND = colors.HexColor("#0F766E")
-BRAND_LIGHT = colors.HexColor("#E6F4F2")
+BRAND = colors.HexColor("#1F7A4D")
+BRAND_LIGHT = colors.HexColor("#EEF7F1")
+NAVY = colors.HexColor("#13294B")
+LOGO = Path(__file__).resolve().parents[2] / "branding" / "logo-full.png"
 INK = colors.HexColor("#1F2937")
 MUTED = colors.HexColor("#6B7280")
 LINE = colors.HexColor("#D1D5DB")
@@ -162,9 +164,9 @@ class ManualDoc(BaseDocTemplate):
             rightMargin=20 * mm,
             topMargin=22 * mm,
             bottomMargin=20 * mm,
-            title="SIAT Robô - Manual do usuário",
-            author="SIAT Automação",
-            subject="Instalação e uso do SIAT Robô",
+            title="JR Sistema - Manual do usuário",
+            author="JR Sistema",
+            subject="Instalação e uso do JR Sistema e do robô",
         )
         frame = Frame(self.leftMargin, self.bottomMargin, self.width, self.height, id="f")
         self.addPageTemplates(
@@ -185,8 +187,13 @@ class ManualDoc(BaseDocTemplate):
     def _cover(self, canv, doc) -> None:  # noqa: ANN001
         w, h = A4
         canv.saveState()
+        logo_w = 150 * mm
+        logo_h = logo_w / 3  # logo-full.png tem proporção 3:1
+        canv.drawImage(str(LOGO), (w - logo_w) / 2, h - 30 * mm - logo_h, logo_w, logo_h, mask="auto")
+        canv.setFillColor(BRAND_LIGHT)
+        canv.rect(0, 0, w, 95 * mm, fill=1, stroke=0)
         canv.setFillColor(BRAND)
-        canv.rect(0, h - 120 * mm, w, 120 * mm, fill=1, stroke=0)
+        canv.rect(0, 95 * mm, w, 1.2 * mm, fill=1, stroke=0)
         canv.restoreState()
 
     def _page(self, canv, doc) -> None:  # noqa: ANN001
@@ -197,25 +204,23 @@ class ManualDoc(BaseDocTemplate):
         canv.line(20 * mm, h - 14 * mm, w - 20 * mm, h - 14 * mm)
         canv.setFont("Segoe", 8)
         canv.setFillColor(MUTED)
-        canv.drawString(20 * mm, h - 11.5 * mm, "SIAT Robô · Manual do usuário")
+        canv.drawString(20 * mm, h - 11.5 * mm, "JR Sistema · Manual do usuário")
         canv.drawRightString(w - 20 * mm, h - 11.5 * mm, f"Versão {__version__}")
         canv.drawRightString(w - 20 * mm, 11 * mm, f"Página {doc.page}")
         canv.restoreState()
 
 
 def cover() -> list:
-    white_title = ParagraphStyle("ct", fontName="Segoe-Bold", fontSize=34, leading=40, textColor=colors.white)
-    white_sub = ParagraphStyle("cs", fontName="Segoe", fontSize=14, leading=20, textColor=colors.HexColor("#D1FAE5"))
+    white_title = ParagraphStyle("ct", fontName="Segoe-Bold", fontSize=30, leading=36, textColor=NAVY, alignment=TA_CENTER)
+    white_sub = ParagraphStyle("cs", fontName="Segoe", fontSize=14, leading=20, textColor=MUTED, alignment=TA_CENTER)
     info = ParagraphStyle("ci", fontName="Segoe", fontSize=11, leading=17, textColor=INK)
     return [
-        Spacer(1, 18 * mm),
-        icon("brand", 26),
-        Spacer(1, 8 * mm),
-        Paragraph("SIAT Robô", white_title),
-        Paragraph("Manual do usuário", white_sub),
-        Spacer(1, 3 * mm),
+        Spacer(1, 70 * mm),
+        Paragraph("Manual do usuário", white_title),
+        Spacer(1, 2 * mm),
+        Paragraph("Automação SIAT · SEFAZ-PI", white_sub),
         Paragraph("Da instalação às ferramentas do dia a dia", white_sub),
-        Spacer(1, 62 * mm),
+        Spacer(1, 84 * mm),
         Paragraph(
             "Agendamento e download automáticos das exportações de <b>NFC-e</b>, <b>NF-e emitidas</b> e "
             "<b>NF-e recebidas</b> do SIAT Web (SEFAZ-PI), para vários clientes, com o certificado digital "
@@ -241,9 +246,9 @@ def toc() -> list:
 # --- capítulos ------------------------------------------------------------------------
 def cap_visao_geral() -> list:
     return [
-        H1("1. O que é o SIAT Robô"),
+        H1("1. O que é o JR Sistema Robô"),
         P(
-            "O SIAT Robô faz sozinho o trabalho repetitivo de entrar no SIAT Web com o certificado de cada "
+            "O JR Sistema Robô faz sozinho o trabalho repetitivo de entrar no SIAT Web com o certificado de cada "
             "cliente, pedir a exportação das notas de uma competência e, quando a SEFAZ libera, baixar os "
             "arquivos ZIP e organizá-los em pastas por empresa."
         ),
@@ -397,7 +402,7 @@ def cap_instalacao() -> list:
         ),
         H2("Desinstalar"),
         P(
-            "Configurações do Windows → Aplicativos → <b>SIAT Robô</b> → Desinstalar. As notas baixadas em "
+            "Configurações do Windows → Aplicativos → <b>JR Sistema Robô</b> → Desinstalar. As notas baixadas em "
             + code("storage\\downloads") + " <b>não são apagadas</b>."
         ),
         H2("Instalar em mais de um computador"),
@@ -425,23 +430,30 @@ def cap_painel_acesso() -> list:
                 ["Ver dashboard, fila, histórico, downloads e erros", "Sim", "Sim", "Sim"],
                 ["Criar agendamentos (Automação)", "Sim", "Sim", "Não"],
                 ["Cancelar um agendamento", "Sim", "Sim", "Não"],
-                ["Reprocessar um agendamento com erro", "Sim", "Não", "Não"],
-                ["Forçar novo agendamento mesmo se já existir", "Sim", "Não", "Não"],
-                ["Cadastrar clientes e certificados", "Sim", "Não", "Não"],
+                ["Reprocessar um agendamento com erro", "Sim", "Sim", "Não"],
+                ["Forçar novo agendamento mesmo se já existir", "Sim", "Sim", "Não"],
+                ["Cadastrar e editar clientes e certificados", "Sim", "Sim", "Não"],
+                ["Excluir clientes e certificados, ativar computadores", "Sim", "Não", "Não"],
                 ["Alterar configurações", "Sim", "Não", "Não"],
                 ["Gerenciar usuários", "Sim", "Não", "Não"],
             ],
             [85, 30, 27, 28],
         ),
         H2("Menu do painel"),
+        P(
+            "O menu fica à esquerda, em três grupos: <b>Operação</b>, <b>Cadastros</b> e <b>Sistema</b>. Os "
+            "números ao lado dos itens mostram quantos agendamentos estão na fila, quantas notas foram baixadas "
+            "e quantos clientes estão ativos. No alto, a busca (<b>Ctrl+K</b>) encontra um cliente pelo nome, "
+            "código ou CNPJ, e o selo <b>Robô ativo</b> mostra se algum computador com o robô está ligado."
+        ),
         table(
             [
                 ["Tela", "Para que serve"],
-                ["Dashboard", "Visão geral: números do dia, agendamentos em andamento, erros e certificados vencendo."],
+                ["Dashboard", "Situação da competência, o que o robô está fazendo agora e o que precisa de atenção."],
+                ["Automação SIAT", "Pedir agendamentos de uma competência para vários clientes."],
+                ["Fila de processamento", "Acompanhar em tempo real o que o robô está fazendo."],
                 ["Clientes", "Cadastro das empresas."],
                 ["Certificados", "Certificado digital de cada cliente e sua validade."],
-                ["Automação", "Pedir agendamentos de uma competência para vários clientes."],
-                ["Fila", "Acompanhar em tempo real o que o robô está fazendo."],
                 ["Downloads", "Notas baixadas, com o botão Abrir pasta."],
                 ["Histórico", "Todas as execuções, com detalhes, logs e resultado."],
                 ["Erros", "Falhas, com o motivo e o print da tela."],
@@ -515,13 +527,17 @@ def cap_automacao() -> list:
         H1("6. Agendar exportações (Automação)"),
         *steps(
             [
-                "Abra a tela <b>Automação</b>.",
-                "Escolha a <b>Competência</b> (mês/ano), por exemplo 08/2026.",
-                "Marque as <b>Operações</b>: NFC-e, NF-e emitidas, NF-e recebidas.",
-                "Use a busca e os filtros (<b>Ativos</b>, <b>Certificado válido</b>, <b>Com NFC-e</b>, "
-                "<b>Com NF-e</b>) para achar os clientes.",
-                "Marque os clientes, ou <b>Selecionar todos</b>.",
-                "Clique em <b>Agendar</b> e confirme. Os pedidos vão para a Fila.",
+                "Abra a tela <b>Automação SIAT</b> (ou, no Dashboard, <b>Processar competência</b> ou "
+                "<b>Agendar pendentes</b>).",
+                "<b>Competência:</b> use as setas ‹ › para escolher o mês. A tela abre no mês anterior, que "
+                "é o mais comum; meses futuros não aparecem.",
+                "<b>Operações:</b> ligue ou desligue NFC-e, NF-e emitidas e NF-e recebidas.",
+                "<b>Clientes:</b> cada cliente mostra a situação dele naquela competência (Concluído, Na fila, "
+                "Aguardando SEFAZ, Erro, Não solicitado...). Os filtros <b>Todos</b>, <b>Pendentes</b> e "
+                "<b>Já solicitados</b> ajudam a achar quem falta.",
+                "Marque os clientes, ou use <b>Selecionar pendentes</b> no resumo ao lado.",
+                "Confira o <b>Resumo do agendamento</b> (clientes, exportações e tempo estimado) e clique em "
+                "<b>Processar</b>. Os pedidos vão para a Fila.",
             ]
         ),
         H2("O que o robô usa em cada exportação"),
@@ -538,10 +554,15 @@ def cap_automacao() -> list:
         H2("Pedidos repetidos"),
         *bullets(
             [
-                "Se a competência já foi agendada para o cliente, o painel avisa e não duplica.",
+                "Cliente que já tem pedido na competência aparece com um <b>cadeado</b> (“será ignorado”). "
+                "Erro e Cancelado podem ser agendados de novo.",
                 "Se o SIAT responder <i>“Já existe um agendamento com os parâmetros passados”</i>, o robô "
                 "aproveita o número (ID) do agendamento que já existe, em vez de dar erro.",
-                "<b>Forçar novo agendamento</b> (somente administrador) pede de novo mesmo que já exista.",
+                "<b>Forçar reagendamento</b> (administrador e operador), no rodapé do resumo, libera os clientes "
+                "com cadeado e pede de novo. Antes de processar, o painel pede confirmação, porque isso pode "
+                "gerar pedido duplicado no SIAT.",
+                "Se agendar o <b>mês atual</b> antes de ele acabar, o SIAT só entrega as notas emitidas até "
+                "aquele momento. Depois que o mês fechar, agende de novo com Forçar reagendamento.",
             ]
         ),
     ]
@@ -591,7 +612,7 @@ def cap_fila() -> list:
         *bullets(
             [
                 "<b>Detalhes e logs:</b> passo a passo do robô, notas, IDs do SIAT e prints.",
-                "<b>Reprocessar</b> (administrador): coloca de novo na fila um agendamento com erro. O que já "
+                "<b>Reprocessar</b> (administrador e operador): coloca de novo na fila um agendamento com erro. O que já "
                 "foi agendado no SIAT não é pedido de novo.",
                 "<b>Cancelar:</b> interrompe o agendamento. Se o computador do robô estiver desligado, o "
                 "cancelamento é concluído assim que algum robô estiver ligado.",
@@ -628,7 +649,7 @@ def cap_downloads() -> list:
         *steps(
             [
                 "Clique em <b>Abrir pasta</b> na linha da nota.",
-                "Na primeira vez, o navegador pergunta <b>“Abrir SIAT Robô?”</b>: marque <b>Sempre permitir</b> "
+                "Na primeira vez, o navegador pergunta <b>“Abrir JR Sistema Robô?”</b>: marque <b>Sempre permitir</b> "
                 "e clique em Abrir.",
                 "O Explorer abre com o ZIP já selecionado.",
             ]
@@ -648,12 +669,28 @@ def cap_historico() -> list:
             "Todas as execuções, com quem pediu, resultado e duração. Ao abrir uma, aparecem: período, "
             "tarefas de cada nota com o ID do SIAT, notas baixadas, o passo a passo (logs) e os prints."
         ),
+        P(
+            "Quando a empresa não teve notas no mês, o SIAT mostra <i>“Processado sem notas”</i> e não oferece "
+            "arquivo. O robô conclui sem erro e a tarefa aparece como <b>Sem notas no período</b>."
+        ),
         H2("Erros"),
         P("Lista das falhas com o código do erro, a mensagem e o print da tela no momento do erro."),
         H2("Dashboard"),
         P(
-            "Resumo geral: números das automações, últimas execuções e certificados vencendo nos próximos "
-            "30 dias. O botão <b>Processar competência</b> é um atalho para agendar."
+            "A tela inicial do painel, atualizada em tempo real:"
+        ),
+        *bullets(
+            [
+                "<b>Competência atual</b> (o mês anterior): barra colorida com a situação de cada cliente, "
+                "downloads disponíveis, concluídos e erros. <b>Agendar pendentes</b> abre a Automação com quem "
+                "falta já selecionado.",
+                "<b>Últimas execuções</b>, com as abas Todas, Em andamento e a competência.",
+                "<b>Agora</b>: o cliente que o robô está processando, a etapa e o tempo, e quando será a "
+                "próxima consulta à SEFAZ.",
+                "<b>Precisa de atenção</b>: intervenções, esperas longas da SEFAZ, erros, clientes sem pedido e "
+                "certificados vencendo.",
+                "<b>Certificados</b>: válidos, vencendo em 30 dias, vencidos e o próximo a vencer.",
+            ]
         ),
         H2("Configurações (administrador)"),
         table(
@@ -679,7 +716,7 @@ def cap_icone() -> list:
 
     t = Table(
         [
-            [Paragraph("Ícone", S["cellb"]), Paragraph("Cor", S["cellb"]), Paragraph("Significado", S["cellb"])],
+            [Paragraph("Ícone", S["cellb"]), Paragraph("Ponto", S["cellb"]), Paragraph("Significado", S["cellb"])],
             row("idle", "Verde", "Robô ligado, aguardando trabalho."),
             row("busy", "Azul", "Trabalhando no SIAT (agendando ou baixando)."),
             row("attention", "Vermelho", "Algum agendamento falhou ou precisa de você."),
@@ -718,8 +755,8 @@ def cap_icone() -> list:
                 ["Parar robô", "Termina o trabalho atual e para. Nada se perde."],
                 ["Ver mensagens do robô (log)", "Abre o registro técnico, útil para o suporte."],
                 ["Atualizar agora", "Aparece quando há versão nova. O robô termina o trabalho atual, instala e volta sozinho."],
-                ["Parar robô e fechar o ícone", "Desliga tudo: o robô termina o trabalho atual e para, e o ícone fecha. Para ligar de novo: menu Iniciar → SIAT Robô → Ligar robô (ou entrar no Windows)."],
-                ["Fechar só o ícone", "Fecha só o ícone; <b>o robô continua trabalhando</b>. Para reabrir: menu Iniciar → SIAT Robô."],
+                ["Parar robô e fechar o ícone", "Desliga tudo: o robô termina o trabalho atual e para, e o ícone fecha. Para ligar de novo: menu Iniciar → JR Sistema → Ligar robô (ou entrar no Windows)."],
+                ["Fechar só o ícone", "Fecha só o ícone; <b>o robô continua trabalhando</b>. Para reabrir: menu Iniciar → JR Sistema."],
             ],
             [50, 120],
         ),
@@ -727,15 +764,15 @@ def cap_icone() -> list:
             "O ícone também mostra avisos no canto da tela, por exemplo <i>“Notas baixadas: EMPRESA 08/2026 "
             "(NFC-e, NF-e emitidas, NF-e recebidas)”</i>."
         ),
-        H2("Atalhos no menu Iniciar → SIAT Robô"),
+        H2("Atalhos no menu Iniciar → JR Sistema"),
         *bullets(
             [
-                "<b>SIAT Robô (ícone ao lado do relógio)</b>: reabre o ícone.",
-                "<b>Painel SIAT</b> e <b>Pasta das notas</b>.",
+                "<b>Robô (ícone ao lado do relógio)</b>: reabre o ícone.",
+                "<b>Painel JR Sistema</b> e <b>Pasta das notas</b>.",
                 "<b>Ligar robô</b> e <b>Parar robô</b>.",
                 "<b>Status e verificação</b>: mostra se o robô está rodando, as últimas mensagens e, se você "
                 "responder <b>s</b>, confere Supabase, Chrome, pasta e o certificado de cada cliente.",
-                "<b>Desinstalar SIAT Robô</b>.",
+                "<b>Desinstalar o robô</b>.",
             ]
         ),
     ]
@@ -835,7 +872,7 @@ def cap_problemas() -> list:
                 ["Situação", "O que fazer"],
                 [
                     "O ícone está cinza (robô parado)",
-                    "Botão direito no ícone → <b>Ligar robô</b>, ou menu Iniciar → SIAT Robô → Ligar robô.",
+                    "Botão direito no ícone → <b>Ligar robô</b>, ou menu Iniciar → JR Sistema → Ligar robô.",
                 ],
                 [
                     "Agendamento parado em 80% por muito tempo",
@@ -871,7 +908,7 @@ def cap_problemas() -> list:
                 [
                     "O ícone mostra “Ativar este computador”",
                     "O computador ainda usa o acesso antigo. Gere um código em Computadores e clique na opção "
-                    "(ou menu Iniciar → SIAT Robô → Ativar este computador).",
+                    "(ou menu Iniciar → JR Sistema → Ativar este computador).",
                 ],
                 [
                     "Uma nota ficou com erro depois de 5 tentativas",
@@ -942,7 +979,7 @@ def build() -> Path:
         if i < len(chapters) - 1:
             story.append(PageBreak())
     story.append(Spacer(1, 10 * mm))
-    story.append(Paragraph(f"SIAT Robô {__version__} · {PANEL_URL}", ParagraphStyle("end", parent=S["small"], alignment=TA_CENTER)))
+    story.append(Paragraph(f"JR Sistema Robô {__version__} · {PANEL_URL}", ParagraphStyle("end", parent=S["small"], alignment=TA_CENTER)))
     doc.multiBuild(story)
     return OUT
 

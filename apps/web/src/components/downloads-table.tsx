@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 
 // Os ZIPs ficam no computador do robô, fora do alcance do site. O botão usa o
 // link "siatrobo://" registrado pelo instalador: o Windows abre o Explorer com
-// o arquivo selecionado, no computador onde o SIAT Robô está instalado.
+// o arquivo selecionado, no computador onde o robô do JR Sistema está instalado.
 export const OPEN_FOLDER_URL = (id: string) => `siatrobo://abrir/${id}`;
 
 // sem rolagem lateral: no celular, só a primeira coluna e o botão
@@ -107,7 +107,7 @@ export function DownloadsTable({ rows, showClient = true }: { rows: DownloadRow[
                 </Button>
               </TooltipTrigger>
               <TooltipContent className="max-w-64 text-xs">
-                Abre a pasta com o arquivo selecionado, no computador onde o SIAT Robô está instalado.
+                Abre a pasta com o arquivo selecionado, no computador onde o robô está instalado.
               </TooltipContent>
             </Tooltip>
           </div>

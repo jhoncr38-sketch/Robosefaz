@@ -10,8 +10,8 @@ const geistSans = Geist({ variable: "--font-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: { default: "SIAT Automação", template: "%s · SIAT Automação" },
-  description: "Automação de rotinas do SIAT Web (SEFAZ-PI): agendamento e download de documentos fiscais.",
+  title: { default: "JR Sistema", template: "%s · JR Sistema" },
+  description: "JR Sistema: automação do SIAT Web (SEFAZ-PI), agendamento e download de NFC-e e NF-e.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

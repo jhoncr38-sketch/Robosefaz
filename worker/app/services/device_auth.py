@@ -33,6 +33,6 @@ def device_credentials(settings: Settings) -> dict[str, str]:
     if not settings.device_email or not password:
         raise RuntimeError(
             "Computador ativado, mas a senha de acesso não está no cofre do Windows. "
-            "Ative este computador de novo (menu Iniciar → SIAT Robô → Ativar este computador)."
+            "Ative este computador de novo (menu Iniciar → JR Sistema → Ativar este computador)."
         )
     return {"email": settings.device_email, "password": password}

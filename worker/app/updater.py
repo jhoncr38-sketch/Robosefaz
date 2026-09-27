@@ -152,7 +152,7 @@ def _sha256(path: Path) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Atualização automática do SIAT Robô")
+    parser = argparse.ArgumentParser(description="Atualização automática do JR Sistema Robô")
     parser.add_argument("--check", action="store_true", help="só consulta a versão mais nova")
     parser.add_argument("--download", action="store_true", help="baixa e confere a versão nova")
     args = parser.parse_args(argv)

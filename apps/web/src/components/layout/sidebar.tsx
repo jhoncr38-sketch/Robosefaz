@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronsUpDown, FileArchive } from "lucide-react";
+import { ChevronsUpDown } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -73,13 +74,13 @@ export function SidebarNav({
 
 export function Brand() {
   return (
-    <Link href="/dashboard" className="flex items-center gap-2.5">
-      <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-        <FileArchive className="size-4" />
-      </div>
+    <Link href="/dashboard" className="flex items-center gap-2.5 text-foreground hover:no-underline">
+      <Image src="/brand/logo-mark.png" alt="" width={34} height={34} priority className="size-[34px]" />
       <div className="leading-tight">
-        <p className="text-sm font-semibold">SIAT Automação</p>
-        <p className="text-[11px] text-[#7a7b75]">SEFAZ-PI</p>
+        <p className="text-sm font-semibold">
+          <span className="text-[#1fa37a]">JR</span> Sistema
+        </p>
+        <p className="text-[11px] text-[#7a7b75]">Automação SIAT · SEFAZ-PI</p>
       </div>
     </Link>
   );

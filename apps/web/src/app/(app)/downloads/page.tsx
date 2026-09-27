@@ -43,8 +43,8 @@ export default async function DownloadsPage({ searchParams }: PageProps<"/downlo
       <Alert className="mb-4">
         <FolderOpen />
         <AlertDescription>
-          O botão <strong>Abrir pasta</strong> funciona no computador onde o SIAT Robô está instalado. Na primeira vez, o
-          navegador pergunta se pode abrir o SIAT Robô: marque <strong>“Sempre permitir”</strong> e clique em Abrir.
+          O botão <strong>Abrir pasta</strong> funciona no computador onde o robô está instalado. Na primeira vez, o
+          navegador pergunta se pode abrir o robô: marque <strong>“Sempre permitir”</strong> e clique em Abrir.
         </AlertDescription>
       </Alert>
       <ListCard>

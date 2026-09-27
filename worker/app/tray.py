@@ -180,7 +180,7 @@ class RobotTray:
         self.icon = pystray.Icon(
             "siat-robo",
             draw("stopped"),
-            "SIAT Robô",
+            "JR Sistema Robô",
             menu=pystray.Menu(
                 pystray.MenuItem(lambda _i: self.state.text, None, enabled=False),
                 pystray.MenuItem(f"Versão {__version__}", None, enabled=False),
@@ -228,7 +228,7 @@ class RobotTray:
         if path and path.is_file():
             os.startfile(path)  # noqa: S606
         else:
-            self.icon.notify("Ainda não há mensagens do robô.", "SIAT Robô")
+            self.icon.notify("Ainda não há mensagens do robô.", "JR Sistema Robô")
 
     def start_robot(self, *_a) -> None:
         self.settings.stop_flag.unlink(missing_ok=True)
@@ -239,13 +239,13 @@ class RobotTray:
             # sem permissão para disparar a tarefa: pede administrador pelo iniciar-robo.bat
             bat = PROJECT_ROOT / "iniciar-robo.bat"
             ctypes.windll.shell32.ShellExecuteW(None, "runas", str(bat), None, str(PROJECT_ROOT), 0)
-        self.icon.notify("Ligando o robô…", "SIAT Robô")
+        self.icon.notify("Ligando o robô…", "JR Sistema Robô")
 
     def stop_robot(self, *_a) -> None:
         flag = self.settings.stop_flag
         flag.parent.mkdir(parents=True, exist_ok=True)
         flag.write_text("parar", encoding="utf-8")
-        self.icon.notify("O robô vai terminar o trabalho atual e parar.", "SIAT Robô")
+        self.icon.notify("O robô vai terminar o trabalho atual e parar.", "JR Sistema Robô")
 
     def activate(self, *_a) -> None:
         """Abre a janela de ativação (pede o código gerado em Computadores, no painel)."""
@@ -261,7 +261,7 @@ class RobotTray:
             self.start_robot()  # ao ligar, o serviço já atualiza antes de trabalhar
         self.icon.notify(
             "O robô vai terminar o trabalho atual, instalar a versão nova e voltar sozinho em 1 a 2 minutos.",
-            "SIAT Robô",
+            "JR Sistema Robô",
         )
 
     def stop_and_quit(self, *_a) -> None:
@@ -281,7 +281,7 @@ class RobotTray:
         if fresh.device_email != self.settings.device_email:
             self.settings = fresh
             self.remote = RemoteWatcher(fresh)
-            self.icon.notify("Computador ativado. O robô já usa o acesso deste escritório.", "SIAT Robô")
+            self.icon.notify("Computador ativado. O robô já usa o acesso deste escritório.", "JR Sistema Robô")
 
     def _refresh(self) -> None:
         self._reload_if_activated()
@@ -290,16 +290,16 @@ class RobotTray:
         update = read_update_status(self.settings)
         if update and update != self.state.update_to:
             self.icon.notify(
-                f"Versão {update} do SIAT Robô disponível. Ela será instalada sozinha quando o robô estiver "
+                f"Versão {update} do JR Sistema Robô disponível. Ela será instalada sozinha quando o robô estiver "
                 "parado, ou clique em Atualizar agora no menu do ícone.",
-                "SIAT Robô",
+                "JR Sistema Robô",
             )
         self.state.update_to = update
         color = self.state.color
         if color != self._last_color:
             self.icon.icon = draw(color)
             self._last_color = color
-        self.icon.title = f"SIAT Robô · {self.state.text}"[:127]
+        self.icon.title = f"JR Sistema Robô · {self.state.text}"[:127]
         self.icon.update_menu()
 
     def _loop(self, icon: pystray.Icon) -> None:
@@ -312,7 +312,7 @@ class RobotTray:
                     attention, notices = self.remote.poll()
                     self.state.attention = attention
                     for msg in notices[:3]:
-                        icon.notify(msg, "SIAT Robô")
+                        icon.notify(msg, "JR Sistema Robô")
                         time.sleep(4)
             except Exception as exc:  # noqa: BLE001 - sem internet etc.: tenta de novo depois
                 log.warning("Consulta ao Supabase falhou: %s", exc)

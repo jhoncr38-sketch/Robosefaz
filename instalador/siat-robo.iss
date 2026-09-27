@@ -1,8 +1,9 @@
-﻿; Instalador do SIAT Robô (Inno Setup 6).
+﻿; Instalador do JR Sistema Robô (Inno Setup 6).
 ; Não compile à mão: use gerar-instalador.bat, que prepara os arquivos e
 ; passa StageDir, PythonExe, AppVersion, OutputDir e PanelUrl.
 
-#define AppName "SIAT Robô"
+#define AppName "JR Sistema Robô"
+#define GroupName "JR Sistema"
 #define TaskName "SIAT Automacao - Robo"
 
 [Setup]
@@ -10,9 +11,9 @@ AppId={{8C1F6D2A-5B7E-4E7B-9C1B-2F4A6D8E3B10}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
-AppPublisher=SIAT Automação
+AppPublisher=JR Sistema
 DefaultDirName=C:\SIAT-Robo
-DefaultGroupName={#AppName}
+DefaultGroupName={#GroupName}
 DisableProgramGroupPage=yes
 UsePreviousAppDir=yes
 PrivilegesRequired=admin
@@ -22,6 +23,8 @@ OutputDir={#OutputDir}
 OutputBaseFilename=Instalar-SIAT-Robo-{#AppVersion}
 SetupIconFile={#StageDir}\instalador\robo.ico
 UninstallDisplayIcon={app}\instalador\robo.ico
+WizardImageFile={#StageDir}\instalador\wizard-grande.bmp
+WizardSmallImageFile={#StageDir}\instalador\wizard-pequena.bmp
 UninstallDisplayName={#AppName}
 WizardStyle=modern
 WizardSizePercent=110
@@ -47,19 +50,25 @@ Source: "{#PythonExe}"; DestDir: "{tmp}"; DestName: "python-instalador.exe"; Fla
 ; usado antes da cópia dos arquivos para parar um robô já instalado
 Source: "{#StageDir}\instalador\desinstalar.ps1"; Flags: dontcopy
 
+[InstallDelete]
+; atalhos com o nome antigo (antes da marca JR Sistema, até a 1.1.2)
+Type: filesandordirs; Name: "{commonprograms}\SIAT Robô"
+Type: files; Name: "{commondesktop}\Painel SIAT.url"
+Type: files; Name: "{commondesktop}\Painel SIAT.lnk"
+
 [Dirs]
 Name: "{app}\storage\downloads"; Flags: uninsneveruninstall
 
 [Icons]
-Name: "{group}\SIAT Robô (ícone ao lado do relógio)"; Filename: "{app}\worker\.venv\Scripts\pythonw.exe"; Parameters: "-m app.tray"; WorkingDir: "{app}\worker"; IconFilename: "{app}\instalador\robo.ico"
-Name: "{group}\Painel SIAT"; Filename: "{#PanelUrl}"; IconFilename: "{app}\instalador\robo.ico"
+Name: "{group}\Robô (ícone ao lado do relógio)"; Filename: "{app}\worker\.venv\Scripts\pythonw.exe"; Parameters: "-m app.tray"; WorkingDir: "{app}\worker"; IconFilename: "{app}\instalador\robo.ico"
+Name: "{group}\Painel JR Sistema"; Filename: "{#PanelUrl}"; IconFilename: "{app}\instalador\robo.ico"
 Name: "{group}\Pasta das notas"; Filename: "{app}\storage\downloads"
 Name: "{group}\Ligar robô"; Filename: "{app}\iniciar-robo.bat"; IconFilename: "{app}\instalador\robo.ico"
 Name: "{group}\Parar robô"; Filename: "{app}\parar-robo.bat"; IconFilename: "{app}\instalador\robo.ico"
 Name: "{group}\Status e verificação"; Filename: "{app}\status-robo.bat"; IconFilename: "{app}\instalador\robo.ico"
 Name: "{group}\Ativar este computador"; Filename: "{app}\ativar-robo.bat"; IconFilename: "{app}\instalador\robo.ico"
-Name: "{group}\Desinstalar SIAT Robô"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\Painel SIAT"; Filename: "{#PanelUrl}"; IconFilename: "{app}\instalador\robo.ico"; Tasks: atalhopainel
+Name: "{group}\Desinstalar o robô"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\Painel JR Sistema"; Filename: "{#PanelUrl}"; IconFilename: "{app}\instalador\robo.ico"; Tasks: atalhopainel
 
 [Run]
 Filename: "{#PanelUrl}"; Description: "Abrir o painel"; Flags: postinstall shellexec skipifsilent nowait
@@ -195,7 +204,7 @@ begin
     Log := ExpandConstant('{app}\storage\logs\instalacao.log');
     if InstallResult = 2 then
       MsgBox('O robô foi instalado, mas a verificação encontrou problemas (por exemplo, certificado de algum cliente não instalado neste Windows).' + #13#10#13#10 +
-        'Veja o relatório no final da instalação ou no menu Iniciar > SIAT Robô > Status e verificação.', mbInformation, MB_OK)
+        'Veja o relatório no final da instalação ou no menu Iniciar > JR Sistema > Status e verificação.', mbInformation, MB_OK)
     else if InstallResult <> 0 then
       MsgBox('Não foi possível concluir a preparação do robô (código ' + IntToStr(InstallResult) + ').' + #13#10#13#10 +
         'Detalhes em: ' + Log + #13#10 + 'Corrija o problema e execute o instalador novamente.', mbError, MB_OK);

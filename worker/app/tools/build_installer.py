@@ -68,7 +68,28 @@ def _stage() -> Path:
     for rel in EMPTY_DIRS:
         (stage / rel).mkdir(parents=True, exist_ok=True)
     save_ico(stage / "instalador" / "robo.ico")
+    _wizard_images(stage / "instalador")
     return stage
+
+
+def _wizard_images(folder: Path) -> None:
+    """Imagens do assistente com a marca JR Sistema (BMP sem transparência, fundo branco)."""
+    from PIL import Image
+
+    mark = Image.open(PROJECT_ROOT / "branding" / "logo-mark.png").convert("RGBA")
+
+    # lateral das telas de boas-vindas e conclusão (proporção 164x314, em 150%)
+    big = Image.new("RGBA", (246, 471), (255, 255, 255, 255))
+    band = Image.new("RGBA", (246, 120), (238, 247, 241, 255))
+    big.alpha_composite(band, (0, 351))
+    m = mark.resize((210, 210), Image.LANCZOS)
+    big.alpha_composite(m, (18, 120))
+    big.convert("RGB").save(folder / "wizard-grande.bmp")
+
+    # canto superior das demais telas (55x55, em 200%)
+    small = Image.new("RGBA", (110, 110), (255, 255, 255, 255))
+    small.alpha_composite(mark.resize((104, 104), Image.LANCZOS), (3, 3))
+    small.convert("RGB").save(folder / "wizard-pequena.bmp")
 
 
 def build() -> Path:

@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2 } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -10,7 +10,6 @@ import { z } from "zod";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
@@ -25,6 +24,7 @@ type FormValues = z.infer<typeof schema>;
 export function LoginForm({ initialError, next }: { initialError?: string; next: string }) {
   const router = useRouter();
   const [error, setError] = useState<string | undefined>(initialError);
+  const [showPassword, setShowPassword] = useState(false);
   const {
     register,
     handleSubmit,
@@ -44,45 +44,74 @@ export function LoginForm({ initialError, next }: { initialError?: string; next:
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Entrar</CardTitle>
-        <CardDescription>Acesse o painel de automação.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
-          {error ? (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          ) : null}
-          <div className="space-y-1.5">
-            <Label htmlFor="email">E-mail</Label>
-            <Input id="email" type="email" autoComplete="email" autoFocus {...register("email")} aria-invalid={!!errors.email} />
-            {errors.email ? <p className="text-xs text-destructive">{errors.email.message}</p> : null}
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.02em] text-[#13294b]">Bem-vindo de volta</h1>
+        <p className="text-sm text-muted-foreground">Entre para acompanhar automações, certificados e downloads.</p>
+      </div>
+      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+        {error ? (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+        <div className="space-y-1.5">
+          <Label htmlFor="email">E-mail</Label>
+          <div className="relative">
+            <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[#9a9b94]" />
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              autoFocus
+              placeholder="seu@email.com"
+              className="h-11 pl-9"
+              {...register("email")}
+              aria-invalid={!!errors.email}
+            />
           </div>
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password">Senha</Label>
-              <Link href="/forgot-password" className="text-xs text-muted-foreground hover:text-foreground">
-                Esqueci minha senha
-              </Link>
-            </div>
+          {errors.email ? <p className="text-xs text-destructive">{errors.email.message}</p> : null}
+        </div>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password">Senha</Label>
+            <Link href="/forgot-password" className="text-xs font-medium text-primary hover:underline">
+              Esqueci minha senha
+            </Link>
+          </div>
+          <div className="relative">
+            <Lock className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[#9a9b94]" />
             <Input
               id="password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               autoComplete="current-password"
+              placeholder="Digite sua senha"
+              className="h-11 pr-10 pl-9"
               {...register("password")}
               aria-invalid={!!errors.password}
             />
-            {errors.password ? <p className="text-xs text-destructive">{errors.password.message}</p> : null}
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "Esconder senha" : "Mostrar senha"}
+              className="absolute top-1/2 right-2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-[#9a9b94] hover:text-foreground"
+            >
+              {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            </button>
           </div>
-          <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
-            {isSubmitting ? <Loader2 className="animate-spin" /> : null}
-            Entrar
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+          {errors.password ? <p className="text-xs text-destructive">{errors.password.message}</p> : null}
+        </div>
+        <Button
+          type="submit"
+          className="mt-2 h-11 w-full gap-2 bg-gradient-to-r from-[#1f7a4d] to-[#1fa37a] text-[15px] hover:from-[#196640] hover:to-[#1b8f6a]"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? <Loader2 className="animate-spin" /> : null}
+          Entrar
+          {!isSubmitting ? <ArrowRight className="size-4" /> : null}
+        </Button>
+      </form>
+      <p className="text-center text-xs text-[#9a9b94]">Não tem acesso? Peça ao administrador do seu escritório.</p>
+    </div>
   );
 }
