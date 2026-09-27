@@ -15,6 +15,7 @@ class TaskType(StrEnum):
     NFE_RECEIVED_EXPORT = "NFE_RECEIVED_EXPORT"
     CHECK_PROCESSING = "CHECK_PROCESSING"
     DOWNLOAD = "DOWNLOAD"
+    EFD_CHECK = "EFD_CHECK"  # consulta do processamento da EFD (mensagens do DT-e)
 
 
 EXPORT_TASK_TYPES: tuple[TaskType, ...] = (

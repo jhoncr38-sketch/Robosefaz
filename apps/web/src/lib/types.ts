@@ -24,7 +24,13 @@ export type JobStatus =
   | "manual_action_required"
   | "certificate_required";
 
-export type TaskType = "NFCE_EXPORT" | "NFE_ISSUED_EXPORT" | "NFE_RECEIVED_EXPORT" | "CHECK_PROCESSING" | "DOWNLOAD";
+export type TaskType =
+  | "NFCE_EXPORT"
+  | "NFE_ISSUED_EXPORT"
+  | "NFE_RECEIVED_EXPORT"
+  | "CHECK_PROCESSING"
+  | "DOWNLOAD"
+  | "EFD_CHECK";
 
 export type ExportTaskType = Extract<TaskType, "NFCE_EXPORT" | "NFE_ISSUED_EXPORT" | "NFE_RECEIVED_EXPORT">;
 
@@ -142,7 +148,8 @@ export interface AutomationJob {
   competence: string;
   start_date: string;
   end_date: string;
-  operations: ExportTaskType[];
+  /** exportações de notas ou ["EFD_CHECK"] (consulta do processamento da EFD) */
+  operations: (ExportTaskType | "EFD_CHECK")[];
   force_reschedule: boolean;
   status: JobStatus;
   current_step: string | null;
@@ -248,6 +255,34 @@ export interface WorkerHeartbeat {
   meta: Record<string, unknown>;
   started_at: string;
   last_seen_at: string;
+}
+
+/** Situação da EFD lida no DT-e (mensagem "EPE - EFD" do SIAT). */
+export type EfdSituation = "processed" | "alert" | "pending" | "not_processed";
+
+export interface EfdInconsistency {
+  type: number;
+  type_label: string;
+  rule: string;
+  description: string;
+}
+
+export interface EfdDeclaration {
+  id: string;
+  client_id: string;
+  job_id: string | null;
+  competence: string;
+  epe_number: string;
+  finalidade: string | null;
+  processed: boolean | null;
+  situation: EfdSituation;
+  processed_at: string | null;
+  received_at: string | null;
+  message_sent_at: string | null;
+  subject: string | null;
+  inconsistencies: EfdInconsistency[];
+  raw_text: string | null;
+  checked_at: string;
 }
 
 export interface AppSetting {

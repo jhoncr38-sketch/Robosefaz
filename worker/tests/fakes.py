@@ -114,7 +114,7 @@ class FakeRepo:
             "provider": "SIAT",
         }
         for op in ops:
-            doc = TASK_DOCUMENT[op]
+            doc = TASK_DOCUMENT.get(op)
             tid = str(uuid.uuid4())
             self.tasks[tid] = {
                 "id": tid,
@@ -124,8 +124,8 @@ class FakeRepo:
                 "status": task_status,
                 "competence": competence,
                 "document_type": doc,
-                "operation_type": "EXPORT",
-                "dedup_key": build_dedup_key(client.id, competence, doc),
+                "operation_type": "EXPORT" if doc else "EFD",
+                "dedup_key": build_dedup_key(client.id, competence, doc) if doc else None,
                 "superseded": False,
                 "retry_count": 0,
                 "result": {},
@@ -221,6 +221,10 @@ class FakeRepo:
         self.downloads.append(fields)
         return fields
 
+    async def upsert_efd_declaration(self, **fields: Any) -> None:
+        self.efd = [d for d in getattr(self, "efd", []) if d["epe_number"] != fields["epe_number"]]
+        self.efd.append(fields)
+
     async def get_download(self, download_id: str) -> dict[str, Any] | None:
         return None
 
@@ -312,6 +316,8 @@ class FakeProvider(AutomationProvider):
         self.download_dir = None
         self.download_errors: dict[DocumentType, Exception] = {}
         self.on_schedule: Callable[[Task], None] | None = None
+        self.efd_messages: list = []  # DteMessage devolvidas pelo "DT-e"
+        self.efd_error: Exception | None = None
 
     @asynccontextmanager
     async def open_session(self, ctx: AutomationContext) -> AsyncIterator[AutomationContext]:
@@ -378,6 +384,16 @@ class FakeProvider(AutomationProvider):
         tmp.parent.mkdir(parents=True, exist_ok=True)
         tmp.write_bytes(f"conteudo {task.document_type}".encode())
         return ctx.organizer.store(tmp, ctx.client.client_code, ctx.job.competence, task.document_type)  # type: ignore[arg-type]
+
+
+async def _read_efd_messages(self, ctx: AutomationContext, competence: str) -> list:
+    self.calls.append(f"read_efd:{competence}")
+    if self.efd_error:
+        raise self.efd_error
+    return list(self.efd_messages)
+
+
+FakeProvider.read_efd_messages = _read_efd_messages  # type: ignore[method-assign]
 
 
 def registry_with(provider: FakeProvider) -> ProviderRegistry:

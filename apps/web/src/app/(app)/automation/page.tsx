@@ -26,6 +26,7 @@ export default async function AutomationPage({ searchParams }: PageProps<"/autom
       .from("automation_jobs")
       .select("client_id, competence, status, created_at")
       .eq("competence", competence)
+      .not("operations", "cs", "{EFD_CHECK}")
       .order("created_at", { ascending: false })
       .limit(5000),
   ]);

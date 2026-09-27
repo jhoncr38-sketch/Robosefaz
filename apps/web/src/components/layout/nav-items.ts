@@ -2,6 +2,7 @@ import {
   Bot,
   Building2,
   Download,
+  FileSearch,
   History,
   Laptop,
   Landmark,
@@ -46,6 +47,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/automation", label: "Automação SIAT", icon: Bot, permission: "automation:run" },
+      { href: "/efd", label: "Consulta EFD", icon: FileSearch },
       { href: "/queue", label: "Fila de processamento", icon: ListOrdered, badge: "queue", badgeWarn: true },
       { href: "/downloads", label: "Downloads", icon: Download, badge: "downloads" },
       { href: "/history", label: "Histórico", icon: History },

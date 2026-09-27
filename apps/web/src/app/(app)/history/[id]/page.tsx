@@ -7,6 +7,7 @@ import { ListHead, ListRow, PrimaryCell } from "@/components/data-list";
 import { DownloadsTable } from "@/components/downloads-table";
 import { JobLogs } from "@/components/job-logs";
 import { ContinueButton, JobActions } from "@/components/queue/job-actions";
+import { Button } from "@/components/ui/button";
 import { JobStatusBadge, TaskStatusBadge, ToneBadge } from "@/components/status-badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -74,6 +75,13 @@ export default async function JobDetailPage({ params }: PageProps<"/history/[id]
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {job.operations.includes("EFD_CHECK") ? (
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/efd?competence=${job.competence}`} className="text-foreground hover:no-underline">
+                Ver resultado da EFD
+              </Link>
+            </Button>
+          ) : null}
           <ContinueButton job={job} role={profile.role} />
           <JobActions job={job} role={profile.role} />
         </div>

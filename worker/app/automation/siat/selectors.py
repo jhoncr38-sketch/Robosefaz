@@ -143,6 +143,29 @@ class SiatSelectors:
     export_status_processing: str = r"aguardando|em\s+processamento|processando|pendente|agendad[oa]|na\s+fila"
     export_status_error: str = r"erro|falha|cancelad[oa]|rejeitad[oa]|expirad[oa]"
 
+    # --- Domicílio Tributário Eletrônico (DT-e) no e-AGEAT --------------------
+    # Consulta do processamento da EFD: mensagens "EPE - EFD - Período AAAAMM - <EPE>".
+    # O robô SÓ abre essas notificações e NUNCA clica em excluir/arquivar.
+    dte_menu_root: str = r"^\s*domic[íi]lio\s+eletr[ôo]nico\s*$"
+    dte_menu_inbox: str = r"caixa\s+de\s+entrada|^\s*mensagens\s*$|consultar\s+mensagens"
+    dte_page_marker: str = r"mensagens\s+do\s+domic[íi]lio|caixa\s+de\s+entrada\s+do\s+domic[íi]lio"
+    dte_search_label: str = r"^\s*pesquisar"
+    dte_list_label: str = r"^\s*listar"
+    dte_list_all: str = r"^\s*tod[ao]s"
+    dte_page_size_label: str = r"^\s*visualizar"
+    dte_subject_header: str = r"assunto"
+    dte_type_header: str = r"^\s*tipo\s*$"
+    dte_sent_header: str = r"data\s+da\s+emiss[ãa]o"
+    dte_recipient_header: str = r"inscri[çc][ãa]o|destinat[áa]rio"
+    dte_allowed_type: str = r"notifica[çc][ãa]o"
+    dte_view_button: str = r"visualizar|detalh|abrir|^\s*ler\b|ver\s+mensagem|consultar"
+    dte_view_icon_container: str = "[class*='search'], [class*='eye'], [class*='zoom'], [class*='lupa']"
+    # nada que combine com isto é clicado (proteção contra excluir/arquivar mensagens)
+    dte_danger: str = r"excluir|remover|apagar|delete|trash|lixeira|times|close|remove|arquivar|×|✖"
+    dte_dialog_title: str = r"detalhes\s+da\s+mensagem"
+    dte_close_button: str = r"^\s*fechar\s*$"
+    dte_next_page: str = r"^\s*(pr[óo]xim[oa]|›|»)\s*$"
+
     extra: dict[str, str] = field(default_factory=dict)
 
     def rx(self, name: str) -> re.Pattern[str]:

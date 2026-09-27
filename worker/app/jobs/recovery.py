@@ -18,7 +18,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from app.jobs.models import LogLevel, TaskStatus
+from app.jobs.models import LogLevel, TaskStatus, TaskType
 from app.jobs.repository import JobRepository
 from app.jobs.state_machine import JobStatus
 
@@ -116,8 +116,9 @@ async def recover_orphaned_jobs(
             if job.get("cancel_requested") and t.status in (_OPEN_EXPORT | _WAITING_SEFAZ):
                 await repo.update_task(t.id, status=TaskStatus.CANCELLED.value, finished_at=now)
             elif t.status == TaskStatus.RUNNING:
-                # exportação que não chegou a ser enviada volta a pendente; consulta/download interrompido falha
-                status = TaskStatus.PENDING if t.is_export else TaskStatus.FAILED
+                # exportação que não chegou a ser enviada (ou consulta de EFD, que só lê) volta a pendente;
+                # consulta/download interrompido falha
+                status = TaskStatus.PENDING if t.is_export or t.task_type == TaskType.EFD_CHECK else TaskStatus.FAILED
                 await repo.update_task(t.id, status=status.value)
         await repo.add_log(
             job_id=job["id"], task_id=None, level=LogLevel.WARNING, step="recovery",

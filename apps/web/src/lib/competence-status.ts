@@ -92,6 +92,11 @@ export function blocksNewRequest(status: ClientCompetenceStatus): boolean {
   return status !== "none" && status !== "failed" && status !== "cancelled";
 }
 
+/** Agendamento de notas (a consulta de EFD não conta na situação da competência). */
+export function isExportJob(job: { operations?: readonly string[] | null }): boolean {
+  return !(job.operations ?? []).includes("EFD_CHECK");
+}
+
 /** Job mais recente de cada cliente na competência. */
 export function latestJobByClient<T extends { client_id: string; competence: string; created_at: string }>(
   jobs: T[],

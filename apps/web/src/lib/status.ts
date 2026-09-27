@@ -103,6 +103,7 @@ export const TASK_TYPE_LABEL: Record<TaskType, string> = {
   NFE_RECEIVED_EXPORT: "NF-e recebidas",
   CHECK_PROCESSING: "Consulta de processamento",
   DOWNLOAD: "Download",
+  EFD_CHECK: "Consulta EFD",
 };
 
 export const EXPORT_OPERATIONS: { value: ExportTaskType; label: string; flag: "uses_nfce" | "uses_nfe_issued" | "uses_nfe_received" }[] = [

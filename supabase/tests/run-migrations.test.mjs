@@ -627,5 +627,82 @@ await test("escritório suspenso: robô dele também para", async () => {
   assert.ok(ok.rows[0].n > 0);
 });
 
+// ---------------------------------------------------------------------
+// Consulta do processamento da EFD (DT-e)
+// ---------------------------------------------------------------------
+let EFD_JOB;
+await test("EFD: operador pede a consulta; visualizador não; pedido repetido é ignorado", async () => {
+  await rejects(
+    as(VIEWER, (tx) => tx.query("select public.create_efd_check_jobs($1, '2026-08')", [[CLIENT_A]])),
+    /FORBIDDEN/,
+  );
+  const first = (await as(OPERATOR, (tx) => tx.query("select public.create_efd_check_jobs($1, '2026-08') r", [[CLIENT_A]]))).rows[0].r;
+  assert.equal(first.created, 1);
+  EFD_JOB = first.results[0].job_id;
+  const job = (await db.query("select operations, status, org_id from public.automation_jobs where id = $1", [EFD_JOB])).rows[0];
+  assert.equal(job.status, "queued");
+  assert.equal(job.org_id, ORG_A);
+  assert.match(String(job.operations), /EFD_CHECK/);
+  const tasks = (await db.query("select task_type, document_type, dedup_key from public.automation_tasks where job_id = $1", [EFD_JOB])).rows;
+  assert.deepEqual(tasks, [{ task_type: "EFD_CHECK", document_type: null, dedup_key: null }]);
+  const again = (await as(OPERATOR, (tx) => tx.query("select public.create_efd_check_jobs($1, '2026-08') r", [[CLIENT_A]]))).rows[0].r;
+  assert.deepEqual([again.created, again.skipped], [0, 1]);
+  // outro escritório não pede consulta para cliente de A
+  await rejects(as(ADMIN_B, (tx) => tx.query("select public.create_efd_check_jobs($1, '2026-08')", [[CLIENT_A]])), /CLIENT_NOT_FOUND|FORBIDDEN/);
+});
+
+await test("EFD: robô antigo não pega a consulta; robô 1.2.0 pega", async () => {
+  // só a consulta de EFD na fila de A
+  await db.query("update public.automation_jobs set status = 'cancelled' where org_id = $1 and status = 'queued' and id <> $2", [ORG_A, EFD_JOB]);
+  await db.query("update public.automation_jobs set locked_by = null, locked_at = null");
+  await as(DEVICE_A.authId, (tx) =>
+    tx.query(`insert into public.worker_heartbeats (worker_id, kind, meta) values
+      ('PC-A-ANTIGO', 'all', '{"version":"1.1.3"}'), ('PC-A-NOVO', 'all', '{"version":"1.2.0"}')`),
+  );
+  const old = await as(DEVICE_A.authId, (tx) => tx.query("select id from public.claim_next_job('PC-A-ANTIGO')"));
+  assert.equal(old.rows.length, 0, "robô 1.1.3 não deve pegar consulta de EFD");
+  const unknown = await as(DEVICE_A.authId, (tx) => tx.query("select id from public.claim_next_job('sem-sinal')"));
+  assert.equal(unknown.rows.length, 0, "robô sem versão conhecida não pega consulta de EFD");
+  const fresh = await as(DEVICE_A.authId, (tx) => tx.query("select id from public.claim_next_job('PC-A-NOVO')"));
+  assert.equal(fresh.rows[0].id, EFD_JOB);
+});
+
+await test("EFD: robô grava declarações com upsert pelo EPE; painel lê só o próprio escritório", async () => {
+  const sql = `insert into public.efd_declarations (client_id, job_id, competence, epe_number, finalidade, processed, situation, inconsistencies)
+               values ($1, $2, '2026-08', '93104981381', 'ORIGINAL', true, $3, $4)
+               on conflict (org_id, epe_number) do update set situation = excluded.situation, inconsistencies = excluded.inconsistencies
+               returning *`;
+  for (const situation of ["processed", "alert"]) {
+    const r = await as(DEVICE_A.authId, (tx) => tx.query(sql, [CLIENT_A, EFD_JOB, situation, JSON.stringify([{ type: 3 }])]));
+    assert.equal(r.rows.length, 1);
+  }
+  const rows = (await as(OPERATOR, (tx) => tx.query("select situation, org_id from public.efd_declarations"))).rows;
+  assert.deepEqual(rows, [{ situation: "alert", org_id: ORG_A }]);
+  const fromB = await as(ADMIN_B, (tx) => tx.query("select count(*)::int n from public.efd_declarations"));
+  assert.equal(fromB.rows[0].n, 0);
+  // painel não grava declarações (só o robô)
+  await rejects(
+    as(ADMIN, (tx) => tx.query("insert into public.efd_declarations (client_id, competence, epe_number, situation) values ($1, '2026-08', '1', 'processed')", [CLIENT_A])),
+    /row-level security/,
+  );
+  await rejects(
+    db.query("insert into public.efd_declarations (client_id, competence, epe_number, situation) values ($1, '2026-08', '2', 'ok')", [CLIENT_A]),
+    /efd_declarations_situation/,
+  );
+});
+
+await test("EFD: conclusão avisa com o resultado; reprocessar recoloca a consulta na fila", async () => {
+  await db.query("update public.automation_jobs set status = 'completed', last_message = 'EFD 08/2026: processada com malha' where id = $1", [EFD_JOB]);
+  const n = (await db.query("select title, message, link from public.notifications where dedup_key = $1 limit 1", [`job-completed:${EFD_JOB}`])).rows[0];
+  assert.equal(n.title, "Consulta de EFD concluída.");
+  assert.match(n.message, /processada com malha/);
+  assert.equal(n.link, "/efd?competence=2026-08");
+  await db.query("update public.automation_jobs set status = 'failed', locked_by = null where id = $1", [EFD_JOB]);
+  await db.query("update public.automation_tasks set status = 'failed' where job_id = $1", [EFD_JOB]);
+  await as(OPERATOR, (tx) => tx.query("select public.retry_automation_job($1)", [EFD_JOB]));
+  const t = (await db.query("select status from public.automation_tasks where job_id = $1", [EFD_JOB])).rows[0];
+  assert.equal(t.status, "pending");
+});
+
 console.log(`\n${passed} teste(s) de banco passaram${process.exitCode ? " (com falhas)" : ""}.`);
 await db.close();

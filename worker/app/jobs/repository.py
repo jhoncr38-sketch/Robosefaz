@@ -60,6 +60,7 @@ class JobRepository(Protocol):
         metadata: dict[str, Any],
     ) -> None: ...
     async def insert_download(self, **fields: Any) -> dict[str, Any]: ...
+    async def upsert_efd_declaration(self, **fields: Any) -> None: ...
     async def get_download(self, download_id: str) -> dict[str, Any] | None: ...
     async def release_lock(self, job_id: str, worker_id: str) -> None: ...
     async def is_cancel_requested(self, job_id: str) -> bool: ...
@@ -378,6 +379,11 @@ class SupabaseJobRepository:
             .execute()
         )
         return res.data[0] if res.data else payload
+
+    @_transient
+    async def upsert_efd_declaration(self, **fields: Any) -> None:
+        # mesmo EPE lido de novo (nova consulta) atualiza a linha existente
+        await self._db.table("efd_declarations").upsert(_serialize(fields), on_conflict="org_id,epe_number").execute()
 
     async def heartbeat(
         self, worker_id: str, kind: str, status: str, current_job_id: str | None, meta: dict[str, Any]

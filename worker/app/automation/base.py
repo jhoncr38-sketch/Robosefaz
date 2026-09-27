@@ -112,6 +112,10 @@ class AutomationProvider(ABC):
     ) -> DownloadedFile:
         """Baixa o arquivo processado e devolve os dados do arquivo organizado."""
 
+    async def read_efd_messages(self, ctx: AutomationContext, competence: str) -> list:
+        """Lê as notificações da EFD (DT-e) da competência; lista de app.automation.siat.siat_dte.DteMessage."""
+        raise NotImplementedError(f"{self.name} não consulta o processamento da EFD")
+
     def document_for(self, task: Task) -> DocumentType:
         if task.document_type is None:
             raise ValueError(f"Tarefa {task.id} sem document_type")

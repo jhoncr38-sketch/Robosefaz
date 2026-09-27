@@ -451,6 +451,7 @@ def cap_painel_acesso() -> list:
                 ["Tela", "Para que serve"],
                 ["Dashboard", "Situação da competência, o que o robô está fazendo agora e o que precisa de atenção."],
                 ["Automação SIAT", "Pedir agendamentos de uma competência para vários clientes."],
+                ["Consulta EFD", "Ver se a EFD de cada cliente foi processada (mensagens do DT-e)."],
                 ["Fila de processamento", "Acompanhar em tempo real o que o robô está fazendo."],
                 ["Clientes", "Cadastro das empresas."],
                 ["Certificados", "Certificado digital de cada cliente e sua validade."],
@@ -663,7 +664,7 @@ def cap_downloads() -> list:
 
 def cap_historico() -> list:
     return [
-        H1("9. Histórico, Erros, Dashboard e Configurações"),
+        H1("9. Histórico, Erros, Dashboard, Consulta EFD e Configurações"),
         H2("Histórico"),
         P(
             "Todas as execuções, com quem pediu, resultado e duração. Ao abrir uma, aparecem: período, "
@@ -690,6 +691,38 @@ def cap_historico() -> list:
                 "<b>Precisa de atenção</b>: intervenções, esperas longas da SEFAZ, erros, clientes sem pedido e "
                 "certificados vencendo.",
                 "<b>Certificados</b>: válidos, vencendo em 30 dias, vencidos e o próximo a vencer.",
+            ]
+        ),
+        H2("Consulta EFD"),
+        P(
+            "Mostra se a EFD de cada cliente foi processada pela SEFAZ-PI, lendo as notificações "
+            "<b>“EPE - EFD - Período AAAAMM”</b> do Domicílio Eletrônico (DT-e) do SIAT."
+        ),
+        *steps(
+            [
+                "Abra <b>Consulta EFD</b> e escolha a competência com as setas.",
+                "Marque os clientes (ou <b>Selecionar os sem resultado</b>) e clique em "
+                "<b>Consultar processamento de EFD</b>.",
+                "O robô entra no SIAT de cada cliente, lê as mensagens da EFD e o resultado aparece sozinho.",
+            ]
+        ),
+        table(
+            [
+                ["Situação", "O que significa"],
+                ["Processada", "A SEFAZ-PI processou a declaração sem inconsistências."],
+                ["Processada com malha", "Inconsistência tipo 3 (alerta): pode ser analisada por Auditor Fiscal."],
+                ["Processada com pendência", "Inconsistência tipo 2: regularizar em até 45 dias."],
+                ["Não processada", "Inconsistência tipo 1 (impeditiva): a EFD não tem validade para a SEFAZ-PI."],
+                ["Sem mensagem no DT-e", "EFD não entregue ou mensagem expirada (o SIAT mantém por cerca de 60 dias)."],
+            ],
+            [45, 125],
+        ),
+        *bullets(
+            [
+                "Clique no cliente para ver finalidade (original ou retificadora), EPE, datas, as inconsistências "
+                "e a mensagem completa. Quando há retificadora, vale a declaração processada por último.",
+                "O robô abre <b>somente</b> as notificações da EFD e nunca exclui mensagens. Abrir registra a data "
+                "de leitura no SIAT, como quando você abre à mão.",
             ]
         ),
         H2("Configurações (administrador)"),

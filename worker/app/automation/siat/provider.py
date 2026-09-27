@@ -8,6 +8,7 @@ from typing import AsyncIterator
 from app.automation.base import AutomationContext, AutomationProvider
 from app.automation.siat.selectors import SiatSelectors, get_selectors
 from app.automation.siat.siat_downloads import SiatExportConsult
+from app.automation.siat.siat_dte import DteMessage, SiatDte
 from app.automation.siat.siat_legacy import SiatLegacy
 from app.automation.siat.siat_login import SiatLogin
 from app.automation.siat.siat_navigation import SiatNavigation
@@ -128,6 +129,12 @@ class SiatAutomationProvider(AutomationProvider):
         await self._ensure_export_area(ctx)
         consult = SiatExportConsult(ctx, lambda: self.verify_company(ctx), self.sel)
         return await consult.check(tasks)
+
+    async def read_efd_messages(self, ctx: AutomationContext, competence: str) -> list[DteMessage]:
+        # o contribuinte é confirmado pelo CNPJ no painel ANTES de abrir o e-AGEAT
+        await SiatTaxpayer(ctx, self.sel).verify(security=True)
+        await SiatNavigation(ctx, self.sel).open_module()
+        return await SiatDte(ctx, self.sel).read_efd(competence)
 
     async def download(self, ctx: AutomationContext, task: Task, status: ExportStatusResult) -> DownloadedFile:
         consult = SiatExportConsult(ctx, lambda: self.verify_company(ctx), self.sel)

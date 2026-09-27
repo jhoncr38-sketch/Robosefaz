@@ -24,6 +24,7 @@ import {
   COMPETENCE_STATUS_ORDER,
   competenceStatusOf,
   countByStatus,
+  isExportJob,
   latestJobByClient,
 } from "@/lib/competence-status";
 import { formatClock, formatDate, formatShortAgo } from "@/lib/format";
@@ -50,10 +51,11 @@ export interface DashboardTotals {
   failed: number;
 }
 
-const OP_TAG: Record<ExportTaskType, string> = {
+const OP_TAG: Record<ExportTaskType | "EFD_CHECK", string> = {
   NFCE_EXPORT: "NFC-e",
   NFE_ISSUED_EXPORT: "Emit.",
   NFE_RECEIVED_EXPORT: "Receb.",
+  EFD_CHECK: "EFD",
 };
 
 const EXEC_GRID =
@@ -92,7 +94,7 @@ export function DashboardBoard({
   const scheduleHref = `/automation?competence=${competence}&select=pending`;
 
   // situação de cada cliente ativo na competência
-  const latest = useMemo(() => latestJobByClient(jobs, competence), [jobs, competence]);
+  const latest = useMemo(() => latestJobByClient(jobs.filter(isExportJob), competence), [jobs, competence]);
   const statuses = clients.map((c) => competenceStatusOf(latest.get(c.id)));
   const counts = countByStatus(statuses);
   const pendingClients = clients.filter((_, i) => statuses[i] === "none");

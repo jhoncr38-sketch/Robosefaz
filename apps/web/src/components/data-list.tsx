@@ -109,13 +109,14 @@ export function Segmented<T extends string>({
   );
 }
 
-const OP_TAG: Record<ExportTaskType, string> = {
+const OP_TAG: Record<ExportTaskType | "EFD_CHECK", string> = {
   NFCE_EXPORT: "NFC-e",
   NFE_ISSUED_EXPORT: "Emit.",
   NFE_RECEIVED_EXPORT: "Receb.",
+  EFD_CHECK: "EFD",
 };
 
-export function OpTags({ ops }: { ops: ExportTaskType[] }) {
+export function OpTags({ ops }: { ops: (ExportTaskType | "EFD_CHECK")[] }) {
   return (
     <span className="flex flex-wrap gap-1">
       {ops.map((o) => (
