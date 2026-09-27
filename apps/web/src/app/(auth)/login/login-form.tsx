@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { whatsappLink } from "@/lib/contact";
 import { createClient } from "@/lib/supabase/client";
 
 const schema = z.object({
@@ -111,7 +112,22 @@ export function LoginForm({ initialError, next }: { initialError?: string; next:
           {!isSubmitting ? <ArrowRight className="size-4" /> : null}
         </Button>
       </form>
-      <p className="text-center text-xs text-(--c-9a9b94)">Não tem acesso? Peça ao administrador do seu escritório.</p>
+      <p className="text-center text-xs text-(--c-9a9b94)">
+        Ainda não é cliente?{" "}
+        {whatsappLink() ? (
+          <a
+            href={whatsappLink() ?? undefined}
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium text-primary hover:underline"
+          >
+            Fale com a nossa equipe
+          </a>
+        ) : (
+          <span className="font-medium">Fale com a nossa equipe</span>
+        )}{" "}
+        e conheça o JR Sistema.
+      </p>
     </div>
   );
 }
