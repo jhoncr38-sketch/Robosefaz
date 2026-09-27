@@ -26,8 +26,8 @@ export interface ClientRow {
   last_job: { status: string; created_at: string; competence: string } | null;
 }
 
-export function ClientsTable({ rows }: { rows: ClientRow[] }) {
-  const [q, setQ] = useState("");
+export function ClientsTable({ rows, initialQuery = "" }: { rows: ClientRow[]; initialQuery?: string }) {
+  const [q, setQ] = useState(initialQuery);
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     if (!term) return rows;

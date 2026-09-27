@@ -50,3 +50,16 @@ export function recentCompetences(count = 18, now = new Date()): string[] {
   }
   return out;
 }
+
+/** Competência deslocada em N meses (YYYY-MM); null se a entrada for inválida. */
+export function shiftCompetence(value: string, delta: number): string | null {
+  const p = parseCompetence(value);
+  if (!p) return null;
+  const d = new Date(p.year, p.month - 1 + delta, 1);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+}
+
+/** Competência do mês corrente (limite para agendar). */
+export function currentCompetence(now = new Date()): string {
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+}

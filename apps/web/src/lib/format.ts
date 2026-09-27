@@ -49,3 +49,26 @@ export function daysUntil(value: string | null | undefined): number | null {
 export function isoDaysFromNow(days: number): string {
   return new Date(Date.now() + days * 86_400_000).toISOString();
 }
+
+/** "agora", "5 min", "2h", "ontem", "12/09" — coluna "Quando" das listas compactas. */
+export function formatShortAgo(value: string | null | undefined, now = new Date()): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  const minutes = Math.floor((now.getTime() - d.getTime()) / 60_000);
+  if (minutes < 1) return "agora";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  if (hours < 24 && d.getDate() === now.getDate()) return `${hours}h`;
+  if (d >= yesterday) return "ontem";
+  return format(d, "dd/MM", { locale: ptBR });
+}
+
+/** 125 → "2:05" (cronômetros e contagens regressivas). */
+export function formatClock(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`;
+}

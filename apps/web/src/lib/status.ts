@@ -1,9 +1,9 @@
 import type { CertificateStatus, DocumentType, ExportTaskType, JobStatus, TaskStatus, TaskType } from "@/lib/types";
 
-export type Tone = "gray" | "blue" | "yellow" | "green" | "red" | "orange";
+export type Tone = "gray" | "blue" | "yellow" | "green" | "red" | "orange" | "purple";
 
 export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
-  queued: "Aguardando",
+  queued: "Na fila",
   starting: "Iniciando",
   opening_browser: "Abrindo navegador",
   opening_siat: "Abrindo SIAT",
@@ -27,11 +27,12 @@ export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
   certificate_required: "Certificado necessário",
 };
 
-// Cinza = aguardando; Azul = processando; Amarelo = aguardando SEFAZ;
+// Roxo = na fila; Cinza = cancelado; Azul = processando; Amarelo = aguardando SEFAZ;
 // Verde = concluído; Vermelho = erro; Laranja = intervenção manual.
 export function jobTone(status: JobStatus): Tone {
   switch (status) {
     case "queued":
+      return "purple";
     case "cancelled":
       return "gray";
     case "waiting_sefaz":

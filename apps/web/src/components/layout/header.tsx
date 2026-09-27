@@ -1,9 +1,13 @@
 "use client";
 
-import { LogOut, Menu, UserRound } from "lucide-react";
+import { ChevronRight, LogOut, Menu, UserRound } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 
+import { GlobalSearch } from "@/components/layout/global-search";
+import { navLocation, type NavCounts } from "@/components/layout/nav-items";
 import { NotificationsBell } from "@/components/layout/notifications-bell";
+import { RobotStatusPill } from "@/components/layout/robot-status-pill";
 import { Brand, SidebarNav } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,51 +22,71 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { ROLE_LABEL } from "@/lib/permissions";
 import type { Profile } from "@/lib/types";
 
-export function Header({ profile }: { profile: Profile }) {
+export function Header({ profile, counts }: { profile: Profile; counts: NavCounts }) {
   const [open, setOpen] = useState(false);
-  const initials = (profile.name || profile.email)
+  const pathname = usePathname();
+  const where = navLocation(pathname);
+  const displayName = profile.name || profile.email;
+  const initials = displayName
     .split(/\s+/)
     .map((p) => p[0])
-    .slice(0, 2)
+    .slice(0, 1)
     .join("")
     .toUpperCase();
 
   return (
-    <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b bg-background/85 px-4 backdrop-blur lg:px-8">
+    <header className="sticky top-0 z-20 flex h-14 items-center gap-4 border-b bg-white/90 px-4 backdrop-blur-[6px] lg:px-6">
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>
-          <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Abrir menu">
+          <Button variant="ghost" size="icon" className="-mr-2 lg:hidden" aria-label="Abrir menu">
             <Menu />
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-64 p-0">
-          <SheetHeader className="border-b py-4">
+        <SheetContent side="left" className="w-[260px] gap-0 p-0">
+          <SheetHeader className="border-b px-4 py-4">
             <SheetTitle asChild>
               <div>
                 <Brand />
               </div>
             </SheetTitle>
           </SheetHeader>
-          <div className="py-3">
-            <SidebarNav role={profile.role} isOwner={profile.is_platform_owner} onNavigate={() => setOpen(false)} />
+          <div className="overflow-y-auto py-2">
+            <SidebarNav
+              role={profile.role}
+              isOwner={profile.is_platform_owner}
+              counts={counts}
+              onNavigate={() => setOpen(false)}
+            />
           </div>
         </SheetContent>
       </Sheet>
 
-      <div className="flex-1" />
+      {where ? (
+        <div className="hidden shrink-0 items-center gap-2 text-[13px] whitespace-nowrap text-[#7a7b75] md:flex">
+          <span>{where.group}</span>
+          <ChevronRight className="size-3" />
+          <span className="font-medium text-foreground">{where.label}</span>
+        </div>
+      ) : null}
+
+      <div className="flex min-w-0 flex-1 justify-center">
+        <GlobalSearch />
+      </div>
+
+      <RobotStatusPill />
       <NotificationsBell userId={profile.user_id} />
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-9 gap-2 px-2">
-            <span className="flex size-7 items-center justify-center rounded-full bg-emerald-100 text-xs font-semibold text-emerald-800">
+          <button type="button" className="flex shrink-0 items-center gap-2 rounded-lg px-1 py-1 hover:bg-[#f2f3ef]">
+            <span className="flex size-[30px] items-center justify-center rounded-full bg-[#dff1e6] text-[12.5px] font-semibold text-primary">
               {initials || <UserRound className="size-4" />}
             </span>
             <span className="hidden text-left leading-tight sm:block">
-              <span className="block text-sm font-medium">{profile.name || profile.email}</span>
-              <span className="block text-[11px] text-muted-foreground">{ROLE_LABEL[profile.role]}</span>
+              <span className="block max-w-36 truncate text-[13px] font-medium">{displayName.split(/\s+/)[0]}</span>
+              <span className="block text-[11px] text-[#7a7b75]">{ROLE_LABEL[profile.role]}</span>
             </span>
-          </Button>
+          </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel className="font-normal">

@@ -49,38 +49,39 @@
 }
 
 :root {
-  --background: oklch(0.985 0.002 250);
-  --foreground: oklch(0.2 0.01 250);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.56 0.11 160);
-  --primary-foreground: oklch(0.99 0.01 160);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.72 0.09 160);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  /* identidade do redesenho (handoff 26/09/2026): verde, claro, limpo */
+  --background: #f7f7f5;
+  --foreground: #1c1d1b;
+  --card: #ffffff;
+  --card-foreground: #1c1d1b;
+  --popover: #ffffff;
+  --popover-foreground: #1c1d1b;
+  --primary: #1f7a4d;
+  --primary-foreground: #ffffff;
+  --secondary: #f3f3f0;
+  --secondary-foreground: #1c1d1b;
+  --muted: #f3f3f0;
+  --muted-foreground: #6b6c66;
+  --accent: #f2f3ef;
+  --accent-foreground: #1c1d1b;
+  --destructive: #c53030;
+  --border: #e8e8e4;
+  --input: #e3e3df;
+  --ring: #9fd3b5;
+  --chart-1: #2ea062;
+  --chart-2: #8b5cf6;
+  --chart-3: #e0a019;
+  --chart-4: #3b82e0;
+  --chart-5: #a3a39e;
   --radius: 0.625rem;
-  --sidebar: oklch(1 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.56 0.11 160);
-  --sidebar-primary-foreground: oklch(0.99 0.01 160);
-  --sidebar-accent: oklch(0.96 0.03 160);
-  --sidebar-accent-foreground: oklch(0.38 0.08 160);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: #ffffff;
+  --sidebar-foreground: #3d3e3a;
+  --sidebar-primary: #1f7a4d;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e6f4ec;
+  --sidebar-accent-foreground: #17603b;
+  --sidebar-border: #e8e8e4;
+  --sidebar-ring: #9fd3b5;
 }
 
 .dark {
@@ -139,8 +140,26 @@
 }
 
 :root {
-  --info: oklch(0.55 0.15 250);
-  --info-foreground: oklch(0.99 0 0);
-  --success: oklch(0.56 0.11 160);
-  --warning: oklch(0.75 0.14 75);
+  --info: #1d5fb8;
+  --info-foreground: #ffffff;
+  --success: #2ea062;
+  --warning: #e0a019;
 }
+
+/* ponto "ao vivo" (robô ativo, card Agora) */
+@keyframes live-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(46, 160, 98, 0.5); }
+  70% { box-shadow: 0 0 0 6px rgba(46, 160, 98, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(46, 160, 98, 0); }
+}
+.live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background: #2ea062;
+  animation: live-pulse 1.6s infinite;
+}
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

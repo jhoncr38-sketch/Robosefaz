@@ -50,8 +50,10 @@ describe("Permissões", () => {
   it("respeita os papéis", () => {
     assert.equal(can("admin", "automation:retry"), true);
     assert.equal(can("operator", "automation:run"), true);
-    assert.equal(can("operator", "automation:retry"), false);
-    assert.equal(can("operator", "clients:write"), false);
+    // operador cadastra/edita empresas e reprocessa (decisão de 26/09/2026); excluir e usuários, não
+    assert.equal(can("operator", "automation:retry"), true);
+    assert.equal(can("operator", "clients:write"), true);
+    assert.equal(can("operator", "users:manage"), false);
     assert.equal(can("viewer", "automation:run"), false);
     assert.equal(can(null, "automation:run"), false);
   });

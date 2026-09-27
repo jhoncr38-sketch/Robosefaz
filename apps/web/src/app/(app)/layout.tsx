@@ -1,15 +1,33 @@
 import { Header } from "@/components/layout/header";
+import type { NavCounts } from "@/components/layout/nav-items";
 import { Sidebar } from "@/components/layout/sidebar";
 import { requireSession } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import type { DashboardStats } from "@/lib/types";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { profile } = await requireSession();
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("dashboard_stats");
+  const stats = (data ?? {}) as Partial<DashboardStats>;
+  const n = (v?: number) => v ?? 0;
+  const counts: NavCounts = {
+    queue: n(stats.jobs_queued) + n(stats.jobs_processing) + n(stats.jobs_waiting_sefaz) + n(stats.jobs_manual),
+    downloads: n(stats.downloads_available),
+    clients: n(stats.clients_active),
+  };
+
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar role={profile.role} isOwner={profile.is_platform_owner} orgName={profile.organizations?.name ?? null} />
-      <div className="lg:pl-60">
-        <Header profile={profile} />
-        <main className="mx-auto w-full max-w-[1400px] px-4 py-6 lg:px-8">{children}</main>
+      <Sidebar
+        role={profile.role}
+        isOwner={profile.is_platform_owner}
+        orgName={profile.organizations?.name ?? null}
+        counts={counts}
+      />
+      <div className="flex min-w-0 flex-col lg:pl-[232px]">
+        <Header profile={profile} counts={counts} />
+        <main className="w-full max-w-[1360px] p-4 lg:p-6">{children}</main>
       </div>
     </div>
   );

@@ -10,8 +10,9 @@ import { certificateStatusFromDate } from "@/lib/status";
 
 export const metadata: Metadata = { title: "Clientes" };
 
-export default async function ClientsPage() {
+export default async function ClientsPage({ searchParams }: PageProps<"/clients">) {
   const { profile } = await requireSession();
+  const { q } = await searchParams;
   const [clients, lastJobs] = await Promise.all([loadClientsWithCertificates(), loadLastJobByClient()]);
 
   const rows: ClientRow[] = clients.map((c) => {
@@ -37,7 +38,8 @@ export default async function ClientsPage() {
         description={`${rows.length} empresa(s) cadastrada(s).`}
         actions={can(profile.role, "clients:write") ? <ClientFormDialog /> : null}
       />
-      <ClientsTable rows={rows} />
+      {/* a busca do cabeçalho (Ctrl+K) chega aqui como ?q= */}
+      <ClientsTable key={typeof q === "string" ? q : ""} rows={rows} initialQuery={typeof q === "string" ? q : ""} />
     </>
   );
 }
