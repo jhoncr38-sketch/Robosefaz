@@ -537,7 +537,8 @@ export function AutomationScheduler({
               <div className="flex flex-col gap-0.5">
                 <span className="text-[12.5px] font-medium">Forçar reagendamento</span>
                 <span className="text-[11.5px] text-(--c-7a7b75)">
-                  Libera clientes já solicitados. Pode gerar pedido duplicado no SIAT.
+                  Libera clientes já solicitados: o robô exclui no SIAT o agendamento anterior desta competência e faz
+                  um novo.
                 </span>
               </div>
             </div>
@@ -562,8 +563,9 @@ export function AutomationScheduler({
           <AlertDialogHeader>
             <AlertDialogTitle>Forçar reagendamento em {formatCompetence(competence)}?</AlertDialogTitle>
             <AlertDialogDescription>
-              {chosen.length} cliente(s) serão agendados de novo, mesmo os que já têm pedido nesta competência. Isso pode
-              gerar pedido duplicado no SIAT.
+              {chosen.length} cliente(s) serão agendados de novo, mesmo os que já têm pedido nesta competência. Quando o
+              SIAT disser que o agendamento já existe, o robô exclui esse agendamento no SIAT e pede um novo. Os arquivos
+              já baixados continuam nas pastas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

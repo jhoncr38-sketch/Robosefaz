@@ -125,6 +125,10 @@ class SiatSelectors:
     legacy_table_status_header: str = r"situa[çc][ãa]o"
     legacy_table_ie_header: str = r"^\s*ie\b"
     legacy_download_button: str = r"^\s*download\s*$"
+    # "Forçar reagendamento": exclui o agendamento que o SIAT disse já existir e pede de novo
+    legacy_delete_button: str = r"^\s*excluir\s*$"
+    legacy_delete_confirm_title: str = r"confirmar\s+exclus[ãa]o"
+    legacy_delete_confirm_yes: str = r"^\s*sim\s*$"
     legacy_paginator_next: str = ".ui-paginator-next"
     legacy_paginator_first: str = ".ui-paginator-first"
 

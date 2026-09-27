@@ -55,6 +55,9 @@ class MockState:
     show_notice: bool = True
     scheduled: list[dict] = field(default_factory=list)
     downloads_served: int = 0
+    # como o SIAT real: recusa pedido com os mesmos parâmetros ("Já existe um agendamento ... busque o ID")
+    reject_duplicates: bool = False
+    deleted: list[str] = field(default_factory=list)
 
 
 LOGIN_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>SIAT WEB</title></head>
@@ -190,6 +193,11 @@ LEGACY_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><
 <div>Usuário: <span id="user">__USER__</span> <a href="#">Pagina Inicial</a> <a href="#">Sair</a></div>
 <div class="ui-messages" id="msg" style="display:none"></div>
 <div id="overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:10"></div>
+<div id="confirm-del" class="ui-dialog" role="dialog" style="display:none;position:fixed;top:30%;left:30%;background:#fff;z-index:20;padding:12px">
+  <div>Confirmar exclusão agendamento</div>
+  <p>Deseja realmente remover este agendamento?</p>
+  <button id="del-yes">Sim</button><button id="del-no">Não</button>
+</div>
 <div id="notice" class="ui-dialog" role="dialog" style="display:none;position:fixed;top:30%;left:30%;z-index:11;background:#fff;padding:20px">
   <span class="ui-dialog-title">Comunicado Importante</span>
   <p>Observação: Os arquivos de download estarão disponíveis durante 60 dias a partir da sua data de processamento.</p>
@@ -276,7 +284,17 @@ function render() {
         ? '<td>' + r.id + '</td><td>' + status + '</td><td>' + r.created + '</td><td>' + r.created + '</td><td></td><td>' + ie + '</td>'
         : '<td>' + r.id + '</td><td>' + status + '</td><td>' + r.created + '</td><td></td><td>' + ie + '</td><td>' + r.created + '</td>';
       tr.innerHTML +=
-        '<td><button>Info</button><button class="dl">Download</button><button>Excluir</button></td>';
+        '<td><button>Info</button><button class="dl">Download</button><button class="del">Excluir</button></td>';
+      tr.querySelector('.del').onclick = () => {
+        $('confirm-del').style.display = 'block';
+        $('del-no').onclick = () => { $('confirm-del').style.display = 'none'; };
+        $('del-yes').onclick = async () => {
+          await fetch('/siatweb/api/excluir/' + r.id, { method: 'POST' });
+          localStorage.setItem('reqs', JSON.stringify(reqs().filter(x => x.id !== r.id)));
+          $('confirm-del').style.display = 'none';
+          render();
+        };
+      };
       tr.querySelector('.dl').onclick = async () => {
         const res = await fetch('/siatweb/api/download/' + r.id);
         const blob = await res.blob();
@@ -302,6 +320,11 @@ async function agendar(fam) {
   const missing = !p.tipo || !p.ie || !p.ini || !p.fim || (fam === 'nfce' && (!p.nota || !p.status));
   $('msg').style.display = 'block';
   if (missing) { $('msg').textContent = 'Erro: preencha os campos obrigatórios.'; return; }
+  const same = __REJECT_DUP__ && reqs().find(r => r.family === fam && r.tipo === p.tipo && r.ie === p.ie && r.ini === p.ini && r.fim === p.fim && r.nota === p.nota && r.status === p.status);
+  if (same) {
+    $('msg').textContent = 'Já existe um agendamento com os parâmetros passados. Tente com novos ou busque o ID: ' + same.id;
+    return;
+  }
   const res = await fetch('/siatweb/api/agendar', { method: 'POST', body: JSON.stringify({ family: fam, ...p }) });
   const r = await res.json();
   const all = reqs(); all.push(r); localStorage.setItem('reqs', JSON.stringify(all));
@@ -355,6 +378,9 @@ def build_handler(state: MockState):
                 content_type="application/json",
                 body=json.dumps({**params, "id": request_id, "created": "24/09/2026 23:30:00"}),
             )
+        elif path.startswith("/siatweb/api/excluir/"):
+            state.deleted.append(path.rsplit("/", 1)[-1])
+            await route.fulfill(status=200, content_type="application/json", body="{}")
         elif path.startswith("/siatweb/api/download/"):
             req_id = path.rsplit("/", 1)[-1]
             state.downloads_served += 1
@@ -366,7 +392,8 @@ def build_handler(state: MockState):
                 .replace("__OPTIONS__", _options(state))
                 .replace("__STATUS__", json.dumps(state.export_status))
                 .replace("__IE_OVERRIDE__", json.dumps(state.rows_ie_override))
-                .replace("__NOTICE__", json.dumps(state.show_notice)),
+                .replace("__NOTICE__", json.dumps(state.show_notice))
+                .replace("__REJECT_DUP__", json.dumps(state.reject_duplicates)),
             )
         else:
             await route.fulfill(status=404, body="not found")

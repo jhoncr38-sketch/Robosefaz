@@ -20,7 +20,7 @@ from typing import Awaitable, Callable, Literal
 from playwright.async_api import Error as PlaywrightError, Page
 
 from app.automation.base import AutomationContext
-from app.automation.siat.page_helpers import fill_field, find_clickable, first_visible, wait_idle
+from app.automation.siat.page_helpers import dialog_by_title, fill_field, find_clickable, first_visible, wait_idle
 from app.automation.siat.selectors import SiatSelectors, get_selectors
 from app.automation.siat.siat_legacy import NFCE, SiatLegacy, family_of, ie_matches, new_request_ids
 from app.jobs.errors import AutomationError, ErrorCode, TaxpayerMismatchError
@@ -137,8 +137,62 @@ class SiatExportScheduler:
             f"Agendamento já existia no SIAT: reaproveitando o ID {request_id} ({row.situacao}).", step="scheduling"
         )
 
+    async def _delete_existing(self, request_id: str, client_ie: str) -> bool:
+        """Forçar reagendamento: exclui no SIAT o agendamento que ele disse já existir.
+
+        Só o ID informado pelo próprio SIAT, só se a linha for da IE do cliente.
+        Devolve False (sem excluir nada) quando a linha não é encontrada.
+        """
+        found = await self.legacy.find_row(request_id)
+        if found is None:
+            await self.ctx.logger.warning(
+                f"Forçar reagendamento: agendamento {request_id} não localizado na lista; nada foi excluído.",
+                step="scheduling",
+            )
+            return False
+        row, row_locator = found
+        # PROTEÇÃO CONTRA CLIENTE ERRADO: nunca excluir agendamento de outra inscrição
+        if not row.ie or not ie_matches(row.ie, client_ie):
+            raise TaxpayerMismatchError(f"IE {client_ie}", f"IE {row.ie or 'não informada'}", security=True)
+        rx = self.sel.rx("legacy_delete_button")
+        button = await first_visible(
+            [row_locator.get_by_role("button", name=rx), row_locator.get_by_role("link", name=rx), row_locator.get_by_text(rx)],
+            5_000,
+        )
+        if button is None:
+            raise AutomationError(ErrorCode.SELECTOR_NOT_FOUND, "Botão 'Excluir' não encontrado na linha do agendamento.")
+        await button.click()
+        dialog = await dialog_by_title(self.page, self.sel.rx("legacy_delete_confirm_title"), timeout_ms=10_000)
+        if dialog is None:
+            raise AutomationError(ErrorCode.SELECTOR_NOT_FOUND, "Confirmação de exclusão do agendamento não apareceu.")
+        yes = await first_visible(
+            [dialog.get_by_role("button", name=self.sel.rx("legacy_delete_confirm_yes")), dialog.get_by_text(self.sel.rx("legacy_delete_confirm_yes"))],
+            5_000,
+        )
+        if yes is None:
+            raise AutomationError(ErrorCode.SELECTOR_NOT_FOUND, "Botão 'Sim' da exclusão não encontrado.")
+        await yes.click()
+        await wait_idle(self.page, 20_000)
+        if await self.legacy.find_row(request_id) is not None:
+            raise AutomationError(
+                ErrorCode.SCHEDULE_FAILED,
+                f"O agendamento {request_id} continua na lista depois da exclusão.",
+                retryable=False,
+            )
+        await self.ctx.logger.info(
+            f"Forçar reagendamento: agendamento {request_id} ({row.situacao}) excluído no SIAT; pedindo um novo.",
+            step="scheduling",
+        )
+        await self.ctx.reporter.screenshot(f"deleted_{request_id}")
+        return True
+
     async def schedule(
-        self, document_type: DocumentType, start_date: date, end_date: date, competence: str
+        self,
+        document_type: DocumentType,
+        start_date: date,
+        end_date: date,
+        competence: str,
+        replaced: str | None = None,
     ) -> ExportRequestResult:
         family = family_of(document_type)
         await self.legacy.go_to(family)
@@ -197,6 +251,15 @@ class SiatExportScheduler:
         new_ids = new_request_ids(before, after_rows, client_ie)
         request_id = new_ids[0] if len(new_ids) == 1 else extract_protocol(message, self.sel)
         if kind == "duplicate" and request_id is not None:
+            # Forçar reagendamento: exclui o existente e pede de novo (uma única vez por tarefa)
+            if self.ctx.job.force_reschedule and replaced is None:
+                if await self._delete_existing(request_id, client_ie):
+                    return await self.schedule(document_type, start_date, end_date, competence, replaced=request_id)
+            elif replaced is not None:
+                await self.ctx.logger.warning(
+                    f"O SIAT recusou o novo pedido mesmo após excluir o {replaced}; aproveitando o ID {request_id}.",
+                    step="scheduling",
+                )
             await self._check_existing(request_id, client_ie)
         if request_id is None:
             if kind != "success":
@@ -214,5 +277,7 @@ class SiatExportScheduler:
             external_request_id=request_id,
             requested_at=datetime.now(timezone.utc),
             dry_run=False,
-            raw_message=("JA_EXISTENTE_NO_PORTAL: " if kind == "duplicate" else "") + (message or ""),
+            raw_message=("JA_EXISTENTE_NO_PORTAL: " if kind == "duplicate" else "")
+            + (f"SUBSTITUIU {replaced}: " if replaced else "")
+            + (message or ""),
         )

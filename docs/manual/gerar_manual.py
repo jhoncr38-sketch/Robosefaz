@@ -562,10 +562,12 @@ def cap_automacao() -> list:
                 "Se o SIAT responder <i>“Já existe um agendamento com os parâmetros passados”</i>, o robô "
                 "aproveita o número (ID) do agendamento que já existe, em vez de dar erro.",
                 "<b>Forçar reagendamento</b> (administrador e operador), no rodapé do resumo, libera os clientes "
-                "com cadeado e pede de novo. Antes de processar, o painel pede confirmação, porque isso pode "
-                "gerar pedido duplicado no SIAT.",
+                "com cadeado e pede de novo, com confirmação. Se o SIAT responder que o agendamento já existe, o "
+                "robô <b>exclui esse agendamento no SIAT</b> (só o ID informado pelo SIAT e só se for da inscrição "
+                "do cliente) e faz um novo. Os arquivos já baixados continuam nas pastas.",
                 "Se agendar o <b>mês atual</b> antes de ele acabar, o SIAT só entrega as notas emitidas até "
-                "aquele momento. Depois que o mês fechar, agende de novo com Forçar reagendamento.",
+                "aquele momento. Depois que o mês fechar, agende de novo com Forçar reagendamento para o arquivo "
+                "vir completo.",
             ]
         ),
     ]

@@ -279,3 +279,38 @@ async def test_notice_is_dismissed_and_logged(repo: FakeRepo, integration_settin
         result = await provider.schedule(ctx, (await repo.list_tasks(job.id))[0])
         assert result.external_request_id == "9237950"
     assert any("Aviso do SIAT web fechado" in m and "60 dias" in m for m in repo.log_messages())
+
+
+async def test_existing_request_is_reused_without_force(repo: FakeRepo, integration_settings: Settings) -> None:
+    """SIAT recusa o pedido repetido: sem "Forçar", o robô aproveita o ID existente e não exclui nada."""
+    state = MockState(reject_duplicates=True)
+    ctx, job = await _context(repo, integration_settings)
+    provider = SiatAutomationProvider()
+    async with provider.open_session(ctx):
+        await _open(provider, ctx, state)
+        nfce = [t for t in await repo.list_tasks(job.id) if t.task_type == TaskType.NFCE_EXPORT][0]
+        first = await provider.schedule(ctx, nfce)
+        again = await provider.schedule(ctx, nfce)
+    assert first.external_request_id == "9237950"
+    assert again.external_request_id == "9237950"
+    assert (again.raw_message or "").startswith("JA_EXISTENTE_NO_PORTAL")
+    assert state.deleted == []
+    assert len(state.scheduled) == 1
+
+
+async def test_force_deletes_existing_request_and_schedules_again(repo: FakeRepo, integration_settings: Settings) -> None:
+    """Com "Forçar reagendamento": exclui no SIAT o ID que ele apontou (confirmando "Sim") e pede de novo."""
+    state = MockState(reject_duplicates=True)
+    ctx, job = await _context(repo, integration_settings)
+    provider = SiatAutomationProvider()
+    async with provider.open_session(ctx):
+        await _open(provider, ctx, state)
+        nfce = [t for t in await repo.list_tasks(job.id) if t.task_type == TaskType.NFCE_EXPORT][0]
+        first = await provider.schedule(ctx, nfce)
+        ctx.job.force_reschedule = True
+        forced = await provider.schedule(ctx, nfce)
+    assert first.external_request_id == "9237950"
+    assert state.deleted == ["9237950"]
+    assert forced.external_request_id == "9237951"
+    assert "SUBSTITUIU 9237950" in (forced.raw_message or "")
+    assert len(state.scheduled) == 2
