@@ -21,8 +21,8 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputDir}
 OutputBaseFilename=Instalar-SIAT-Robo-{#AppVersion}
-SetupIconFile={#StageDir}\instalador\jr-sistema.ico
-UninstallDisplayIcon={app}\instalador\jr-sistema.ico
+SetupIconFile={#StageDir}\instalador\jr-sistema-logo.ico
+UninstallDisplayIcon={app}\instalador\jr-sistema-logo.ico
 WizardImageFile={#StageDir}\instalador\wizard-grande.bmp
 WizardSmallImageFile={#StageDir}\instalador\wizard-pequena.bmp
 UninstallDisplayName={#AppName}
@@ -60,15 +60,15 @@ Type: files; Name: "{commondesktop}\Painel SIAT.lnk"
 Name: "{app}\storage\downloads"; Flags: uninsneveruninstall
 
 [Icons]
-Name: "{group}\Robô (ícone ao lado do relógio)"; Filename: "{app}\worker\.venv\Scripts\pythonw.exe"; Parameters: "-m app.tray"; WorkingDir: "{app}\worker"; IconFilename: "{app}\instalador\jr-sistema.ico"
-Name: "{group}\Painel JR Sistema"; Filename: "{#PanelUrl}"; IconFilename: "{app}\instalador\jr-sistema.ico"
+Name: "{group}\Robô (ícone ao lado do relógio)"; Filename: "{app}\worker\.venv\Scripts\pythonw.exe"; Parameters: "-m app.tray"; WorkingDir: "{app}\worker"; IconFilename: "{app}\instalador\jr-sistema-logo.ico"
+Name: "{group}\Painel JR Sistema"; Filename: "{#PanelUrl}"; IconFilename: "{app}\instalador\jr-sistema-logo.ico"
 Name: "{group}\Pasta das notas"; Filename: "{app}\storage\downloads"
-Name: "{group}\Ligar robô"; Filename: "{app}\iniciar-robo.bat"; IconFilename: "{app}\instalador\jr-sistema.ico"
-Name: "{group}\Parar robô"; Filename: "{app}\parar-robo.bat"; IconFilename: "{app}\instalador\jr-sistema.ico"
-Name: "{group}\Status e verificação"; Filename: "{app}\status-robo.bat"; IconFilename: "{app}\instalador\jr-sistema.ico"
-Name: "{group}\Ativar este computador"; Filename: "{app}\ativar-robo.bat"; IconFilename: "{app}\instalador\jr-sistema.ico"
+Name: "{group}\Ligar robô"; Filename: "{app}\iniciar-robo.bat"; IconFilename: "{app}\instalador\jr-sistema-logo.ico"
+Name: "{group}\Parar robô"; Filename: "{app}\parar-robo.bat"; IconFilename: "{app}\instalador\jr-sistema-logo.ico"
+Name: "{group}\Status e verificação"; Filename: "{app}\status-robo.bat"; IconFilename: "{app}\instalador\jr-sistema-logo.ico"
+Name: "{group}\Ativar este computador"; Filename: "{app}\ativar-robo.bat"; IconFilename: "{app}\instalador\jr-sistema-logo.ico"
 Name: "{group}\Desinstalar o robô"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\Painel JR Sistema"; Filename: "{#PanelUrl}"; IconFilename: "{app}\instalador\jr-sistema.ico"; Tasks: atalhopainel
+Name: "{autodesktop}\Painel JR Sistema"; Filename: "{#PanelUrl}"; IconFilename: "{app}\instalador\jr-sistema-logo.ico"; Tasks: atalhopainel
 
 [Run]
 Filename: "{#PanelUrl}"; Description: "Abrir o painel"; Flags: postinstall shellexec skipifsilent nowait

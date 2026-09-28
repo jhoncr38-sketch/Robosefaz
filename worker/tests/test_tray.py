@@ -45,3 +45,18 @@ def test_icon_images(tmp_path: Path) -> None:
         assert draw(state, 32).size == (32, 32)
     ico = save_ico(tmp_path / "robo.ico")
     assert ico.read_bytes()[:4] == b"\x00\x00\x01\x00"  # cabeçalho de arquivo .ico
+
+
+def test_brand_icon_uses_logo_from_32px(tmp_path: Path) -> None:
+    from PIL import Image
+
+    logo = Path(__file__).resolve().parents[2] / "branding" / "logo-mark.png"
+    ico = save_ico(tmp_path / "jr.ico", logo=logo)
+    with Image.open(ico) as im:
+        assert {(16, 16), (24, 24), (32, 32), (48, 48), (256, 256)} <= set(im.info["sizes"])
+        im.size = (256, 256)
+        big = im.convert("RGBA")
+    # 256 px é a logo da marca: o "J" verde ocupa o canto inferior esquerdo (a cabeça do robô não)
+    r, g, b, a = big.getpixel((30, 200))
+    assert a > 0 and g > r
+    assert draw("brand", 256).getpixel((30, 200))[3] == 0

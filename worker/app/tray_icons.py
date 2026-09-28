@@ -65,10 +65,33 @@ def draw(state: str = "idle", size: int = 64) -> Image.Image:
     return img.resize((size, size), Image.LANCZOS)
 
 
-def save_ico(path: Path, state: str = "brand") -> Path:
+ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
+# abaixo disto a logo completa (JR + robô) vira borrão: usa a cabeça do robô desenhada
+LOGO_MIN_SIZE = 32
+
+
+def _square(img: Image.Image) -> Image.Image:
+    img = img.crop(img.getbbox())
+    side = max(img.size)
+    sq = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    sq.paste(img, ((side - img.width) // 2, (side - img.height) // 2), img)
+    return sq
+
+
+def save_ico(path: Path, state: str = "brand", logo: Path | None = None) -> Path:
+    """Ícone .ico com vários tamanhos.
+
+    Com `logo` (branding/logo-mark.png), os tamanhos a partir de 32 px usam a logo da marca
+    (atalhos da Área de Trabalho e do menu Iniciar); 16 e 24 px ficam com a cabeça do robô.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    big = draw(state, 256)
-    big.save(path, format="ICO", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+    mark = _square(Image.open(logo).convert("RGBA")) if logo is not None else None
+    images = [
+        mark.resize((s, s), Image.LANCZOS) if mark is not None and s >= LOGO_MIN_SIZE else draw(state, s)
+        for s in ICO_SIZES
+    ]
+    # o maior é o principal; os demais entram prontos (sem o Pillow redimensionar o maior)
+    images[-1].save(path, format="ICO", sizes=[(s, s) for s in ICO_SIZES], append_images=images[:-1])
     return path
 
 

@@ -4,7 +4,7 @@ r"""Gera o instalador Instalar-SIAT-Robo-<versão>.exe (Inno Setup).
 
 1. separa em dist\stage os mesmos arquivos do pacote ZIP (sem .env, notas,
    perfis do Chrome, cofre, logs);
-2. desenha o ícone do robô (instalador\jr-sistema.ico);
+2. desenha o ícone do robô (instalador\jr-sistema-logo.ico, com a logo da marca);
 3. embute o instalador oficial do Python 3.12 (baixado de python.org uma vez,
    com a assinatura da Python Software Foundation conferida);
 4. compila instalador\siat-robo.iss com o Inno Setup 6 (ISCC.exe).
@@ -68,7 +68,7 @@ def _stage() -> Path:
     for rel in EMPTY_DIRS:
         (stage / rel).mkdir(parents=True, exist_ok=True)
     # nome novo a cada troca de desenho: o Windows guarda o ícone pelo caminho do arquivo
-    save_ico(stage / "instalador" / "jr-sistema.ico")
+    save_ico(stage / "instalador" / "jr-sistema-logo.ico", logo=PROJECT_ROOT / "branding" / "logo-mark.png")
     _wizard_images(stage / "instalador")
     return stage
 
