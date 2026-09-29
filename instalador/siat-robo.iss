@@ -199,17 +199,21 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  Log: String;
+  LogFile: String;
 begin
   if CurStep = ssPostInstall then
   begin
     RunSetupScript();
-    Log := ExpandConstant('{app}\storage\logs\instalacao.log');
-    if InstallResult = 2 then
-      MsgBox('O robô foi instalado, mas a verificação encontrou problemas (por exemplo, certificado de algum cliente não instalado neste Windows).' + #13#10#13#10 +
-        'Veja o relatório no final da instalação ou no menu Iniciar > JR Sistema > Status e verificação.', mbInformation, MB_OK)
+    LogFile := ExpandConstant('{app}\storage\logs\instalacao.log');
+    { atualização automática: nunca espera clique (o robô fica parado até alguém dar OK);
+      o resultado fica no relatório (instalacao.log) }
+    if FromUpdater() then
+      Log(Format('Verificação da atualização automática: código %d (detalhes em instalacao.log)', [InstallResult]))
+    else if InstallResult = 2 then
+      SuppressibleMsgBox('O robô foi instalado, mas a verificação encontrou problemas (por exemplo, certificado de algum cliente não instalado neste Windows).' + #13#10#13#10 +
+        'Veja o relatório no final da instalação ou no menu Iniciar > JR Sistema > Status e verificação.', mbInformation, MB_OK, IDOK)
     else if InstallResult <> 0 then
-      MsgBox('Não foi possível concluir a preparação do robô (código ' + IntToStr(InstallResult) + ').' + #13#10#13#10 +
-        'Detalhes em: ' + Log + #13#10 + 'Corrija o problema e execute o instalador novamente.', mbError, MB_OK);
+      SuppressibleMsgBox('Não foi possível concluir a preparação do robô (código ' + IntToStr(InstallResult) + ').' + #13#10#13#10 +
+        'Detalhes em: ' + LogFile + #13#10 + 'Corrija o problema e execute o instalador novamente.', mbError, MB_OK, IDOK);
   end;
 end;
