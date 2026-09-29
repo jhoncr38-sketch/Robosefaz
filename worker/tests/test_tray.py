@@ -60,3 +60,35 @@ def test_brand_icon_uses_logo_from_32px(tmp_path: Path) -> None:
     r, g, b, a = big.getpixel((30, 200))
     assert a > 0 and g > r
     assert draw("brand", 256).getpixel((30, 200))[3] == 0
+
+
+def test_menu_order_and_help_submenu(settings) -> None:  # noqa: ANN001
+    """Menu do ícone: uso diário, controle, configuração/ajuda e Sair (nesta ordem)."""
+    from app import __version__
+    from app.tray import RobotTray
+
+    tray = RobotTray(settings)
+    items = list(tray.icon.menu.items)
+    texts = [i.text for i in items]  # o pystray já resolve os textos dinâmicos
+    assert texts == [
+        "Robô parado",  # estado do robô (sem worker rodando no teste)
+        f"Versão {__version__}",
+        "Precisam de atenção (0)",  # escondido enquanto não há pendências
+        "- - - -",
+        "Abrir painel",
+        "Abrir pasta das notas",
+        "- - - -",
+        "Ligar robô",
+        "Parar robô",
+        "Atualizar agora (versão None)",  # escondido enquanto não há versão nova
+        "- - - -",
+        "Status e verificação",
+        "Salvar notas no Google Drive",
+        "⚠ Ativar este computador…",
+        "Ajuda e suporte",
+        "- - - -",
+        "Sair",
+    ]
+    help_menu = [i.text for i in items[-3].submenu.items]
+    assert help_menu == ["Manual do JR Sistema", "Falar com o suporte (WhatsApp)", "Mensagens do robô (log)"]
+    assert items[4].default  # duplo clique no ícone = Abrir painel

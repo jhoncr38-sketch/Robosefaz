@@ -123,6 +123,10 @@ class Settings(BaseSettings):
     update_idle_minutes: int = 10
     # endereço do painel aberto pelo ícone da bandeja
     panel_url: str = "https://jrsistema.com"
+    # "Ajuda e suporte" no ícone do robô: WhatsApp do suporte (DDI+DDD, só dígitos; vazio = sem item)
+    # e o manual da última versão publicada (usado se o PDF instalado em docs/manual faltar)
+    support_whatsapp: str = "5586994502488"
+    manual_url: str = "https://github.com/jhoncr38-sketch/siat-robo-releases/releases/latest/download/Manual-SIAT-Robo.pdf"
 
     @field_validator("browser_channel")
     @classmethod

@@ -18,6 +18,8 @@ import ctypes
 import json
 import logging
 import os
+import re
+import socket
 import subprocess
 import sys
 import threading
@@ -25,6 +27,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 import pystray
 
@@ -192,27 +195,37 @@ class RobotTray:
                     visible=lambda _i: bool(self.state.attention),
                 ),
                 pystray.Menu.SEPARATOR,
-                pystray.MenuItem(
-                    "⚠ Ativar este computador…",
-                    self.activate,
-                    visible=lambda _i: self.settings.auth_mode != "device",
-                ),
+                # todo dia
                 pystray.MenuItem("Abrir painel", self.open_panel, default=True),
                 pystray.MenuItem("Abrir pasta das notas", self.open_downloads),
-                pystray.MenuItem("Salvar notas no Google Drive", self.setup_google_drive),
                 pystray.Menu.SEPARATOR,
+                # controle do robô
                 pystray.MenuItem("Ligar robô", self.start_robot, enabled=lambda _i: self.state.robot == "stopped"),
                 pystray.MenuItem("Parar robô", self.stop_robot, enabled=lambda _i: self.state.robot != "stopped"),
-                pystray.MenuItem("Ver mensagens do robô (log)", self.open_log),
-                pystray.MenuItem("Status e verificação", self.check_setup),
                 pystray.MenuItem(
                     lambda _i: f"Atualizar agora (versão {self.state.update_to})",
                     self.update_now,
                     visible=lambda _i: bool(self.state.update_to),
                 ),
                 pystray.Menu.SEPARATOR,
-                pystray.MenuItem("Parar robô e fechar o ícone", self.stop_and_quit),
-                pystray.MenuItem("Fechar só o ícone (o robô continua)", self.quit),
+                # configuração (uma vez) e ajuda
+                pystray.MenuItem("Status e verificação", self.check_setup),
+                pystray.MenuItem("Salvar notas no Google Drive", self.setup_google_drive),
+                pystray.MenuItem(
+                    "⚠ Ativar este computador…",
+                    self.activate,
+                    visible=lambda _i: self.settings.auth_mode != "device",
+                ),
+                pystray.MenuItem(
+                    "Ajuda e suporte",
+                    pystray.Menu(
+                        pystray.MenuItem("Manual do JR Sistema", self.open_manual),
+                        pystray.MenuItem("Falar com o suporte (WhatsApp)", self.open_support),
+                        pystray.MenuItem("Mensagens do robô (log)", self.open_log),
+                    ),
+                ),
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem("Sair", self.stop_and_quit),
             ),
         )
 
@@ -245,6 +258,20 @@ class RobotTray:
             os.startfile(path)  # noqa: S606
         else:
             self.icon.notify("Ainda não há mensagens do robô.", "JR Sistema Robô")
+
+    def open_manual(self, *_a) -> None:
+        """O manual instalado junto com o robô (docs/manual); sem ele, o da última versão publicada."""
+        local = PROJECT_ROOT / "docs" / "manual" / "Manual-SIAT-Robo.pdf"
+        os.startfile(local if local.is_file() else self.settings.manual_url)  # noqa: S606
+
+    def open_support(self, *_a) -> None:
+        """Conversa no WhatsApp com o suporte do JR Sistema (número em SUPPORT_WHATSAPP)."""
+        digits = re.sub(r"\D", "", self.settings.support_whatsapp)
+        if not digits:
+            self.icon.notify("Nenhum contato de suporte configurado.", "JR Sistema Robô")
+            return
+        text = quote(f"Olá! Preciso de ajuda com o JR Sistema Robô (computador {socket.gethostname()}).")
+        os.startfile(f"https://wa.me/{digits}?text={text}")  # noqa: S606
 
     def start_robot(self, *_a) -> None:
         self.settings.stop_flag.unlink(missing_ok=True)
