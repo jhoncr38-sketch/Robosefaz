@@ -23,6 +23,7 @@ INCLUDE_FILES = [
     ".env.example",
     "instalar-robo.bat",
     "ativar-robo.bat",
+    "salvar-notas-no-drive.bat",
     "iniciar-robo.bat",
     "parar-robo.bat",
     "status-robo.bat",

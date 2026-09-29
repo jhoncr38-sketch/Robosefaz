@@ -188,3 +188,5 @@ class DownloadedFile(_Base):
     filepath: str
     size: int
     checksum: str
+    # plano B: a pasta das notas estava fora do ar e a nota ficou na pasta local
+    saved_locally: bool = False

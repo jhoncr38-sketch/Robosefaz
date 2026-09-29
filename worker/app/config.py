@@ -46,6 +46,9 @@ class Settings(BaseSettings):
 
     # Storage
     download_base_path: str = "./storage/downloads"
+    # plano B: se a pasta das notas (ex.: Google Drive) estiver fora do ar, a nota é salva
+    # aqui e enviada para lá quando ela voltar (lista em storage/notas-para-enviar.json)
+    local_download_path: str = "./storage/downloads"
     browser_profile_base_path: str = "./storage/browser_profiles"
     error_screenshot_path: str = "./storage/errors"
     step_screenshot_path: str = "./storage/screenshots"
@@ -179,6 +182,15 @@ class Settings(BaseSettings):
     @property
     def downloads_dir(self) -> Path:
         return _resolve(self.download_base_path)
+
+    @property
+    def local_downloads_dir(self) -> Path:
+        return _resolve(self.local_download_path)
+
+    @property
+    def pending_notes_file(self) -> Path:
+        """Notas salvas na pasta local porque a pasta das notas estava fora do ar (plano B)."""
+        return self.status_file.with_name("notas-para-enviar.json")
 
     @property
     def profiles_dir(self) -> Path:

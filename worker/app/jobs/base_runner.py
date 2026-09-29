@@ -13,6 +13,7 @@ from app.automation.registry import ProviderRegistry
 from app.browser.screenshots import capture_error_screenshot
 from app.certificates.certificate_manager import CertificateManager
 from app.config import Settings
+from app.downloads.fallback import organizer_for
 from app.downloads.organizer import DownloadOrganizer
 from app.jobs.errors import AutomationError, ErrorCode, error_code_of
 from app.jobs.models import Certificate, Client, Job
@@ -80,7 +81,7 @@ class RunnerDeps:
             registry=registry,
             settings=settings,
             certificate_manager=certificate_manager or CertificateManager(),
-            organizer=organizer or DownloadOrganizer(settings.downloads_dir),
+            organizer=organizer or organizer_for(settings),
             worker_id=worker_id,
             retry_policy=RetryPolicy(delays=tuple(settings.retry_delay_list), max_retries=settings.max_attempts),
         )

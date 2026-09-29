@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from app.api.deps import CurrentUser, require_operator, require_viewer, settings_dep
 from app.clients.profile_setup import profile_setup_service
 from app.config import Settings
-from app.downloads.organizer import DownloadOrganizer
+from app.downloads.fallback import organizer_for
 from app.jobs.models import Certificate, Client
 from app.services.supabase_client import get_supabase
 
@@ -68,7 +68,7 @@ async def download_file(
     row = res.data[0]
     client_code = (row.get("clients") or {}).get("client_code") or ""
     try:
-        path = DownloadOrganizer(settings.downloads_dir).locate(
+        path = organizer_for(settings).locate(
             row["filepath"], client_code, row["competence"], row["document_type"], row["filename"]
         )
     except ValueError as exc:

@@ -19,10 +19,11 @@ import sys
 from pathlib import Path
 
 from app.config import Settings, get_settings
+from app.downloads.fallback import organizer_for
+from app.downloads.organizer import NOTE_FILE as _NOTE_FILE
 from app.downloads.organizer import DownloadOrganizer
 
 _LINK = re.compile(r"^siatrobo://abrir/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/?$", re.IGNORECASE)
-_NOTE_FILE = re.compile(r"^[A-Z0-9]{3,20}_\d{4}-\d{2}_(NFCE|NFE_EMITIDAS|NFE_RECEBIDAS)(_\d+)?\.(zip|xml)$", re.IGNORECASE)
 TITLE = "JR Sistema Robô"
 
 
@@ -32,16 +33,20 @@ def parse_link(link: str) -> str | None:
 
 
 def resolve_file(row: dict, organizer: DownloadOrganizer) -> Path | None:
-    """Arquivo da nota neste computador (caminho gravado ou pasta padrão desta instalação)."""
-    stored = Path(row.get("filepath") or "")
-    if _NOTE_FILE.match(stored.name) and stored.is_file():
-        return stored
+    """Arquivo da nota neste computador.
+
+    Primeiro na pasta das notas atual (ex.: Google Drive, depois de trocar a pasta);
+    senão, no caminho gravado na hora do download.
+    """
     client_code = (row.get("clients") or {}).get("client_code") or ""
     try:
-        local = organizer.locate(row["filepath"], client_code, row["competence"], row["document_type"], row["filename"])
+        current = organizer.locate(row["filepath"], client_code, row["competence"], row["document_type"], row["filename"])
+        if _NOTE_FILE.match(current.name) and current.is_file():
+            return current
     except (ValueError, KeyError):
-        return None
-    return local if _NOTE_FILE.match(local.name) and local.is_file() else None
+        pass
+    stored = Path(row.get("filepath") or "")
+    return stored if _NOTE_FILE.match(stored.name) and stored.is_file() else None
 
 
 def explorer_select_command(path: Path) -> str:
@@ -80,8 +85,7 @@ def open_download(download_id: str, settings: Settings) -> None:
     if not rows:
         _message("Este download não existe mais (o histórico é apagado 60 dias depois do download).", error=True)
         return
-    organizer = DownloadOrganizer(settings.downloads_dir)
-    path = resolve_file(rows[0], organizer)
+    path = resolve_file(rows[0], organizer_for(settings))
     if path is None:
         folder = settings.downloads_dir
         folder.mkdir(parents=True, exist_ok=True)
@@ -95,8 +99,27 @@ def open_download(download_id: str, settings: Settings) -> None:
     subprocess.Popen(explorer_select_command(path))  # noqa: S603
 
 
+def open_notes_folder(settings: Settings) -> None:
+    """Menu Iniciar → JR Sistema → Pasta das notas (a pasta configurada, ex.: Google Drive)."""
+    folder = settings.downloads_dir
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        _message(
+            f"A pasta das notas não está disponível agora:\n{folder}\n\n"
+            "Se ela fica no Google Drive, confira se o Google Drive está aberto. Abri a pasta local do robô.",
+            error=True,
+        )
+        folder = settings.local_downloads_dir
+        folder.mkdir(parents=True, exist_ok=True)
+    subprocess.Popen(["explorer.exe", str(folder)])  # noqa: S603, S607
+
+
 def main(argv: list[str] | None = None) -> None:
     argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] == "--pasta":
+        open_notes_folder(get_settings())
+        return
     download_id = parse_link(argv[0]) if argv else None
     if download_id is None:
         _message("Link inválido.", error=True)

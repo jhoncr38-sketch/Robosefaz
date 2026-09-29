@@ -22,6 +22,7 @@ def settings(tmp_path: Path) -> Settings:
         supabase_url="",
         supabase_service_role_key="",
         download_base_path=str(tmp_path / "downloads"),
+        local_download_path=str(tmp_path / "downloads"),
         browser_profile_base_path=str(tmp_path / "profiles"),
         error_screenshot_path=str(tmp_path / "errors"),
         step_screenshot_path=str(tmp_path / "shots"),

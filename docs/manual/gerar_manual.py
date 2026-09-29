@@ -645,6 +645,33 @@ def cap_downloads() -> list:
                 "O robô <b>nunca apaga</b> os ZIPs. Você apaga quando quiser.",
             ]
         ),
+        H2("Salvar as notas no Google Drive (opcional)"),
+        P(
+            "Assim a equipe baixa as notas de qualquer lugar, pelo navegador, e as notas de todos os computadores "
+            "com o robô ficam na mesma pasta."
+        ),
+        *steps(
+            [
+                "Instale o <b>Google Drive para computador</b> e entre na conta Google.",
+                "No primeiro computador, a ferramenta do passo 4 cria a pasta <b>JR Sistema - Notas</b>. Nos outros "
+                "computadores com o robô, compartilhe essa pasta com a conta Google usada ali como <b>Editor</b>. "
+                "Depois, em drive.google.com dessa conta, abra <b>Compartilhados comigo</b>, clique com o botão "
+                "direito na pasta e escolha <b>Organizar → Adicionar atalho → Meu Drive</b>.",
+                "Espere 1 minuto para o Google Drive sincronizar.",
+                "Menu Iniciar → JR Sistema → <b>Salvar notas no Google Drive</b> e clique em <b>Sim</b> no pedido "
+                "de administrador. A ferramenta testa a gravação, copia as notas já baixadas (sem apagar nada), "
+                "troca a pasta do robô e confere que ele passou a usá-la. Se algo falhar, nada é mudado.",
+            ]
+        ),
+        *tip(
+            "Para a equipe só consultar, compartilhe a pasta com o e-mail de cada pessoa como <b>Leitor</b>. "
+            "Evite “Qualquer pessoa com o link”: as notas têm dados fiscais dos clientes."
+        ),
+        P(
+            "<b>Se o Google Drive estiver fechado</b> na hora de um download, o robô salva a nota na pasta "
+            "do próprio computador (" + code("C:\\SIAT-Robo\\storage\\downloads") + "), avisa no histórico e a "
+            "envia para o Drive sozinho quando ele voltar. Sem internet, o próprio Google Drive guarda e envia depois."
+        ),
         H2("Tela Downloads"),
         P(
             "Lista todas as notas baixadas, com filtros por competência, cliente e tipo. O ícone de informação (i), ao lado do nome, mostra o "
@@ -805,7 +832,8 @@ def cap_icone() -> list:
         *bullets(
             [
                 "<b>Robô (ícone ao lado do relógio)</b>: reabre o ícone.",
-                "<b>Painel JR Sistema</b> e <b>Pasta das notas</b>.",
+                "<b>Painel JR Sistema</b> e <b>Pasta das notas</b> (abre a pasta em uso, inclusive a do Google Drive).",
+                "<b>Salvar notas no Google Drive</b>: veja o capítulo 8.",
                 "<b>Ligar robô</b> e <b>Parar robô</b>.",
                 "<b>Status e verificação</b>: mostra se o robô está rodando, as últimas mensagens e, se você "
                 "responder <b>s</b>, confere Supabase, Chrome, pasta e o certificado de cada cliente.",
@@ -933,6 +961,15 @@ def cap_problemas() -> list:
                     "Abrir pasta avisa que o arquivo não está neste computador",
                     "A nota foi baixada por outro computador. Pegue lá ou refaça o agendamento neste: o SIAT "
                     "reaproveita o pedido existente.",
+                ],
+                [
+                    "Salvar notas no Google Drive: “Não encontrei o Google Drive”",
+                    "Abra o Google Drive para computador e entre na conta. Se ele já está aberto, o Windows está "
+                    "escondendo a unidade de programas de administrador: fale com o suporte.",
+                ],
+                [
+                    "Salvar notas no Google Drive: “Não consegui gravar”",
+                    "A conta deste computador está como Leitor na pasta: mude para <b>Editor</b>.",
                 ],
                 [
                     "“O Windows protegeu o computador” ao instalar",

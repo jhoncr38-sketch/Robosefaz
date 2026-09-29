@@ -162,6 +162,13 @@ class SiatExportConsult:
                 f"Pasta de downloads indisponível: {exc}",
                 retryable=True,
             ) from exc
+        if stored.saved_locally:
+            await self.ctx.logger.warning(
+                f"A pasta das notas ({self.ctx.settings.downloads_dir}) está fora do ar (Google Drive fechado?). "
+                f"A nota foi salva neste computador, em {stored.filepath}, e vai para a pasta das notas "
+                "sozinha quando ela voltar.",
+                step="downloading",
+            )
         await self.ctx.logger.info(
             f"Arquivo salvo: {stored.filename} ({stored.size} bytes, sha256 {stored.checksum[:12]}…) "
             f"— agendamento {row.request_id}",

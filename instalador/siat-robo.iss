@@ -62,7 +62,8 @@ Name: "{app}\storage\downloads"; Flags: uninsneveruninstall
 [Icons]
 Name: "{group}\Robô (ícone ao lado do relógio)"; Filename: "{app}\worker\.venv\Scripts\pythonw.exe"; Parameters: "-m app.tray"; WorkingDir: "{app}\worker"; IconFilename: "{app}\instalador\jr-sistema-logo.ico"
 Name: "{group}\Painel JR Sistema"; Filename: "{#PanelUrl}"; IconFilename: "{app}\instalador\jr-sistema-logo.ico"
-Name: "{group}\Pasta das notas"; Filename: "{app}\storage\downloads"
+Name: "{group}\Pasta das notas"; Filename: "{app}\worker\.venv\Scripts\pythonw.exe"; Parameters: """{app}\worker\abrir_nota.pyw"" --pasta"; WorkingDir: "{app}\worker"; IconFilename: "{sys}\shell32.dll"; IconIndex: 3
+Name: "{group}\Salvar notas no Google Drive"; Filename: "{app}\salvar-notas-no-drive.bat"; IconFilename: "{app}\instalador\jr-sistema-logo.ico"
 Name: "{group}\Ligar robô"; Filename: "{app}\iniciar-robo.bat"; IconFilename: "{app}\instalador\jr-sistema-logo.ico"
 Name: "{group}\Parar robô"; Filename: "{app}\parar-robo.bat"; IconFilename: "{app}\instalador\jr-sistema-logo.ico"
 Name: "{group}\Status e verificação"; Filename: "{app}\status-robo.bat"; IconFilename: "{app}\instalador\jr-sistema-logo.ico"

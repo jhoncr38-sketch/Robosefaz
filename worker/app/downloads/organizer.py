@@ -20,6 +20,8 @@ from app.utils.files import ensure_dir, ensure_within, move_atomic, sha256_file,
 
 _CLIENT_CODE = re.compile(r"^[A-Z0-9]{3,20}$")
 _INVALID_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
+# arquivo de nota do robô: CLI000001_2026-08_NFCE.zip (lotes: _2, _3...)
+NOTE_FILE = re.compile(r"^[A-Z0-9]{3,20}_\d{4}-\d{2}_(NFCE|NFE_EMITIDAS|NFE_RECEBIDAS)(_\d+)?\.(zip|xml)$", re.IGNORECASE)
 
 
 def safe_folder_name(name: str | None, max_len: int = 60) -> str:

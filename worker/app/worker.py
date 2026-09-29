@@ -24,7 +24,8 @@ from typing import Awaitable, Callable
 from app.automation.registry import default_registry
 from app import __version__
 from app.config import Settings, get_settings
-from app.downloads.organizer import DownloadFolderUnavailable, DownloadOrganizer
+from app.downloads.fallback import FallbackOrganizer, organizer_for
+from app.downloads.organizer import DownloadFolderUnavailable
 from app.jobs.base_runner import RunnerDeps
 from app.jobs.collector_runner import CollectorRunner
 from app.jobs.recovery import recover_orphaned_jobs
@@ -52,6 +53,7 @@ class Worker:
         self.current_jobs: set[str] = set()
         deps = RunnerDeps.build(repo, default_registry(), settings, self.worker_id)
         self.activity = deps.activity
+        self.organizer = deps.organizer
         self.scheduler = SchedulerRunner(deps)
         self.collector = CollectorRunner(deps)
         self.retention = RetentionService(repo, settings)
@@ -85,6 +87,12 @@ class Worker:
                 await self.repo.generate_certificate_expiry_notifications()
             except Exception:
                 log.exception("Falha na rotina de manutenção")
+            if isinstance(self.organizer, FallbackOrganizer):
+                try:
+                    # plano B: notas salvas na pasta local enquanto a pasta das notas estava fora do ar
+                    await asyncio.to_thread(self.organizer.send_pending)
+                except Exception:
+                    log.exception("Falha ao enviar notas do plano B para a pasta das notas")
             now = time.monotonic()
             if self._next_retention_at is None or now >= self._next_retention_at:
                 self._next_retention_at = now + self.settings.retention_interval_hours * 3600
@@ -290,7 +298,7 @@ async def _sync_client_folders(settings: Settings, client) -> None:  # noqa: ANN
     """Pastas de notas com o nome da empresa (renomeia 'CLI000001' e nomes antigos)."""
     try:
         rows = (await client.table("clients").select("client_code, legal_name, trade_name").execute()).data or []
-        organizer = DownloadOrganizer(settings.downloads_dir)
+        organizer = organizer_for(settings)
         for r in rows:
             organizer.sync_client_dir(r["client_code"], r.get("trade_name") or r.get("legal_name"))
     except Exception as exc:  # noqa: BLE001 - pasta indisponível/sem internet: tenta no próximo início
@@ -302,11 +310,19 @@ async def amain(mode: str) -> None:
     configure_logging(settings.log_level, settings.log_file)
     settings.stop_flag.unlink(missing_ok=True)  # sinal antigo não derruba o worker novo
     settings.update_flag.unlink(missing_ok=True)  # o serviço já tratou a atualização antes de ligar o robô
+    organizer = organizer_for(settings)
     try:
-        DownloadOrganizer(settings.downloads_dir).check_available()
+        organizer.check_available()
         log.info("Downloads serão salvos em %s", settings.downloads_dir)
     except DownloadFolderUnavailable as exc:
-        log.warning("Pasta de downloads indisponível agora (%s); o collector tentará de novo mais tarde.", exc)
+        if isinstance(organizer, FallbackOrganizer):
+            log.warning(
+                "Pasta de downloads indisponível agora (%s); as notas vão para %s até ela voltar.",
+                exc,
+                settings.local_downloads_dir,
+            )
+        else:
+            log.warning("Pasta de downloads indisponível agora (%s); o collector tentará de novo mais tarde.", exc)
     _clear_stale_chrome_policy(settings)
     client = await get_supabase(settings)
     await _sync_client_folders(settings, client)

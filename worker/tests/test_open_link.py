@@ -63,3 +63,12 @@ def test_missing_file_returns_none(tmp_path: Path) -> None:
 def test_explorer_command_quotes_only_the_path(tmp_path: Path) -> None:
     path = tmp_path / "CLI000002 - SELETO PLANEJADOS" / "2026" / "05" / "NFCE" / "CLI000002_2026-05_NFCE.zip"
     assert explorer_select_command(path) == f'explorer.exe /select,"{path}"'
+
+
+def test_prefers_current_notes_folder(tmp_path: Path) -> None:
+    # notas antigas copiadas para o Google Drive: abre a cópia da pasta atual, não o caminho antigo
+    old = _zip(tmp_path / "antiga")
+    drive = _zip(tmp_path / "drive")
+    assert resolve_file(_row(str(old)), DownloadOrganizer(tmp_path / "drive")) == drive.resolve()
+    # ainda não copiada: usa o caminho gravado
+    assert resolve_file(_row(str(old)), DownloadOrganizer(tmp_path / "vazia")) == old
