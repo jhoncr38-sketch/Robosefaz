@@ -80,3 +80,45 @@ async def test_link_drive_ids_updates_only_found(tmp_path: Path) -> None:
     assert repo.downloads[0]["drive_month_folder_id"] == MONTH
     assert "drive_file_id" not in repo.downloads[1]
     assert await link_drive_ids(repo, lookup) == 0  # d1 já tem; d2 ainda subindo
+
+
+def test_probe_account_finds_the_account_of_the_folder(tmp_path: Path) -> None:
+    from app.downloads.drive_ids import probe_account
+
+    dbs = drivefs_databases(_drivefs(tmp_path))
+    con = sqlite3.connect(dbs[0])
+    con.execute("insert into items values (99, 'local-7', null, 0, 0, 'teste-conta.txt')")
+    con.commit()
+    con.close()
+    folder = tmp_path / "notas"
+    folder.mkdir()
+    assert probe_account(folder, dbs, name="teste-conta.txt") == dbs[0]
+    assert list(folder.iterdir()) == []  # o arquivo de teste é apagado
+    assert probe_account(folder, dbs, timeout=0, name="outra-conta.txt") is None
+
+
+def test_link_state_detects_account_or_folder_change(tmp_path: Path) -> None:
+    from app.downloads.drive_ids import linked_account, update_link_state
+
+    state = tmp_path / "drive-link.json"
+    folder = Path(r"G:\Meu Drive\JR Sistema - Notas")
+    assert update_link_state(state, folder, "conta-pessoal") is False  # 1ª vez: só grava
+    assert update_link_state(state, folder, "conta-pessoal") is False
+    assert linked_account(state) == "conta-pessoal"
+    assert update_link_state(state, folder, "conta-escritorio") is True  # mesma pasta, outra conta
+    assert update_link_state(state, Path(r"H:\Meu Drive\JR Sistema - Notas"), "conta-escritorio") is True
+
+
+async def test_worker_relinks_when_the_drive_account_changes(tmp_path: Path, settings, monkeypatch) -> None:  # noqa: ANN001
+    import app.worker as w
+
+    s = settings.model_copy(update={"download_base_path": str(tmp_path / "G" / "Meu Drive" / "JR Sistema - Notas")})
+    repo = FakeRepo()
+    repo.downloads = [{"id": "d1", "drive_file_id": CLOUD, "drive_client_folder_id": CLIENT, "drive_month_folder_id": MONTH}]
+    monkeypatch.setattr(w, "drivefs_databases", lambda: [])
+    for account, cleared in (("conta-pessoal", False), ("conta-pessoal", False), ("conta-escritorio", True)):
+        db = tmp_path / "DriveFS" / account / "metadata_sqlite_db"
+        monkeypatch.setattr(w, "probe_account", lambda folder, dbs, _db=db: _db)
+        worker = w.Worker(repo, s, worker_id="teste")  # type: ignore[arg-type]
+        assert await worker._drive_account() == db
+        assert (repo.downloads[0]["drive_file_id"] is None) is cleared

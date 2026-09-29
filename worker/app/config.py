@@ -188,6 +188,11 @@ class Settings(BaseSettings):
         return _resolve(self.local_download_path)
 
     @property
+    def drive_link_file(self) -> Path:
+        """Pasta e conta do Google Drive dos links do botão Baixar (muda -> refaz os links)."""
+        return self.status_file.with_name("drive-link.json")
+
+    @property
     def pending_notes_file(self) -> Path:
         """Notas salvas na pasta local porque a pasta das notas estava fora do ar (plano B)."""
         return self.status_file.with_name("notas-para-enviar.json")

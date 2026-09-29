@@ -50,18 +50,31 @@ def drive_letters() -> list[Path]:
 
 
 def find_drive_roots(roots: Iterable[Path] | None = None, home: Path | None = None) -> list[Path]:
-    """Pastas "Meu Drive" do Google Drive para computador (unidade G: ou modo "Espelhar arquivos")."""
+    """Pastas "Meu Drive" do Google Drive para computador (unidade G:, uma por conta, ou "Espelhar arquivos")."""
     roots = drive_letters() if roots is None else roots
     home = Path.home() if home is None else home
     found: list[Path] = []
+
+    def add(path: Path) -> None:
+        try:
+            if path.is_dir() and not any(_same(path, f) for f in found):
+                found.append(path)
+        except OSError:
+            pass
+
     for base in [*roots, home]:
         for name in DRIVE_NAMES:
-            path = base / name
-            try:
-                if path.is_dir() and not any(_same(path, f) for f in found):
-                    found.append(path)
-            except OSError:
-                continue
+            add(base / name)
+    # com mais de uma conta, o Drive pode mostrar cada uma numa subpasta da unidade
+    for base in roots:
+        try:
+            children = [c for c in base.iterdir() if c.is_dir()]
+        except OSError:
+            continue
+        for child in children[:50]:
+            for name in DRIVE_NAMES:
+                if child.name != name:
+                    add(child / name)
     return found
 
 
@@ -119,6 +132,17 @@ def copy_notes(src: Path, dst: Path) -> tuple[int, int]:
     return copied, skipped
 
 
+def _account_changed(settings: Settings, target: Path) -> bool:
+    """Mesmo caminho (ex.: G:\\Meu Drive\\...), mas outra conta do Google conectada no lugar."""
+    from app.downloads.drive_ids import drivefs_databases, linked_account, probe_account
+
+    previous = linked_account(settings.drive_link_file)
+    if previous is None:
+        return False
+    db = probe_account(target, drivefs_databases(), timeout=20)
+    return db is not None and db.parent.name != previous
+
+
 def set_download_path(env_file: Path, value: str) -> None:
     from app.tools.activate import set_env_values
 
@@ -173,9 +197,10 @@ def _ask(question: str) -> str:
 def _choose(roots: list[Path], ask: Callable[[str], str]) -> Path:
     if len(roots) == 1:
         return roots[0]
-    print("Encontrei mais de um Google Drive neste computador:")
+    print("Encontrei mais de um Google Drive (mais de uma conta) neste computador:")
     for i, root in enumerate(roots, 1):
-        print(f"  {i}) {root}")
+        mark = f'  (já tem a pasta "{NOTES_FOLDER}")' if (root / NOTES_FOLDER).is_dir() else ""
+        print(f"  {i}) {root}{mark}")
     answer = ask(f"Qual usar? [1-{len(roots)}, Enter = 1] ")
     try:
         return roots[int(answer) - 1] if answer else roots[0]
@@ -249,7 +274,7 @@ def run(settings: Settings, *, local: bool = False, ask: Callable[[str], str] = 
         return 1
     print("Gravação OK.")
 
-    if _same(current, target):
+    if _same(current, target) and not _account_changed(settings, target):
         print()
         print("O robô já salva nesta pasta. Está tudo certo.")
         return 0

@@ -135,3 +135,27 @@ def test_restart_reads_robot_log(settings: Settings, tmp_path: Path, monkeypatch
     assert s.update_flag.exists()
     monkeypatch.setattr("app.tray.read_local_status", lambda path: ("stopped", False))
     assert gd.restart_and_confirm(s, target) == "stopped"
+
+
+def test_find_drive_roots_with_two_accounts(tmp_path: Path) -> None:
+    g = tmp_path / "G"
+    (g / "Meu Drive" / gd.NOTES_FOLDER).mkdir(parents=True)
+    (g / "escritorio@gmail.com" / "Meu Drive").mkdir(parents=True)  # 2ª conta numa subpasta
+    h = tmp_path / "H"
+    (h / "My Drive").mkdir(parents=True)  # ou numa letra própria
+    assert gd.find_drive_roots([g, h], tmp_path / "home") == [
+        g / "Meu Drive",
+        h / "My Drive",
+        g / "escritorio@gmail.com" / "Meu Drive",
+    ]
+
+
+def test_same_path_but_other_account_is_a_switch(settings: Settings, setup, monkeypatch: pytest.MonkeyPatch) -> None:
+    env, target = setup
+    target.mkdir()
+    # a pasta configurada é a mesma (G:\Meu Drive\...), mas a conta conectada mudou
+    s = settings.model_copy(update={"download_base_path": str(target)})
+    monkeypatch.setattr(gd, "_account_changed", lambda _s, _t: True)
+    monkeypatch.setattr(gd, "restart_and_confirm", lambda _s, _t: "ok")
+    assert gd.run(s, env_file=env, ask=lambda q: "") == 0
+    assert (target / NEW).read_bytes() == b"PK"  # notas da pasta local copiadas para a conta nova

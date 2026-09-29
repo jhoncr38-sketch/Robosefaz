@@ -231,6 +231,12 @@ class FakeRepo:
     async def list_downloads_without_drive_id(self, limit: int) -> list[dict[str, Any]]:
         return [d for d in self.downloads if not d.get("drive_client_folder_id")][:limit]
 
+    async def clear_download_drive_ids(self) -> int:
+        linked = [d for d in self.downloads if d.get("drive_file_id")]
+        for d in linked:
+            d.update(drive_file_id=None, drive_client_folder_id=None, drive_month_folder_id=None)
+        return len(linked)
+
     async def set_download_drive_ids(
         self, download_id: str, file_id: str, client_folder_id: str, month_folder_id: str
     ) -> None:

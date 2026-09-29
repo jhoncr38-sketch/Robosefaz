@@ -63,6 +63,7 @@ class JobRepository(Protocol):
     async def upsert_efd_declaration(self, **fields: Any) -> None: ...
     async def get_download(self, download_id: str) -> dict[str, Any] | None: ...
     async def list_downloads_without_drive_id(self, limit: int) -> list[dict[str, Any]]: ...
+    async def clear_download_drive_ids(self) -> int: ...
     async def set_download_drive_ids(
         self, download_id: str, file_id: str, client_folder_id: str, month_folder_id: str
     ) -> None: ...
@@ -326,6 +327,12 @@ class SupabaseJobRepository:
             .execute()
         )
         return res.data or []
+
+    @_transient
+    async def clear_download_drive_ids(self) -> int:
+        cleared = {"drive_file_id": None, "drive_client_folder_id": None, "drive_month_folder_id": None}
+        res = await self._db.table("downloads").update(cleared).not_.is_("drive_file_id", "null").execute()
+        return len(res.data or [])
 
     @_transient
     async def set_download_drive_ids(

@@ -19,12 +19,13 @@ import socket
 import sys
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Awaitable, Callable
 
 from app.automation.registry import default_registry
 from app import __version__
 from app.config import Settings, get_settings
-from app.downloads.drive_ids import DriveIdLookup, drivefs_databases, link_drive_ids
+from app.downloads.drive_ids import DriveIdLookup, drivefs_databases, link_drive_ids, probe_account, update_link_state
 from app.downloads.fallback import FallbackOrganizer, notes_folder_kind, organizer_for
 from app.downloads.organizer import DownloadFolderUnavailable
 from app.jobs.base_runner import RunnerDeps
@@ -55,6 +56,7 @@ class Worker:
         deps = RunnerDeps.build(repo, default_registry(), settings, self.worker_id)
         self.activity = deps.activity
         self.organizer = deps.organizer
+        self._drive_db: Path | None = None  # banco da conta do Google Drive da pasta das notas
         self.scheduler = SchedulerRunner(deps)
         self.collector = CollectorRunner(deps)
         self.retention = RetentionService(repo, settings)
@@ -101,8 +103,9 @@ class Worker:
                     log.exception("Falha ao enviar notas do plano B para a pasta das notas")
             if notes_folder_kind(self.settings.downloads_dir) == "google_drive":
                 try:
-                    # botão "Baixar" do painel: código de cada nota no Google Drive
-                    await link_drive_ids(self.repo, DriveIdLookup(drivefs_databases()))
+                    # botão "Baixar" do painel: código de cada nota no Google Drive (só na conta da pasta)
+                    if await self._drive_account() is not None:
+                        await link_drive_ids(self.repo, DriveIdLookup([self._drive_db]))
                 except Exception:
                     log.exception("Falha ao ligar as notas ao Google Drive")
             now = time.monotonic()
@@ -113,6 +116,20 @@ class Worker:
                 except Exception:
                     log.exception("Falha na limpeza automática")
             await self._sleep(300)
+
+    async def _drive_account(self) -> Path | None:
+        """Conta do Google Drive da pasta das notas (1x por início do robô); troca de conta refaz os links."""
+        if self._drive_db is not None:
+            return self._drive_db
+        folder = self.settings.downloads_dir
+        db = await asyncio.to_thread(probe_account, folder, drivefs_databases())
+        if db is None:
+            return None  # Drive fechado: tenta na próxima rodada
+        if update_link_state(self.settings.drive_link_file, folder, db.parent.name):
+            cleared = await self.repo.clear_download_drive_ids()
+            log.warning("A pasta ou a conta do Google Drive mudou: %s link(s) do botão Baixar serão refeitos.", cleared)
+        self._drive_db = db
+        return db
 
     async def _heartbeat(self) -> None:
         while not self.stop_event.is_set():

@@ -686,6 +686,18 @@ def cap_downloads() -> list:
             "Lista todas as notas baixadas, com filtros por competência, cliente e tipo. O ícone de informação (i), ao lado do nome, mostra o "
             "caminho completo e o código de conferência (SHA-256) do arquivo."
         ),
+        H2("Trocar a conta do Google Drive"),
+        *steps(
+            [
+                "No Google Drive para computador (ícone ao lado do relógio → engrenagem → Preferências), "
+                "<b>adicione</b> a conta nova sem desconectar a antiga.",
+                "Rode <b>Salvar notas no Google Drive</b> e escolha, na lista, o Drive da conta nova. A ferramenta "
+                "copia as notas para lá (nada é apagado) e troca a pasta do robô.",
+                "O robô percebe a troca e refaz os links dos botões Baixar na conta nova em alguns minutos.",
+                "Faça o mesmo em todos os computadores com robô e compartilhe a pasta nova com a equipe. Depois, "
+                "se quiser, desconecte a conta antiga.",
+            ]
+        ),
         H2("Baixar uma nota ou o mês inteiro (Google Drive)"),
         P(
             "Com as notas no Google Drive, a tela Downloads mostra o botão <b>Baixar</b> em cada nota: ele baixa o "

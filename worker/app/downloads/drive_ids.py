@@ -7,14 +7,23 @@ arquivo não subiu, o ID é "local-..." e o robô tenta de novo na próxima roda
 
 É um arquivo interno do Google Drive: se o formato mudar, a leitura falha em
 silêncio e o painel só não mostra o botão Baixar daquela nota.
+
+Várias contas no mesmo computador (ex.: a pessoal e a do escritório): cada uma
+tem o seu banco. `probe_account` descobre de qual conta é a pasta das notas
+(grava um arquivo de teste e vê em que banco ele aparece) e só essa é usada.
+Se a conta ou a pasta mudar, os links antigos são apagados e refeitos na nova
+(storage/drive-link.json guarda a última).
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 import sqlite3
+import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -45,6 +54,54 @@ def drivefs_databases(local_appdata: Path | None = None) -> list[Path]:
         return sorted(p for p in root.glob("*/metadata_sqlite_db") if p.is_file())
     except OSError:
         return []
+
+
+def probe_account(folder: Path, databases: list[Path], *, timeout: float = 30.0, name: str | None = None) -> Path | None:
+    """Banco (conta) do Google Drive onde fica `folder`. None se não der para saber agora."""
+    name = name or f"jr-sistema-conta-{uuid.uuid4().hex[:12]}.txt"
+    probe = folder / name
+    try:
+        probe.write_text("Teste do JR Sistema Robô para saber a conta do Google Drive. Pode apagar.", encoding="utf-8")
+    except OSError:
+        return None
+    try:
+        deadline = time.monotonic() + timeout
+        while True:
+            for db in databases:
+                try:
+                    con = sqlite3.connect(f"{db.as_uri()}?mode=ro", uri=True, timeout=5)
+                    try:
+                        if con.execute("select 1 from items where local_title = ? limit 1", (name,)).fetchone():
+                            return db
+                    finally:
+                        con.close()
+                except sqlite3.Error:
+                    continue
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(1)
+    finally:
+        probe.unlink(missing_ok=True)
+
+
+def update_link_state(state_file: Path, folder: Path, account: str) -> bool:
+    """Grava a pasta/conta em uso. -> True se mudou desde a última vez (links antigos não valem mais)."""
+    current = {"folder": str(folder), "account": account}
+    try:
+        previous = json.loads(state_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        previous = None
+    if previous != current:
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        state_file.write_text(json.dumps(current, ensure_ascii=False), encoding="utf-8")
+    return isinstance(previous, dict) and previous != current
+
+
+def linked_account(state_file: Path) -> str | None:
+    try:
+        return json.loads(state_file.read_text(encoding="utf-8")).get("account")
+    except (OSError, ValueError, AttributeError):
+        return None
 
 
 class DriveIdLookup:
