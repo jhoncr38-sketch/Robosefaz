@@ -856,6 +856,7 @@ def cap_icone() -> list:
                     "Salvar notas no Google Drive",
                     "Liga o robô a uma pasta do Google Drive (capítulo 8). Pede permissão de administrador.",
                 ],
+                ["Status e verificação", "A mesma janela do menu Iniciar (veja abaixo)."],
                 ["Ligar robô", "Liga o robô, se estiver parado."],
                 ["Parar robô", "Termina o trabalho atual e para. Nada se perde."],
                 ["Ver mensagens do robô (log)", "Abre o registro técnico, útil para o suporte."],
@@ -876,8 +877,9 @@ def cap_icone() -> list:
                 "<b>Painel JR Sistema</b> e <b>Pasta das notas</b> (abre a pasta em uso, inclusive a do Google Drive).",
                 "<b>Salvar notas no Google Drive</b>: veja o capítulo 8.",
                 "<b>Ligar robô</b> e <b>Parar robô</b>.",
-                "<b>Status e verificação</b>: mostra se o robô está rodando, as últimas mensagens e, se você "
-                "responder <b>s</b>, confere Supabase, Chrome, pasta e o certificado de cada cliente.",
+                "<b>Status e verificação</b>: janela que mostra se o robô está ligado e a versão, e confere o "
+                "acesso ao painel, o Chrome, a pasta das notas, o certificado de cada cliente e o início automático. "
+                "Os itens com ✖ precisam de correção.",
                 "<b>Desinstalar o robô</b>.",
             ]
         ),

@@ -29,6 +29,7 @@ INCLUDE_FILES = [
     "status-robo.bat",
     "desinstalar-robo.bat",
     "docs/instalacao-robo.md",
+    "branding/logo-mark.png",  # logo das janelas das ferramentas (app/tools/gui.py)
 ]
 EMPTY_DIRS = ["storage/downloads", "storage/logs"]
 _SKIP_PARTS = {"__pycache__", ".pytest_cache", "cache"}  # instalador/cache: Python embutido no .exe

@@ -23,6 +23,7 @@ from pathlib import Path
 import httpx
 
 from app.config import PROJECT_ROOT, Settings, get_settings
+from app.tools.ui import ConsoleUI, ToolUI
 
 ENV_FILE = PROJECT_ROOT / ".env"
 _CODE = re.compile(r"^[A-Za-z0-9]{4}-?[A-Za-z0-9]{4}$")
@@ -100,6 +101,44 @@ def activate(code: str, settings: Settings, panel_url: str | None = None, client
     return {"org_name": data.get("org_name"), "device_id": data.get("device_id")}
 
 
+TITLE = "Ativar este computador"
+SUBTITLE = "Liga este computador ao escritório do painel. Gere o código em Computadores → Adicionar computador."
+
+
+def run(settings: Settings, ui: ToolUI, code: str | None = None, panel_url: str | None = None) -> int:
+    """Pede o código (até 3 tentativas), ativa e mostra o resultado."""
+    ui.info(f"Computador: {socket.gethostname()}")
+    for _attempt in range(3):
+        if not code:
+            code = ui.ask_text(
+                "Código de ativação",
+                "8 caracteres, no formato ABCD-EFGH. Ele vale 30 minutos e só pode ser usado uma vez.",
+            )
+            if code is None:
+                ui.done(False, "Nada foi mudado", "Este computador continua como estava.")
+                return 1
+        ui.status("Ativando este computador no painel…")
+        try:
+            result = activate(code, settings, panel_url)
+        except ActivationError as exc:
+            ui.status("")
+            ui.fail(str(exc))
+            code = None
+            continue
+        ui.done(
+            True,
+            f"Computador ativado no escritório {result['org_name']}",
+            "O robô vai religar sozinho em alguns segundos, já com o acesso deste computador.",
+        )
+        return 0
+    ui.done(
+        False,
+        "Não foi possível ativar",
+        "Gere um código novo no painel (Computadores → Adicionar computador) e tente de novo.",
+    )
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -107,25 +146,25 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("code", nargs="?", help="código de 8 caracteres (Computadores → Adicionar computador)")
     parser.add_argument("--painel", help="endereço do painel (padrão: PANEL_URL)")
     parser.add_argument("--json", action="store_true", help="saída em JSON (instalador)")
+    parser.add_argument("--gui", action="store_true", help="janela em vez da tela preta")
     args = parser.parse_args(argv)
     settings = get_settings()
 
-    code = args.code
-    if not code:
-        print("Ativar este computador no JR Sistema Robô")
-        print("No painel: Computadores → Adicionar computador. Digite o código mostrado (ex.: ABCD-EFGH).")
-        code = input("Código de ativação: ").strip()
-    try:
-        result = activate(code, settings, args.painel)
-    except ActivationError as exc:
-        print(json.dumps({"ok": False, "error": str(exc)}) if args.json else f"\nERRO: {exc}")
-        return 1
-    if args.json:
+    if args.json:  # instalador: sem perguntas, resposta numa linha
+        try:
+            result = activate(args.code or "", settings, args.painel)
+        except ActivationError as exc:
+            print(json.dumps({"ok": False, "error": str(exc)}))
+            return 1
         print(json.dumps({"ok": True, **result}))
-    else:
-        print(f"\nComputador ativado no escritório: {result['org_name']}")
-        print("O robô vai religar sozinho em alguns segundos, já com o acesso deste computador.")
-    return 0
+        return 0
+    if args.gui:
+        from app.tools.gui import run_in_window
+
+        return run_in_window(TITLE, SUBTITLE, lambda ui: run(settings, ui, args.code, args.painel), height=460)
+    print(f"{TITLE} no JR Sistema Robô")
+    print("No painel: Computadores → Adicionar computador. Digite o código mostrado (ex.: ABCD-EFGH).")
+    return run(settings, ConsoleUI(), args.code, args.painel)
 
 
 if __name__ == "__main__":

@@ -29,7 +29,7 @@ from pathlib import Path
 import pystray
 
 from app import __version__
-from app.config import PROJECT_ROOT, Settings, get_settings
+from app.config import PROJECT_ROOT, WORKER_ROOT, Settings, get_settings
 from app.logs.job_logger import configure_logging
 from app.tray_icons import draw
 
@@ -204,6 +204,7 @@ class RobotTray:
                 pystray.MenuItem("Ligar robô", self.start_robot, enabled=lambda _i: self.state.robot == "stopped"),
                 pystray.MenuItem("Parar robô", self.stop_robot, enabled=lambda _i: self.state.robot != "stopped"),
                 pystray.MenuItem("Ver mensagens do robô (log)", self.open_log),
+                pystray.MenuItem("Status e verificação", self.check_setup),
                 pystray.MenuItem(
                     lambda _i: f"Atualizar agora (versão {self.state.update_to})",
                     self.update_now,
@@ -235,17 +236,8 @@ class RobotTray:
         os.startfile(folder)  # noqa: S606
 
     def setup_google_drive(self, *_a) -> None:
-        """Ferramenta que liga o robô a uma pasta do Google Drive (pede administrador, igual ao robô)."""
-        bat = PROJECT_ROOT / "salvar-notas-no-drive.bat"
-        if not bat.is_file():
-            self.icon.notify("Ferramenta não encontrada. Reinstale o robô.", "JR Sistema Robô")
-            return
-        rc = ctypes.windll.shell32.ShellExecuteW(None, "runas", str(bat), None, str(PROJECT_ROOT), 1)
-        if rc <= 32:  # permissão de administrador recusada
-            self.icon.notify(
-                "É preciso clicar em Sim no pedido de permissão para ligar as notas ao Google Drive.",
-                "JR Sistema Robô",
-            )
+        """Janela que liga o robô a uma pasta do Google Drive (pede administrador, igual ao robô)."""
+        self._open_tool("app.tools.google_drive", admin=True)
 
     def open_log(self, *_a) -> None:
         path = self.settings.log_file
@@ -271,10 +263,28 @@ class RobotTray:
         flag.write_text("parar", encoding="utf-8")
         self.icon.notify("O robô vai terminar o trabalho atual e parar.", "JR Sistema Robô")
 
+    def _open_tool(self, module: str, *, admin: bool = False) -> None:
+        """Abre uma ferramenta na janela do JR Sistema (pythonw: sem tela preta)."""
+        exe = Path(sys.executable).with_name("pythonw.exe")
+        exe = exe if exe.is_file() else Path(sys.executable)
+        rc = ctypes.windll.shell32.ShellExecuteW(
+            None, "runas" if admin else "open", str(exe), f"-m {module} --gui", str(WORKER_ROOT), 1
+        )
+        if rc <= 32:
+            self.icon.notify(
+                "É preciso clicar em Sim no pedido de permissão para continuar."
+                if admin
+                else "Não foi possível abrir a ferramenta. Reinstale o robô.",
+                "JR Sistema Robô",
+            )
+
     def activate(self, *_a) -> None:
-        """Abre a janela de ativação (pede o código gerado em Computadores, no painel)."""
-        bat = PROJECT_ROOT / "ativar-robo.bat"
-        ctypes.windll.shell32.ShellExecuteW(None, "open", str(bat), None, str(PROJECT_ROOT), 1)
+        """Janela de ativação (pede o código gerado em Computadores, no painel)."""
+        self._open_tool("app.tools.activate")
+
+    def check_setup(self, *_a) -> None:
+        """Janela "Status e verificação": acesso, Chrome, pasta das notas, certificados e início automático."""
+        self._open_tool("app.tools.check_setup")
 
     def update_now(self, *_a) -> None:
         """O robô termina o trabalho atual; o serviço instala a versão nova e religa."""

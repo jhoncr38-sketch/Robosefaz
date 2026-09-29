@@ -15,6 +15,7 @@ Código de saída 1 se algum item obrigatório falhar.
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import os
 import subprocess
@@ -26,6 +27,7 @@ from pathlib import Path
 from app.certificates.windows_store import find_in_store, list_user_certificates
 from app.config import Settings, get_settings
 from app.downloads.organizer import DownloadFolderUnavailable, DownloadOrganizer
+from app.tools.ui import ConsoleUI, ToolUI
 
 TASK_NAME = "SIAT Automacao - Robo"
 
@@ -43,18 +45,24 @@ _CHROME_PATHS = {
 
 
 class Report:
-    def __init__(self) -> None:
+    """Conta os problemas e repassa cada item para a tela (preta ou janela)."""
+
+    def __init__(self, ui: ToolUI | None = None) -> None:
+        self.ui = ui or ConsoleUI()
         self.errors = 0
 
+    def info(self, msg: str) -> None:
+        self.ui.info(msg)
+
     def ok(self, msg: str) -> None:
-        print(f"  [OK]       {msg}")
+        self.ui.ok(msg)
 
     def warn(self, msg: str) -> None:
-        print(f"  [ATENCAO]  {msg}")
+        self.ui.warn(msg)
 
     def fail(self, msg: str) -> None:
         self.errors += 1
-        print(f"  [ERRO]     {msg}")
+        self.ui.fail(msg)
 
 
 def check_browser(settings: Settings, r: Report) -> None:
@@ -123,8 +131,7 @@ async def check_supabase_and_certs(settings: Settings, r: Report) -> None:
     store = await list_user_certificates()
     by_client = {c["client_id"]: c for c in certs}
     now = datetime.now(timezone.utc)
-    print()
-    print("  Certificados dos clientes neste Windows:")
+    r.info("Certificados dos clientes neste Windows:")
     for client in clients:
         label = f"{client['client_code']} {client['legal_name']}"
         cert = by_client.get(client["id"])
@@ -147,22 +154,68 @@ async def check_supabase_and_certs(settings: Settings, r: Report) -> None:
             r.ok(f"{label}: instalado, válido até {until:%d/%m/%Y}")
 
 
-def main() -> int:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    settings = get_settings()
-    r = Report()
-    print()
-    print("Verificação do robô SIAT neste computador")
-    print("=" * 50)
-    print(f"  Modo de teste (dry-run): {'LIGADO - nada será agendado' if settings.automation_dry_run else 'desligado'}")
+TITLE = "Status e verificação"
+SUBTITLE = "Confere se este computador está pronto: acesso ao painel, Chrome, pasta das notas, certificados e início automático."
+
+
+def run_checks(settings: Settings, ui: ToolUI) -> int:
+    """Todas as verificações. -> quantos problemas a corrigir."""
+    r = Report(ui)
+    if settings.automation_dry_run:
+        r.warn("Modo de teste (dry-run) LIGADO: nada será agendado no SIAT.")
     check_browser(settings, r)
     check_downloads(settings, r)
     check_task(r)
     asyncio.run(check_supabase_and_certs(settings, r))
+    return r.errors
+
+
+def run_gui() -> int:
+    from app import __version__
+    from app.tools.gui import run_in_window
+    from app.tray import read_local_status, read_update_status
+
+    def work(ui: ToolUI) -> int:
+        settings = get_settings()
+        state, _dry = read_local_status(settings.status_file)
+        robot = {"idle": "ligado, aguardando", "busy": "ligado, trabalhando no SIAT"}.get(state, "parado")
+        line = f"Robô: {robot} · versão {__version__}"
+        newer = read_update_status(settings)
+        if newer:
+            line += f" · versão nova disponível: {newer}"
+        (ui.ok if state != "stopped" else ui.warn)(line)
+        ui.status("Verificando…")
+        errors = run_checks(settings, ui)
+        actions = [("Abrir painel", lambda: os.startfile(settings.panel_url))]  # noqa: S606
+        log_file = settings.log_file
+        if log_file is not None and log_file.is_file():
+            actions.insert(0, ("Ver mensagens do robô (log)", lambda: os.startfile(log_file)))  # noqa: S606
+        if errors:
+            ui.done(False, f"{errors} problema(s) a corrigir", "Corrija os itens marcados com ✖ e verifique de novo.", actions)
+            return 1
+        ui.done(True, "Tudo pronto", "Este computador está pronto para rodar o robô.", actions)
+        return 0
+
+    return run_in_window(TITLE, SUBTITLE, work, height=620)
+
+
+def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    parser = argparse.ArgumentParser(description="Confere se este computador está pronto para rodar o robô.")
+    parser.add_argument("--gui", action="store_true", help="janela em vez da tela preta")
+    args = parser.parse_args(argv)
+    if args.gui:
+        return run_gui()
+    settings = get_settings()
     print()
-    if r.errors:
-        print(f"Resultado: {r.errors} problema(s) a corrigir.")
+    print("Verificação do robô SIAT neste computador")
+    print("=" * 50)
+    print(f"  Modo de teste (dry-run): {'LIGADO - nada será agendado' if settings.automation_dry_run else 'desligado'}")
+    errors = run_checks(settings, ConsoleUI())
+    print()
+    if errors:
+        print(f"Resultado: {errors} problema(s) a corrigir.")
         return 1
     print("Resultado: tudo pronto.")
     return 0
