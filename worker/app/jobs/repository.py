@@ -62,6 +62,8 @@ class JobRepository(Protocol):
     async def insert_download(self, **fields: Any) -> dict[str, Any]: ...
     async def upsert_efd_declaration(self, **fields: Any) -> None: ...
     async def get_download(self, download_id: str) -> dict[str, Any] | None: ...
+    async def list_downloads_without_drive_id(self, limit: int) -> list[dict[str, Any]]: ...
+    async def set_download_drive_id(self, download_id: str, drive_file_id: str) -> None: ...
     async def release_lock(self, job_id: str, worker_id: str) -> None: ...
     async def is_cancel_requested(self, job_id: str) -> bool: ...
     async def get_manual_confirmation(self, job_id: str) -> datetime | None: ...
@@ -310,6 +312,22 @@ class SupabaseJobRepository:
     async def get_download(self, download_id: str) -> dict[str, Any] | None:
         res = await self._db.table("downloads").select("*").eq("id", download_id).limit(1).execute()
         return res.data[0] if res.data else None
+
+    @_transient
+    async def list_downloads_without_drive_id(self, limit: int) -> list[dict[str, Any]]:
+        res = (
+            await self._db.table("downloads")
+            .select("id, filename, competence, document_type, clients(client_code)")
+            .is_("drive_file_id", "null")
+            .order("downloaded_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return res.data or []
+
+    @_transient
+    async def set_download_drive_id(self, download_id: str, drive_file_id: str) -> None:
+        await self._db.table("downloads").update({"drive_file_id": drive_file_id}).eq("id", download_id).execute()
 
     # -- escrita ----------------------------------------------------------
     @_transient

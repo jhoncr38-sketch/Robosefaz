@@ -604,6 +604,20 @@ await test("robô grava só no próprio escritório (logs, tarefas, downloads, s
   assert.equal(seenByA.rows[0].n, 0);
 });
 
+await test("robô grava o código do Google Drive só nos downloads do próprio escritório", async () => {
+  const id = (await db.query("select id from public.downloads where org_id = $1 and filename = 'x.zip'", [ORG_B])).rows[0].id;
+  const DRIVE_ID = "1jIOcup0tsxX4h2TCXGwS0YYtSbGRh33v";
+  const byA = await as(DEVICE_A.authId, (tx) => tx.query("update public.downloads set drive_file_id = $2 where id = $1", [id, DRIVE_ID]));
+  assert.equal(byA.affectedRows, 0);
+  const byB = await as(DEVICE_B.authId, (tx) => tx.query("update public.downloads set drive_file_id = $2 where id = $1 returning drive_file_id", [id, DRIVE_ID]));
+  assert.equal(byB.rows[0].drive_file_id, DRIVE_ID);
+  // o painel monta o link com o código: nada além do formato de ID do Drive
+  await rejects(
+    as(DEVICE_B.authId, (tx) => tx.query("update public.downloads set drive_file_id = 'https://evil.example/x' where id = $1", [id])),
+    /downloads_drive_file_id_format/,
+  );
+});
+
 await test("painel lista só os computadores do próprio escritório", async () => {
   const a = await as(ADMIN, (tx) => tx.query("select name from public.devices"));
   assert.deepEqual(a.rows.map((r) => r.name), ["PC-ESCRITORIO-A"]);

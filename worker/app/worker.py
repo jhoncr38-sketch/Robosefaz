@@ -24,6 +24,7 @@ from typing import Awaitable, Callable
 from app.automation.registry import default_registry
 from app import __version__
 from app.config import Settings, get_settings
+from app.downloads.drive_ids import DriveIdLookup, drivefs_databases, link_drive_ids
 from app.downloads.fallback import FallbackOrganizer, notes_folder_kind, organizer_for
 from app.downloads.organizer import DownloadFolderUnavailable
 from app.jobs.base_runner import RunnerDeps
@@ -93,6 +94,12 @@ class Worker:
                     await asyncio.to_thread(self.organizer.send_pending)
                 except Exception:
                     log.exception("Falha ao enviar notas do plano B para a pasta das notas")
+            if notes_folder_kind(self.settings.downloads_dir) == "google_drive":
+                try:
+                    # botão "Baixar" do painel: código de cada nota no Google Drive
+                    await link_drive_ids(self.repo, DriveIdLookup(drivefs_databases()))
+                except Exception:
+                    log.exception("Falha ao ligar as notas ao Google Drive")
             now = time.monotonic()
             if self._next_retention_at is None or now >= self._next_retention_at:
                 self._next_retention_at = now + self.settings.retention_interval_hours * 3600
