@@ -38,6 +38,9 @@ class MockState:
     )
     # quando definido, o portal "abre" outro contribuinte (teste de segurança)
     force_header_cnpj: str | None = None
+    # certificado ligado a mais de um cadastro: "Selecionar Tipo Usuário" logo após o login,
+    # cartões só com o rótulo; cada um abre o CNPJ indicado (como no SIAT real em 29/09/2026)
+    user_types: list[tuple[str, str]] | None = None
     # retorno do login trava para sempre
     callback_always_hangs: bool = False
     # e-AGEAT: nova aba; "Error 500" nas N primeiras; depois "Usuário não identificado" nas M seguintes
@@ -110,6 +113,7 @@ PAINEL_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><
 <body>
 <header>
   <span>USUÁRIO</span>
+  <button id="ut-open">CONTRIBUINTE</button>
   <span id="current">Contribuinte: nenhum</span>
   <button id="logout">Sair</button>
 </header>
@@ -119,6 +123,10 @@ PAINEL_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><
   <a href="/eageat/jsp/login/bemVindo.jsf" id="module" __TARGET__>e-AGEAT</a>
   <a href="#">Incentivos ICMS - Indústria</a>
 </nav>
+<div id="ut" class="v-dialog" role="dialog" style="display:none">
+  <div class="v-card__title">Selecionar Tipo Usuário</div>
+  <div id="ut-list"></div>
+</div>
 <div id="tp" class="v-dialog" role="dialog" style="display:none">
   <span class="titulo">Selecionar Contribuinte</span>
   <label for="doc">CPF/CNPJ</label><input id="doc">
@@ -131,7 +139,24 @@ PAINEL_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><
 <script>
 const taxpayers = __TAXPAYERS__;
 const forced = __FORCED__;
+const userTypes = __USER_TYPES__;
 const $ = (id) => document.getElementById(id);
+function showUserTypes() {
+  const list = $('ut-list'); list.innerHTML = '';
+  userTypes.forEach(([label, cnpj], i) => {
+    const card = document.createElement('div');
+    card.className = 'v-card'; card.setAttribute('role', 'button');
+    card.innerHTML = '<span class="v-card__title">' + label + '</span><i class="v-icon">✓</i>';
+    card.onclick = () => {
+      const tp = taxpayers.find((t) => t[1] === cnpj);
+      setCurrent(cnpj, tp ? tp[2] : 'DESCONHECIDO');
+      localStorage.setItem('utype', String(i));
+      $('ut').style.display = 'none'; $('ut').classList.remove('v-dialog--active');
+    };
+    list.appendChild(card);
+  });
+  $('ut').style.display = 'block'; $('ut').classList.add('v-dialog--active');
+}
 function setCurrent(cnpj, name) {
   const shown = forced || cnpj;
   $('current').textContent = 'Contribuinte: ' + name + ' - ' + shown;
@@ -139,12 +164,19 @@ function setCurrent(cnpj, name) {
 }
 const saved = localStorage.getItem('tp');
 if (saved) { const [c, n] = JSON.parse(saved); $('current').textContent = 'Contribuinte: ' + n + ' - ' + c; }
-$('logout').onclick = () => { localStorage.removeItem('tp'); location.href = '/painel-aplicacoes/login'; };
+$('logout').onclick = () => { localStorage.removeItem('tp'); localStorage.removeItem('utype'); location.href = '/painel-aplicacoes/login'; };
+if (userTypes && localStorage.getItem('utype') === null) { showUserTypes(); }
+$('ut-open').onclick = () => { if (userTypes) { showUserTypes(); } };
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { ['tp', 'ut'].forEach((id) => { $(id).style.display = 'none'; $(id).classList.remove('v-dialog--active'); }); }
+});
 $('open-tp').onclick = () => { $('tp').style.display = 'block'; $('tp').classList.add('v-dialog--active'); };
 $('search').onclick = () => {
   const q = $('doc').value.replace(/\\D/g, '');
   const tb = $('tp-rows'); tb.innerHTML = '';
-  taxpayers.filter(([ie, doc]) => !q || doc.replace(/\\D/g, '') === q).forEach(([ie, doc, name]) => {
+  // como no SIAT real: o cadastro (tipo de usuário) escolhido só lista as empresas dele
+  const chosen = userTypes && localStorage.getItem('utype') !== null ? userTypes[Number(localStorage.getItem('utype'))][1] : null;
+  taxpayers.filter(([ie, doc]) => (!q || doc.replace(/\\D/g, '') === q) && (!chosen || doc === chosen)).forEach(([ie, doc, name]) => {
     const tr = document.createElement('tr');
     tr.innerHTML = '<td>' + ie + '</td><td>' + doc + '</td><td>' + name + '</td><td>ATIVO</td><td><button title="selecionar">✓</button></td>';
     tr.querySelector('button').onclick = () => { setCurrent(doc, name); $('tp').style.display = 'none'; };
@@ -357,6 +389,7 @@ def build_handler(state: MockState):
                 route,
                 PAINEL_HTML.replace("__TAXPAYERS__", json.dumps(state.taxpayers))
                 .replace("__FORCED__", json.dumps(state.force_header_cnpj))
+                .replace("__USER_TYPES__", json.dumps(state.user_types))
                 .replace("__TARGET__", 'target="_blank"' if state.module_new_tab else ""),
             )
         elif path.startswith("/carta-de-servicos"):

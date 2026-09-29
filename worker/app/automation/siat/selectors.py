@@ -65,8 +65,14 @@ class SiatSelectors:
     two_factor_markers: str = r"c[óo]digo de verifica[çc][ãa]o|autentica[çc][ãa]o em dois fatores|token enviado"
 
     # --- Contribuinte ----------------------------------------------------
-    taxpayer_dialog_title: str = r"selecionar contribuinte"
-    taxpayer_open_button: str = r"selecionar contribuinte|trocar contribuinte|alterar contribuinte"
+    # Certificado ligado a mais de um cadastro na SEFAZ: logo após o login o SIAT abre
+    # "Selecionar Tipo Usuário" com cartões só com "CONTRIBUINTE" (sem CNPJ). O robô
+    # tenta um por um e confere o CNPJ que abriu; o cabeçalho "CONTRIBUINTE" reabre a tela.
+    user_type_dialog_title: str = r"selecionar tipo (de )?usu[áa]rio"
+    user_type_option: str = r"contribuinte"
+    user_type_open_button: str = r"^\s*contribuinte\s*$"
+    taxpayer_dialog_title: str = r"selecionar (contribuinte|empresa)"
+    taxpayer_open_button: str = r"selecionar (contribuinte|empresa)|trocar contribuinte|alterar contribuinte"
     taxpayer_filter_document_label: str = r"cpf\s*/\s*cnpj|cnpj"
     taxpayer_filter_ie_label: str = r"inscri[çc][ãa]o"
     taxpayer_search_button: str = r"^\s*(consultar|pesquisar|buscar)\s*$"

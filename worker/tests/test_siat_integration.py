@@ -314,3 +314,32 @@ async def test_force_deletes_existing_request_and_schedules_again(repo: FakeRepo
     assert forced.external_request_id == "9237951"
     assert "SUBSTITUIU 9237950" in (forced.raw_message or "")
     assert len(state.scheduled) == 2
+
+
+async def test_user_type_dialog_tries_options_until_the_client_opens(repo: FakeRepo, integration_settings: Settings) -> None:
+    """Certificado ligado a dois cadastros: a 1ª opção abre outra empresa; a 2ª, a do cliente."""
+    state = MockState(user_types=[("CONTRIBUINTE", "11.444.777/0001-61"), ("CONTRIBUINTE", "11.222.333/0001-81")])
+    ctx, job = await _context(repo, integration_settings)
+    provider = SiatAutomationProvider()
+    async with provider.open_session(ctx):
+        await _open(provider, ctx, state)
+        assert "11.222.333/0001-81" in await ctx.page.locator("#current").inner_text()  # type: ignore[union-attr]
+        result = await provider.schedule(ctx, (await repo.list_tasks(job.id))[0])
+        assert result.external_request_id == "9237950"
+    messages = [entry["message"] for entry in repo.logs if entry["job_id"] == job.id]
+    assert any("pediu o tipo de usuário (2 opção(ões))" in m for m in messages)
+    assert any("Opção 1 de 2 abriu 11.444.777/0001-61" in m for m in messages)
+    assert any("Opção 2 de 2 abriu o contribuinte do cliente" in m for m in messages)
+
+
+async def test_user_type_dialog_without_the_client_blocks(repo: FakeRepo, integration_settings: Settings) -> None:
+    """Nenhuma opção abre o CNPJ do cliente: nunca opera."""
+    state = MockState(user_types=[("CONTRIBUINTE", "11.444.777/0001-61"), ("CONTRIBUINTE", "11.444.777/0001-61")])
+    ctx, _ = await _context(repo, integration_settings)
+    provider = SiatAutomationProvider()
+    with pytest.raises(AutomationError) as exc:
+        async with provider.open_session(ctx):
+            await _open(provider, ctx, state)
+    assert exc.value.code == ErrorCode.TAXPAYER_MISMATCH
+    assert "Nenhuma das 2 opções" in exc.value.message
+    assert state.scheduled == []

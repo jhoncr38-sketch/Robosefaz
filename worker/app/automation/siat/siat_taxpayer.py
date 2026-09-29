@@ -149,6 +149,101 @@ class SiatTaxpayer:
         await wait_idle(self.page)
         return await dialog_by_title(self.page, self.sel.rx("taxpayer_dialog_title"), timeout_ms=10_000)
 
+    # -- "Selecionar Tipo Usuário" (certificado ligado a mais de um cadastro) ----------
+    async def _user_type_dialog(self, timeout_ms: int = 3_000) -> Locator | None:
+        return await dialog_by_title(self.page, self.sel.rx("user_type_dialog_title"), timeout_ms=timeout_ms)
+
+    async def _user_type_options(self, dialog: Locator) -> list[Locator]:
+        """Cartões "CONTRIBUINTE" da tela (clicar no texto aciona o cartão)."""
+        found = dialog.get_by_text(self.sel.rx("user_type_option"))
+        options: list[Locator] = []
+        for i in range(min(await found.count(), 10)):
+            item = found.nth(i)
+            if await item.is_visible():
+                options.append(item)
+        return options
+
+    async def _reopen_user_type_dialog(self) -> Locator | None:
+        """Volta à tela de tipo de usuário: pelo botão "CONTRIBUINTE" do cabeçalho ou recarregando o painel."""
+        dialog = await self._user_type_dialog(timeout_ms=1_500)
+        if dialog is not None:
+            return dialog
+        btn = await find_clickable(self.page, self.sel.rx("user_type_open_button"), timeout_ms=3_000)
+        if btn is not None:
+            await btn.click()
+            await wait_idle(self.page)
+            dialog = await self._user_type_dialog(timeout_ms=8_000)
+            if dialog is not None:
+                return dialog
+        try:
+            await self.page.reload()
+            await wait_idle(self.page)
+        except PlaywrightError:
+            return None
+        return await self._user_type_dialog(timeout_ms=8_000)
+
+    async def _select_user_type(self, dialog: Locator) -> None:
+        """Tenta cada opção até o portal abrir o CNPJ do cliente; nenhuma = erro (nunca opera sem confirmar)."""
+        client = self.ctx.client
+        cnpj = normalize_cnpj(client.cnpj)
+        ie = re.sub(r"\D", "", client.state_registration or "")
+        options = await self._user_type_options(dialog)
+        total = len(options)
+        if total == 0:
+            raise AutomationError(
+                ErrorCode.SELECTOR_NOT_FOUND, "Tela 'Selecionar Tipo Usuário' sem opção de contribuinte."
+            )
+        hints: list[str] = []
+        for opt in options:
+            text = " ".join((await opt.inner_text()).split())
+            title = await opt.get_attribute("title") or ""
+            hints.append(f"{text} {title}")
+        await self.ctx.logger.info(
+            f"O SIAT pediu o tipo de usuário ({total} opção(ões)): o robô tenta cada uma até abrir o CNPJ do cliente.",
+            step="selecting_taxpayer",
+        )
+        # primeiro as opções que citam o CNPJ ou a IE do cliente (quando o SIAT mostra)
+        digits = [re.sub(r"\D", "", h) for h in hints]
+        order = sorted(range(total), key=lambda i: 0 if cnpj in digits[i] or (ie and ie in digits[i]) else 1)
+
+        for attempt, i in enumerate(order):
+            if attempt > 0:
+                dialog = await self._reopen_user_type_dialog()
+                if dialog is None:
+                    break
+                options = await self._user_type_options(dialog)
+                if i >= len(options):
+                    break
+            await options[i].click()
+            await wait_idle(self.page)
+            if cnpj in await self.current_documents():
+                await self.ctx.logger.info(
+                    f"Opção {i + 1} de {total} abriu o contribuinte do cliente.", step="selecting_taxpayer"
+                )
+                return
+            company = await self._open_dialog()
+            if company is not None:
+                try:
+                    await self._pick_company(company)
+                    return
+                except AutomationError as exc:
+                    # este cadastro não tem o cliente: tenta o próximo (nada foi feito no portal)
+                    if exc.code not in (ErrorCode.TAXPAYER_MISMATCH, ErrorCode.SECURITY_CLIENT_MISMATCH):
+                        raise
+                    await self.page.keyboard.press("Escape")
+                    await wait_idle(self.page)
+            opened = await self.current_documents()
+            await self.ctx.logger.warning(
+                f"Opção {i + 1} de {total} abriu {format_cnpj(opened[0]) if opened else 'nenhum CNPJ'}; "
+                "tentando a próxima.",
+                step="selecting_taxpayer",
+            )
+        raise AutomationError(
+            ErrorCode.TAXPAYER_MISMATCH,
+            f"Nenhuma das {total} opções de 'Selecionar Tipo Usuário' abriu o CNPJ {format_cnpj(cnpj)} do "
+            "cliente. Confira no SIAT qual cadastro corresponde a este certificado.",
+        )
+
     async def select(self) -> None:
         await self.ctx.reporter.step(JobStatus.SELECTING_TAXPAYER, "Selecionando contribuinte")
         client = self.ctx.client
@@ -157,12 +252,21 @@ class SiatTaxpayer:
             await self.ctx.logger.info("Contribuinte já selecionado no portal.", step="selecting_taxpayer")
             return
 
+        user_type = await self._user_type_dialog()
+        if user_type is not None:
+            await self._select_user_type(user_type)
+            return
+
         dialog = await self._open_dialog()
         if dialog is None:
             # Sem tela de seleção: o login precisa ter aberto o próprio contribuinte.
             await self.verify(security=False)
             return
+        await self._pick_company(dialog)
 
+    async def _pick_company(self, dialog: Locator) -> None:
+        """Tela "Selecionar Contribuinte/Empresa": filtra pelo CNPJ, escolhe a linha certa e confere."""
+        client = self.ctx.client
         field = await find_field(dialog, self.sel.rx("taxpayer_filter_document_label"), timeout_ms=3_000)
         if field is not None:
             await field.fill(normalize_cnpj(client.cnpj))

@@ -996,6 +996,12 @@ def cap_problemas() -> list:
                     "clique em Reprocessar.",
                 ],
                 [
+                    "Status Erro: “Nenhuma das opções de ‘Selecionar Tipo Usuário’ abriu o CNPJ”",
+                    "O certificado está ligado a mais de um cadastro na SEFAZ e o robô tentou cada um, mas nenhum "
+                    "abriu a empresa do cliente. Entre no SIAT com esse certificado e veja qual cadastro é o da "
+                    "empresa; se for outro CNPJ, corrija o cadastro do cliente no painel.",
+                ],
+                [
                     "Verificação: “Certificado NÃO instalado neste Windows”",
                     "Instale o .pfx do cliente com o mesmo usuário que roda o robô.",
                 ],
