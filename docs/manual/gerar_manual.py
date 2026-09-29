@@ -839,7 +839,11 @@ def cap_icone() -> list:
                 ["Item", "O que faz"],
                 ["(linha cinza)", "Estado atual do robô. Se houver problemas, aparece “Precisam de atenção” com a lista."],
                 ["Abrir painel", "Abre o site. Dois cliques no ícone fazem o mesmo."],
-                ["Abrir pasta das notas", "Abre a pasta de downloads deste computador."],
+                ["Abrir pasta das notas", "Abre a pasta das notas em uso (a do Google Drive, se estiver ligada)."],
+                [
+                    "Salvar notas no Google Drive",
+                    "Liga o robô a uma pasta do Google Drive (capítulo 8). Pede permissão de administrador.",
+                ],
                 ["Ligar robô", "Liga o robô, se estiver parado."],
                 ["Parar robô", "Termina o trabalho atual e para. Nada se perde."],
                 ["Ver mensagens do robô (log)", "Abre o registro técnico, útil para o suporte."],

@@ -199,6 +199,7 @@ class RobotTray:
                 ),
                 pystray.MenuItem("Abrir painel", self.open_panel, default=True),
                 pystray.MenuItem("Abrir pasta das notas", self.open_downloads),
+                pystray.MenuItem("Salvar notas no Google Drive", self.setup_google_drive),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("Ligar robô", self.start_robot, enabled=lambda _i: self.state.robot == "stopped"),
                 pystray.MenuItem("Parar robô", self.stop_robot, enabled=lambda _i: self.state.robot != "stopped"),
@@ -219,9 +220,32 @@ class RobotTray:
         os.startfile(self.settings.panel_url)  # noqa: S606
 
     def open_downloads(self, *_a) -> None:
-        folder = self.settings.downloads_dir
-        folder.mkdir(parents=True, exist_ok=True)
+        # lê o .env de novo: a pasta pode ter mudado ("Salvar notas no Google Drive") com o ícone aberto
+        current = Settings()
+        folder = current.downloads_dir
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            self.icon.notify(
+                "A pasta das notas não está disponível agora (o Google Drive está aberto?). Abri a pasta local do robô.",
+                "JR Sistema Robô",
+            )
+            folder = current.local_downloads_dir
+            folder.mkdir(parents=True, exist_ok=True)
         os.startfile(folder)  # noqa: S606
+
+    def setup_google_drive(self, *_a) -> None:
+        """Ferramenta que liga o robô a uma pasta do Google Drive (pede administrador, igual ao robô)."""
+        bat = PROJECT_ROOT / "salvar-notas-no-drive.bat"
+        if not bat.is_file():
+            self.icon.notify("Ferramenta não encontrada. Reinstale o robô.", "JR Sistema Robô")
+            return
+        rc = ctypes.windll.shell32.ShellExecuteW(None, "runas", str(bat), None, str(PROJECT_ROOT), 1)
+        if rc <= 32:  # permissão de administrador recusada
+            self.icon.notify(
+                "É preciso clicar em Sim no pedido de permissão para ligar as notas ao Google Drive.",
+                "JR Sistema Robô",
+            )
 
     def open_log(self, *_a) -> None:
         path = self.settings.log_file
