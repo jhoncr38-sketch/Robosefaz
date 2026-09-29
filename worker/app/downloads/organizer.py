@@ -1,12 +1,20 @@
 """Organização dos arquivos baixados por competência e cliente.
 
-{pasta das notas}/{ano}/{mês}/{client_code} - {nome da empresa}/{NFCE|NFE_EMITIDAS|NFE_RECEBIDAS}/
+{pasta das notas}/{ano}/{mês}/{nome da empresa}/{NFCE|NFE_EMITIDAS|NFE_RECEBIDAS}/
 Nome: {client_code}_{YYYY-MM}_{TIPO}.zip  (sufixo _2, _3... para lotes múltiplos)
 
 Mês primeiro (desde a 1.2.8): "todas as notas de 09/2026" e "LIA 08/2026" são uma
-pasta só, que o Google Drive baixa inteira como ZIP. A pasta do cliente começa
-sempre pelo código (CLI000001 - LIA PAPELARIA): o nome pode mudar ou se repetir,
-o código não. Se o nome mudar no painel, as pastas existentes são renomeadas.
+pasta só, que o Google Drive baixa inteira como ZIP.
+
+A pasta do cliente tem só o nome da empresa (desde a 1.2.11). Quem é o dono da
+pasta vem das notas dentro dela: o nome do arquivo sempre começa pelo código do
+cliente. Assim, se o nome mudar no painel, o robô acha a pasta antiga e renomeia;
+se duas empresas tiverem o mesmo nome, a segunda fica "NOME (CLI000013)".
+Pastas antigas "CLI000001 - NOME" (até a 1.2.10) são renomeadas sozinhas.
+
+Ao juntar pastas, nada é sobrescrito nem apagado: cópia idêntica de uma nota que
+já está no lugar novo vai para _Duplicadas (fora dos meses; o usuário apaga se
+quiser); arquivo diferente com o mesmo nome ganha _2, _3...
 
 Notas no formato antigo (cliente/ano/mês/tipo) são movidas por `reorganize`:
 só move, nunca apaga nota.
@@ -31,6 +39,7 @@ _CLIENT_FOLDER = re.compile(r"^(?P<code>[A-Z0-9]{3,20})(?: - (?P<name>.+))?$")
 _YEAR = re.compile(r"^\d{4}$")
 _MONTH = re.compile(r"^(0[1-9]|1[0-2])$")
 _DOC_VALUES = {d.value for d in DocumentType}
+DUPLICATES_FOLDER = "_Duplicadas"
 _INVALID_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
 # arquivo de nota do robô: CLI000001_2026-08_NFCE.zip (lotes: _2, _3...)
 NOTE_FILE = re.compile(r"^[A-Z0-9]{3,20}_\d{4}-\d{2}_(NFCE|NFE_EMITIDAS|NFE_RECEBIDAS)(_\d+)?\.(zip|xml)$", re.IGNORECASE)
@@ -65,20 +74,36 @@ class NotePath:
         return (self.year, self.month, self.client_folder, self.document_type, self.filename)
 
 
+def note_code(filename: str) -> str | None:
+    """Código do cliente pelo nome do arquivo de nota (CLI000001_2026-08_NFCE.zip -> CLI000001)."""
+    return filename.split("_", 1)[0] if NOTE_FILE.match(filename) else None
+
+
+def client_name_from_folder(folder: str, client_code: str) -> str | None:
+    """Nome da empresa pela pasta: "NOME", "NOME (CÓDIGO)" ou o antigo "CÓDIGO - NOME"."""
+    if folder == client_code:
+        return None
+    if folder.startswith(f"{client_code} - "):
+        return folder[len(client_code) + 3 :] or None
+    if folder.endswith(f" ({client_code})"):
+        return folder[: -(len(client_code) + 3)] or None
+    return folder
+
+
 def parse_note_path(parts: tuple[str, ...] | list[str]) -> NotePath | None:
     """ano/mês/cliente/tipo/arquivo (atual) ou cliente/ano/mês/tipo/arquivo (antigo, até a 1.2.7)."""
-    if len(parts) != 5 or not NOTE_FILE.match(parts[4]) or parts[3] not in _DOC_VALUES:
+    if len(parts) != 5 or parts[3] not in _DOC_VALUES:
+        return None
+    code = note_code(parts[4])
+    if code is None or not _CLIENT_CODE.match(code):
         return None
     if _YEAR.match(parts[0]) and _MONTH.match(parts[1]):
-        year, month, client = parts[0], parts[1], parts[2]
+        year, month, folder = parts[0], parts[1], parts[2]
     elif _YEAR.match(parts[1]) and _MONTH.match(parts[2]):
-        client, year, month = parts[0], parts[1], parts[2]
+        folder, year, month = parts[0], parts[1], parts[2]
     else:
         return None
-    m = _CLIENT_FOLDER.match(client)
-    if m is None or _YEAR.match(client):
-        return None
-    return NotePath(client, m["code"], m["name"], year, month, parts[3], parts[4])
+    return NotePath(folder, code, client_name_from_folder(folder, code), year, month, parts[3], parts[4])
 
 
 class InvalidDownloadError(ValueError):
@@ -179,39 +204,102 @@ class DownloadOrganizer:
         return sorted(out)
 
     @staticmethod
-    def _existing_client_dirs(client_code: str, parent: Path) -> list[Path]:
+    def _note_codes(folder: Path) -> set[str]:
+        """Códigos dos clientes das notas dentro da pasta (tipo/arquivo)."""
+        codes: set[str] = set()
+        try:
+            for f in folder.glob("*/*"):
+                code = note_code(f.name)
+                if code:
+                    codes.add(code)
+        except OSError:
+            pass
+        return codes
+
+    @classmethod
+    def _belongs_to(cls, folder: Path, client_code: str) -> bool:
+        name = folder.name
+        if name == client_code or name.startswith(f"{client_code} - ") or name.endswith(f" ({client_code})"):
+            return True
+        return client_code in cls._note_codes(folder)
+
+    @classmethod
+    def _existing_client_dirs(cls, client_code: str, parent: Path) -> list[Path]:
+        """Pastas deste cliente no mês (pelo nome antigo com código ou pelas notas dentro)."""
         if not parent.is_dir():
             return []
-        prefix = re.compile(rf"^{re.escape(client_code)}( - .+)?$")
-        return sorted(d for d in parent.iterdir() if d.is_dir() and prefix.match(d.name))
+        try:
+            dirs = [d for d in parent.iterdir() if d.is_dir()]
+        except OSError:
+            return []
+        return sorted(d for d in dirs if cls._belongs_to(d, client_code))
 
-    def client_dir(self, client_code: str, client_name: str | None, competence: str) -> Path:
-        """Pasta do cliente no mês: 'CLI000001 - NOME'; sem nome, a que já existir para o código."""
+    def _client_dir_in(self, parent: Path, client_code: str, client_name: str | None) -> Path:
         if not _CLIENT_CODE.match(client_code or ""):
             raise ValueError(f"client_code inválido: {client_code!r}")
-        parent = self.month_dir(competence)
         safe = safe_folder_name(client_name)
         if safe:
-            return ensure_within(self.base_dir, parent / f"{client_code} - {safe}")
+            folder = parent / safe
+            if folder.is_dir():
+                codes = self._note_codes(folder)
+                if codes and client_code not in codes:
+                    folder = parent / f"{safe} ({client_code})"  # outra empresa com o mesmo nome
+            return ensure_within(self.base_dir, folder)
         existing = self._existing_client_dirs(client_code, parent)
-        return existing[0] if existing else parent / client_code
+        return existing[0] if existing else ensure_within(self.base_dir, parent / client_code)
+
+    def client_dir(self, client_code: str, client_name: str | None, competence: str) -> Path:
+        """Pasta do cliente no mês: o nome da empresa; sem nome, a que já existir para o código."""
+        return self._client_dir_in(self.month_dir(competence), client_code, client_name)
+
+    def _place(self, file: Path, target: Path) -> bool:
+        """Move `file` para `target` sem sobrescrever nem apagar nada.
+
+        Já existe lá a mesma coisa: a cópia vai para _Duplicadas. Existe outro
+        arquivo com o mesmo nome: este ganha _2, _3... -> se moveu.
+        """
+        try:
+            if target.exists():
+                if target.is_file() and sha256_file(target) == sha256_file(file):
+                    target = self.base_dir / DUPLICATES_FOLDER / file.relative_to(self.base_dir)
+                    if target.exists():
+                        return False
+                else:
+                    n = 2
+                    while (alt := target.with_name(f"{target.stem}_{n}{target.suffix}")).exists():
+                        n += 1
+                    target = alt
+            ensure_dir(target.parent)
+            file.rename(target)
+            return True
+        except (OSError, ValueError) as exc:
+            log.warning("Não foi possível mover %s para %s: %s", file, target, exc)
+            return False
+
+    def _merge_into(self, src: Path, dst: Path) -> None:
+        """Junta a pasta antiga do cliente na atual (só move; veja _place)."""
+        for file in sorted(p for p in src.rglob("*") if p.is_file()):
+            if file.name.lower() != "desktop.ini":
+                self._place(file, dst / file.relative_to(src))
+        _remove_empty_dirs(src)
 
     def _sync_in(self, parent: Path, client_code: str, client_name: str | None) -> Path | None:
-        """Renomeia a pasta do cliente neste mês para 'CÓDIGO - NOME' (nome novo ou pasta só com código)."""
-        safe = safe_folder_name(client_name)
-        if not safe or not _CLIENT_CODE.match(client_code or ""):
+        """Deixa a pasta do cliente neste mês com o nome atual da empresa."""
+        if not safe_folder_name(client_name) or not _CLIENT_CODE.match(client_code or ""):
             return None
-        desired = parent / f"{client_code} - {safe}"
+        desired = self._client_dir_in(parent, client_code, client_name)
         existing = [d for d in self._existing_client_dirs(client_code, parent) if d != desired]
         if not existing:
             return desired if desired.is_dir() else None
-        if desired.exists():
-            return desired  # já existe a certa; a antiga fica (não mistura arquivos)
-        try:
-            existing[0].rename(desired)
-            return desired
-        except OSError:
-            return existing[0]  # pasta em uso (ex.: aberta no Explorer): tenta de novo depois
+        for old in existing:
+            if not desired.exists():
+                try:
+                    old.rename(desired)
+                    continue
+                except OSError:
+                    return old  # pasta em uso (ex.: aberta no Explorer): tenta de novo depois
+            self._merge_into(old, desired)
+        return desired
 
     def sync_client_dir(self, client_code: str, client_name: str | None, competence: str | None = None) -> list[Path]:
         """Nome da empresa nas pastas do cliente (num mês ou em todos)."""
@@ -219,20 +307,26 @@ class DownloadOrganizer:
         return [d for p in parents if (d := self._sync_in(p, client_code, client_name)) is not None]
 
     def sync_client_names(self, names: dict[str, str | None]) -> int:
-        """Todas as pastas de todos os meses de uma vez (início do robô). -> quantas renomeou."""
-        renamed = 0
+        """Todas as pastas de todos os meses de uma vez (início do robô). -> quantas renomeou ou juntou."""
+        changed = 0
         for month in self._month_dirs():
             try:
                 entries = [d for d in month.iterdir() if d.is_dir()]
             except OSError:
                 continue
+            codes: set[str] = set()
             for d in entries:
                 m = _CLIENT_FOLDER.match(d.name)
-                if m is None or m["code"] not in names:
-                    continue
-                result = self._sync_in(month, m["code"], names[m["code"]])
-                renamed += int(result is not None and result != d and not d.exists())
-        return renamed
+                if m and m["code"] in names:
+                    codes.add(m["code"])  # formato antigo "CÓDIGO - NOME"
+                codes |= self._note_codes(d) & names.keys()
+            for code in sorted(codes):
+                before = set(p.name for p in entries)
+                self._sync_in(month, code, names[code])
+                after = set(p.name for p in month.iterdir() if p.is_dir())
+                changed += int(before != after)
+                entries = [month / n for n in after]
+        return changed
 
     def folder_for(
         self, client_code: str, competence: str, document_type: DocumentType | str, client_name: str | None = None
@@ -288,15 +382,7 @@ class DownloadOrganizer:
                 if len(rel) < 3 or not _YEAR.match(rel[0]) or not _MONTH.match(rel[1]):
                     continue  # fora de ano/mês: não é do robô, fica
                 target = self.base_dir.joinpath(rel[0], rel[1], client.name, *rel[2:])
-                if target.exists():
-                    continue
-                try:
-                    ensure_dir(target.parent)
-                    file.rename(target)
-                except OSError as exc:
-                    log.warning("Não foi possível mover %s para %s: %s", file, target, exc)
-                    continue
-                moved += 1
+                moved += int(self._place(file, target))
             _remove_empty_dirs(client)
         if moved:
             log.info("%s nota(s) reorganizada(s) em ano/mês/cliente em %s.", moved, self.base_dir)
@@ -325,7 +411,9 @@ class DownloadOrganizer:
         try:
             if client_name:
                 month = self.month_dir(competence)
-                self._sync_in(month, client_code, client_name)
+                # renomeia/junta só na 1ª nota do cliente no mês (ou se o nome mudou)
+                if not self.client_dir(client_code, client_name, competence).is_dir():
+                    self._sync_in(month, client_code, client_name)
                 # pasta antiga em uso (não renomeou): grava nela em vez de criar uma segunda pasta do cliente
                 if not self.client_dir(client_code, client_name, competence).is_dir() and self._existing_client_dirs(
                     client_code, month

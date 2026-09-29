@@ -32,9 +32,9 @@ def test_organizer_for_only_uses_plan_b_for_another_folder(settings: Settings, t
 def test_drive_down_saves_locally_and_sends_later(tmp_path: Path) -> None:
     org = _org(tmp_path)
     stored = org.store(_source(tmp_path), "CLI000001", "2026-08", "NFCE", "LIA PAPELARIA")
-    local = tmp_path / "local" / "2026" / "08" / "CLI000001 - LIA PAPELARIA" / "NFCE" / "CLI000001_2026-08_NFCE.zip"
+    local = tmp_path / "local" / "2026" / "08" / "LIA PAPELARIA" / "NFCE" / "CLI000001_2026-08_NFCE.zip"
     assert stored.saved_locally and Path(stored.filepath) == local and local.is_file()
-    assert read_pending(tmp_path / "pend.json") == ["2026/08/CLI000001 - LIA PAPELARIA/NFCE/CLI000001_2026-08_NFCE.zip"]
+    assert read_pending(tmp_path / "pend.json") == ["2026/08/LIA PAPELARIA/NFCE/CLI000001_2026-08_NFCE.zip"]
     # ainda fora do ar: nada muda
     assert org.send_pending() == 0
     assert len(read_pending(tmp_path / "pend.json")) == 1
@@ -43,7 +43,7 @@ def test_drive_down_saves_locally_and_sends_later(tmp_path: Path) -> None:
 
     org.base_dir.parent.mkdir(parents=True)  # Google Drive voltou
     assert org.send_pending() == 1
-    sent = org.base_dir / "2026" / "08" / "CLI000001 - LIA PAPELARIA" / "NFCE" / "CLI000001_2026-08_NFCE.zip"
+    sent = org.base_dir / "2026" / "08" / "LIA PAPELARIA" / "NFCE" / "CLI000001_2026-08_NFCE.zip"
     assert sent.read_bytes() == ZIP
     assert local.is_file()  # a cópia local fica: o robô nunca apaga notas
     assert not (tmp_path / "pend.json").exists()
@@ -66,13 +66,14 @@ def test_send_does_not_duplicate_and_forgets_deleted_files(tmp_path: Path) -> No
     gone = org.store(_source(tmp_path, "b.zip", ZIP + b"x"), "CLI000002", "2026-08", "NFCE", "SELETO")
     Path(gone.filepath).unlink()  # o usuário apagou da pasta local
     org.base_dir.parent.mkdir(parents=True)
-    # a mesma nota já estava no Drive (ex.: copiada à mão): não cria _2
-    same = org.base_dir / "2026" / "08" / "CLI000001 - LIA" / "NFCE" / "CLI000001_2026-08_NFCE.zip"
-    same.parent.mkdir(parents=True)
-    same.write_bytes(ZIP)
+    # a mesma nota já estava no Drive, na pasta antiga "CÓDIGO - NOME": renomeia e não cria _2
+    old = org.base_dir / "2026" / "08" / "CLI000001 - LIA" / "NFCE" / "CLI000001_2026-08_NFCE.zip"
+    old.parent.mkdir(parents=True)
+    old.write_bytes(ZIP)
     assert org.send_pending() == 1
-    assert sorted(p.name for p in same.parent.iterdir()) == ["CLI000001_2026-08_NFCE.zip"]
-    assert not (org.base_dir / "2026" / "08" / "CLI000002 - SELETO").exists()
+    same = org.base_dir / "2026" / "08" / "LIA" / "NFCE"
+    assert sorted(p.name for p in same.iterdir()) == ["CLI000001_2026-08_NFCE.zip"]
+    assert not (org.base_dir / "2026" / "08" / "SELETO").exists()
     assert not (tmp_path / "pend.json").exists()
 
 
@@ -104,4 +105,4 @@ def test_old_pending_entry_is_sent_after_local_reorganize(tmp_path: Path) -> Non
     org.base_dir.parent.mkdir(parents=True)
     assert org.reorganize() == 1  # pasta local (a do Drive está vazia)
     assert org.send_pending() == 1
-    assert (org.base_dir / "2026" / "08" / "CLI000001 - LIA" / "NFCE" / "CLI000001_2026-08_NFCE.zip").read_bytes() == ZIP
+    assert (org.base_dir / "2026" / "08" / "LIA" / "NFCE" / "CLI000001_2026-08_NFCE.zip").read_bytes() == ZIP

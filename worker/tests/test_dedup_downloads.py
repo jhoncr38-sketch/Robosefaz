@@ -178,7 +178,7 @@ class TestClientFolderName:
         src.write_bytes(b"PK\x03\x04a")
         stored = org.store(src, "CLI000001", "2026-06", DocumentType.NFCE, client_name="LIA PAPELARIA & VARIEDADE")
         assert Path(stored.filepath).relative_to(tmp_path).parts == (
-            "2026", "06", "CLI000001 - LIA PAPELARIA & VARIEDADE", "NFCE", "CLI000001_2026-06_NFCE.zip"
+            "2026", "06", "LIA PAPELARIA & VARIEDADE", "NFCE", "CLI000001_2026-06_NFCE.zip"
         )
 
     def test_old_code_only_folder_is_renamed_with_its_files(self, tmp_path: Path) -> None:
@@ -186,9 +186,9 @@ class TestClientFolderName:
         (month / "CLI000002" / "NFCE").mkdir(parents=True)
         (month / "CLI000002" / "NFCE" / "CLI000002_2026-08_NFCE.zip").write_bytes(b"PK\x03\x04old")
         org = DownloadOrganizer(tmp_path)
-        assert org.sync_client_dir("CLI000002", "SELETO PLANEJADOS") == [month / "CLI000002 - SELETO PLANEJADOS"]
+        assert org.sync_client_dir("CLI000002", "SELETO PLANEJADOS") == [month / "SELETO PLANEJADOS"]
         assert not (month / "CLI000002").exists()
-        assert (month / "CLI000002 - SELETO PLANEJADOS" / "NFCE" / "CLI000002_2026-08_NFCE.zip").is_file()
+        assert (month / "SELETO PLANEJADOS" / "NFCE" / "CLI000002_2026-08_NFCE.zip").is_file()
 
     def test_name_change_renames_and_old_paths_still_found(self, tmp_path: Path) -> None:
         org = DownloadOrganizer(tmp_path)
@@ -196,7 +196,7 @@ class TestClientFolderName:
         src.write_bytes(b"PK\x03\x04a")
         stored = org.store(src, "CLI000001", "2026-06", DocumentType.NFCE, client_name="NOME ANTIGO")
         assert org.sync_client_names({"CLI000001": "NOME NOVO", "CLI000009": "OUTRO"}) == 1
-        assert [d.name for d in (tmp_path / "2026" / "06").iterdir()] == ["CLI000001 - NOME NOVO"]
+        assert [d.name for d in (tmp_path / "2026" / "06").iterdir()] == ["NOME NOVO"]
         # caminho gravado no banco ficou velho: ainda acha pela pasta do código
         found = org.locate(stored.filepath, "CLI000001", "2026-06", "NFCE", stored.filename)
         assert found.is_file() and "NOME NOVO" in str(found)
@@ -242,16 +242,16 @@ class TestMonthFirst:
             (old / doc).mkdir(parents=True)
             (old / doc / f"CLI000001_2026-08_{doc}.zip").write_bytes(data)
         (old / "NFCE" / "desktop.ini").write_text("x", encoding="utf-8")
-        # já existe no lugar novo: a antiga fica (nunca apaga nota)
+        # já existe no lugar novo, com outro conteúdo: nada é sobrescrito, a antiga ganha _2
         new_nfe = tmp_path / "2026" / "08" / "CLI000001 - LIA" / "NFE_EMITIDAS" / "CLI000001_2026-08_NFE_EMITIDAS.zip"
         new_nfe.parent.mkdir(parents=True)
         new_nfe.write_bytes(b"ja estava")
         org = DownloadOrganizer(tmp_path)
-        assert org.reorganize() == 1
+        assert org.reorganize() == 2
         assert (tmp_path / "2026" / "08" / "CLI000001 - LIA" / "NFCE" / "CLI000001_2026-08_NFCE.zip").read_bytes() == b"PK1"
         assert new_nfe.read_bytes() == b"ja estava"
-        assert (old / "NFE_EMITIDAS" / "CLI000001_2026-08_NFE_EMITIDAS.zip").read_bytes() == b"PK2"
-        assert not (old / "NFCE").exists()  # vazia (só desktop.ini): removida
+        assert new_nfe.with_name("CLI000001_2026-08_NFE_EMITIDAS_2.zip").read_bytes() == b"PK2"
+        assert not (tmp_path / "CLI000001 - LIA").exists()  # vazia (só desktop.ini): removida
         assert org.reorganize() == 0
 
     def test_reorganize_takes_extracted_files_along(self, tmp_path: Path) -> None:
@@ -276,3 +276,66 @@ class TestMonthFirst:
         org.reorganize()
         found = org.locate(str(old), "CLI000001", "2026-08", "NFCE", old.name)
         assert found.read_bytes() == b"PK" and found.parts[-4:-2] == ("08", "CLI000001 - LIA")
+
+
+class TestNameOnlyFolders:
+    """Pasta do cliente só com o nome da empresa (desde a 1.2.11); o dono vem das notas dentro."""
+
+    @staticmethod
+    def _note(folder: Path, code: str, doc: str = "NFCE", comp: str = "2026-08") -> Path:
+        f = folder / doc / f"{code}_{comp}_{doc}.zip"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(b"PK" + code.encode())
+        return f
+
+    def test_same_name_gets_code_only_for_the_second_company(self, tmp_path: Path) -> None:
+        org = DownloadOrganizer(tmp_path)
+        for code in ("CLI000013", "CLI000030"):
+            src = tmp_path / f"{code}.zip"
+            src.write_bytes(b"PK\x03\x04" + code.encode())
+            org.store(src, code, "2026-08", DocumentType.NFCE, client_name="SILVA VARIEDADES")
+        month = tmp_path / "2026" / "08"
+        assert sorted(d.name for d in month.iterdir()) == ["SILVA VARIEDADES", "SILVA VARIEDADES (CLI000030)"]
+        assert (month / "SILVA VARIEDADES" / "NFCE" / "CLI000013_2026-08_NFCE.zip").is_file()
+        # a 1ª continua achando a pasta dela, a 2ª também (pelas notas dentro)
+        assert org.client_dir("CLI000030", "SILVA VARIEDADES", "2026-08").name == "SILVA VARIEDADES (CLI000030)"
+        assert org.client_dir("CLI000030", None, "2026-08").name == "SILVA VARIEDADES (CLI000030)"
+
+    def test_name_change_found_by_the_notes_inside(self, tmp_path: Path) -> None:
+        month = tmp_path / "2026" / "08"
+        self._note(month / "NOME ANTIGO", "CLI000004")
+        self._note(month / "OUTRA EMPRESA", "CLI000005")
+        org = DownloadOrganizer(tmp_path)
+        assert org.sync_client_names({"CLI000004": "CRISTALIZE", "CLI000005": "OUTRA EMPRESA"}) == 1
+        assert sorted(d.name for d in month.iterdir()) == ["CRISTALIZE", "OUTRA EMPRESA"]
+
+    def test_old_code_folders_are_renamed_and_merged(self, tmp_path: Path) -> None:
+        month = tmp_path / "2026" / "08"
+        self._note(month / "CLI000004 - CRISTALIZE", "CLI000004", "NFCE")
+        # outro computador (versão nova) já criou a pasta só com o nome: junta, sem sobrescrever
+        self._note(month / "CRISTALIZE", "CLI000004", "NFE_EMITIDAS")
+        self._note(month / "CLI000004 - CRISTALIZE", "CLI000004", "NFE_EMITIDAS").write_bytes(b"PKoutra")
+        org = DownloadOrganizer(tmp_path)
+        org.sync_client_names({"CLI000004": "CRISTALIZE"})
+        assert (month / "CRISTALIZE" / "NFCE" / "CLI000004_2026-08_NFCE.zip").is_file()
+        assert (month / "CRISTALIZE" / "NFE_EMITIDAS" / "CLI000004_2026-08_NFE_EMITIDAS.zip").read_bytes() == b"PKCLI000004"
+        # a da pasta antiga tinha outro conteúdo: vem junto com _2 (nada é sobrescrito)
+        assert (month / "CRISTALIZE" / "NFE_EMITIDAS" / "CLI000004_2026-08_NFE_EMITIDAS_2.zip").read_bytes() == b"PKoutra"
+        assert not (month / "CLI000004 - CRISTALIZE").exists()
+
+    def test_identical_copy_goes_to_duplicates_folder(self, tmp_path: Path) -> None:
+        month = tmp_path / "2026" / "08"
+        self._note(month / "CLI000001 - LIA", "CLI000001")
+        self._note(month / "LIA", "CLI000001")  # mesma nota, mesmo conteúdo
+        DownloadOrganizer(tmp_path).sync_client_names({"CLI000001": "LIA"})
+        assert sorted(d.name for d in month.iterdir()) == ["LIA"]
+        dup = tmp_path / "_Duplicadas" / "2026" / "08" / "CLI000001 - LIA" / "NFCE" / "CLI000001_2026-08_NFCE.zip"
+        assert dup.read_bytes() == b"PKCLI000001"  # guardada, não apagada
+
+    def test_parse_note_path_takes_code_from_file(self) -> None:
+        from app.downloads.organizer import parse_note_path
+
+        n = parse_note_path(("2026", "08", "SILVA VARIEDADES (CLI000030)", "NFCE", "CLI000030_2026-08_NFCE.zip"))
+        assert n is not None and (n.client_code, n.client_name) == ("CLI000030", "SILVA VARIEDADES")
+        n = parse_note_path(("2026", "08", "CRISTALIZE", "NFCE", "CLI000004_2026-08_NFCE.zip"))
+        assert n is not None and (n.client_code, n.client_name) == ("CLI000004", "CRISTALIZE")

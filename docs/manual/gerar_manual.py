@@ -411,7 +411,9 @@ def cap_instalacao() -> list:
                 "Repita os passos 1 a 3 em cada computador. Cada um precisa dos certificados instalados.",
                 "O computador que estiver ligado pega os agendamentos da fila. Se os dois estiverem ligados, "
                 "eles dividem o trabalho, e o mesmo cliente nunca é processado por dois robôs ao mesmo tempo.",
-                "Cada computador guarda as notas que <b>ele</b> baixou.",
+                "Sem o Google Drive, cada computador guarda as notas que <b>ele</b> baixou. Com o Google Drive "
+                "(capítulo 8), use a <b>mesma pasta</b> em todos os computadores: as notas ficam juntas e o "
+                "“Baixar pasta do mês” sai completo.",
             ]
         ),
     ]
@@ -636,16 +638,20 @@ def cap_downloads() -> list:
             "Os ZIPs ficam <b>no computador que fez o download</b> (ou no Google Drive, veja abaixo), "
             "organizados por mês e depois por empresa:"
         ),
-        P(code("C:\\SIAT-Robo\\storage\\downloads\\2026\\08\\CLI000001 - NOME DA EMPRESA\\NFCE\\CLI000001_2026-08_NFCE.zip")),
+        P(code("C:\\SIAT-Robo\\storage\\downloads\\2026\\08\\NOME DA EMPRESA\\NFCE\\CLI000001_2026-08_NFCE.zip")),
         *bullets(
             [
                 "Ano e mês primeiro: todas as notas de uma competência ficam numa pasta só.",
-                "Dentro do mês, uma pasta por empresa, com o código na frente do nome. Se o nome mudar no painel, "
-                "as pastas são renomeadas sozinhas.",
+                "Dentro do mês, uma pasta por empresa, só com o nome dela. Se o nome mudar no painel, as pastas "
+                "são renomeadas sozinhas. Se duas empresas tiverem o mesmo nome, a segunda ganha o código no fim, "
+                "por exemplo " + code("SILVA VARIEDADES (CLI000013)") + ".",
+                "O nome de cada arquivo começa pelo código do cliente (" + code("CLI000001_2026-08_NFCE.zip") + "): "
+                "é por ele que o robô e o painel sabem de quem é a nota.",
                 "Dentro da empresa, o tipo (" + code("NFCE") + ", " + code("NFE_EMITIDAS") + ", "
                 + code("NFE_RECEBIDAS") + ").",
                 "O robô <b>nunca apaga</b> os ZIPs. Você apaga quando quiser. Notas antigas, no formato "
-                "empresa/ano/mês (até a versão 1.2.7), são movidas sozinhas para o formato novo.",
+                "empresa/ano/mês (até a versão 1.2.7) ou com o código na frente do nome da empresa (até a 1.2.10), "
+                "são reorganizadas sozinhas.",
             ]
         ),
         H2("Salvar as notas no Google Drive (opcional)"),

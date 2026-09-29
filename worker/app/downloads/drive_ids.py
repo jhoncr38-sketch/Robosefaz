@@ -105,9 +105,8 @@ class DriveIdLookup:
             if len(parents) < 4:
                 continue
             titles = [title for title, _ in parents]
-            # .../2026/09/CLI000001 - NOME/NFCE/arquivo.zip
-            client_ok = titles[1] == code or titles[1].startswith(f"{code} - ")
-            if titles[0] == doc and client_ok and titles[2] == month and titles[3] == year:
+            # .../2026/09/NOME DA EMPRESA/NFCE/CLI000001_2026-09_NFCE.zip (o código está no nome do arquivo)
+            if titles[0] == doc and titles[2] == month and titles[3] == year and filename.startswith(f"{code}_"):
                 client_id, month_id = parents[1][1], parents[2][1]
                 if _is_cloud_id(client_id) and _is_cloud_id(month_id):
                     return DriveIds(cloud_id, client_id, month_id)
