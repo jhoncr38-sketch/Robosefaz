@@ -254,6 +254,20 @@ class TestMonthFirst:
         assert not (old / "NFCE").exists()  # vazia (só desktop.ini): removida
         assert org.reorganize() == 0
 
+    def test_reorganize_takes_extracted_files_along(self, tmp_path: Path) -> None:
+        # XMLs que alguém descompactou dentro da pasta do mês vão junto, com as subpastas
+        month = tmp_path / "CLI000002 - SELETO" / "2026" / "06" / "NFCE"
+        (month / "TP-1" / "PI").mkdir(parents=True)
+        (month / "CLI000002_2026-06_NFCE.zip").write_bytes(b"PK")
+        (month / "TP-1" / "PI" / "2226.xml").write_text("<nfe/>", encoding="utf-8")
+        (tmp_path / "CLI000002 - SELETO" / "leia-me.txt").write_text("fora de ano/mês", encoding="utf-8")
+        assert DownloadOrganizer(tmp_path).reorganize() == 2
+        new = tmp_path / "2026" / "06" / "CLI000002 - SELETO" / "NFCE"
+        assert (new / "CLI000002_2026-06_NFCE.zip").is_file()
+        assert (new / "TP-1" / "PI" / "2226.xml").read_text(encoding="utf-8") == "<nfe/>"
+        assert (tmp_path / "CLI000002 - SELETO" / "leia-me.txt").is_file()  # não é do robô: fica
+        assert not (tmp_path / "CLI000002 - SELETO" / "2026").exists()
+
     def test_locate_after_reorganize(self, tmp_path: Path) -> None:
         old = tmp_path / "CLI000001 - LIA" / "2026" / "08" / "NFCE" / "CLI000001_2026-08_NFCE.zip"
         old.parent.mkdir(parents=True)

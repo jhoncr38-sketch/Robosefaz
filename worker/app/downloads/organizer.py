@@ -268,10 +268,12 @@ class DownloadOrganizer:
             seq += 1
 
     def reorganize(self) -> int:
-        """Move as notas do formato antigo (cliente/ano/mês/tipo) para ano/mês/cliente/tipo.
+        """Move o formato antigo (cliente/ano/mês/...) para ano/mês/cliente/...
 
-        Só move (no Google Drive, mover mantém o arquivo e o link). Se a nota já
-        existe no lugar novo, a antiga fica onde está. -> quantas moveu.
+        Leva as notas e também o que estiver junto delas no mês (ex.: XMLs que
+        alguém descompactou ali), mantendo as subpastas. Só move (no Google Drive,
+        mover mantém o arquivo e o link); se já existe no lugar novo, fica onde
+        está. -> quantos arquivos moveu.
         """
         if not self.base_dir.is_dir():
             return 0
@@ -280,12 +282,12 @@ class DownloadOrganizer:
             if not client.is_dir() or _YEAR.match(client.name) or not _CLIENT_FOLDER.match(client.name):
                 continue
             for file in sorted(client.rglob("*")):
-                if not file.is_file():
+                if not file.is_file() or file.name.lower() == "desktop.ini":
                     continue
-                note = parse_note_path((client.name, *file.relative_to(client).parts))
-                if note is None:
-                    continue
-                target = self.base_dir.joinpath(*note.parts)
+                rel = file.relative_to(client).parts  # (ano, mês, ...)
+                if len(rel) < 3 or not _YEAR.match(rel[0]) or not _MONTH.match(rel[1]):
+                    continue  # fora de ano/mês: não é do robô, fica
+                target = self.base_dir.joinpath(rel[0], rel[1], client.name, *rel[2:])
                 if target.exists():
                     continue
                 try:
