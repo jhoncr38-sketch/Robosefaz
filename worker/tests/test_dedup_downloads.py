@@ -74,7 +74,7 @@ class TestDownloadOrganizer:
     def test_folder_and_filename(self, tmp_path: Path) -> None:
         org = DownloadOrganizer(tmp_path)
         folder = org.folder_for("CLI000001", "2026-08", DocumentType.NFCE)
-        assert folder == (tmp_path / "CLI000001" / "2026" / "08" / "NFCE").resolve()
+        assert folder == (tmp_path / "2026" / "08" / "CLI000001" / "NFCE").resolve()
         assert org.filename_for("CLI000001", "2026-08", DocumentType.NFCE) == "CLI000001_2026-08_NFCE.zip"
         assert org.filename_for("CLI000001", "08/2026", "NFE_EMITIDAS") == "CLI000001_2026-08_NFE_EMITIDAS.zip"
         assert org.filename_for("CLI000001", "2026-08", "NFE_RECEBIDAS") == "CLI000001_2026-08_NFE_RECEBIDAS.zip"
@@ -178,31 +178,31 @@ class TestClientFolderName:
         src.write_bytes(b"PK\x03\x04a")
         stored = org.store(src, "CLI000001", "2026-06", DocumentType.NFCE, client_name="LIA PAPELARIA & VARIEDADE")
         assert Path(stored.filepath).relative_to(tmp_path).parts == (
-            "CLI000001 - LIA PAPELARIA & VARIEDADE", "2026", "06", "NFCE", "CLI000001_2026-06_NFCE.zip"
+            "2026", "06", "CLI000001 - LIA PAPELARIA & VARIEDADE", "NFCE", "CLI000001_2026-06_NFCE.zip"
         )
 
     def test_old_code_only_folder_is_renamed_with_its_files(self, tmp_path: Path) -> None:
-        old = tmp_path / "CLI000002" / "2026" / "08" / "NFCE"
-        old.mkdir(parents=True)
-        (old / "CLI000002_2026-08_NFCE.zip").write_bytes(b"PK\x03\x04old")
+        month = tmp_path / "2026" / "08"
+        (month / "CLI000002" / "NFCE").mkdir(parents=True)
+        (month / "CLI000002" / "NFCE" / "CLI000002_2026-08_NFCE.zip").write_bytes(b"PK\x03\x04old")
         org = DownloadOrganizer(tmp_path)
-        assert org.sync_client_dir("CLI000002", "SELETO PLANEJADOS") == tmp_path / "CLI000002 - SELETO PLANEJADOS"
-        assert not (tmp_path / "CLI000002").exists()
-        assert (tmp_path / "CLI000002 - SELETO PLANEJADOS" / "2026" / "08" / "NFCE" / "CLI000002_2026-08_NFCE.zip").is_file()
+        assert org.sync_client_dir("CLI000002", "SELETO PLANEJADOS") == [month / "CLI000002 - SELETO PLANEJADOS"]
+        assert not (month / "CLI000002").exists()
+        assert (month / "CLI000002 - SELETO PLANEJADOS" / "NFCE" / "CLI000002_2026-08_NFCE.zip").is_file()
 
     def test_name_change_renames_and_old_paths_still_found(self, tmp_path: Path) -> None:
         org = DownloadOrganizer(tmp_path)
         src = tmp_path / "a.zip"
         src.write_bytes(b"PK\x03\x04a")
         stored = org.store(src, "CLI000001", "2026-06", DocumentType.NFCE, client_name="NOME ANTIGO")
-        org.sync_client_dir("CLI000001", "NOME NOVO")
-        assert [d.name for d in tmp_path.iterdir() if d.is_dir()] == ["CLI000001 - NOME NOVO"]
+        assert org.sync_client_names({"CLI000001": "NOME NOVO", "CLI000009": "OUTRO"}) == 1
+        assert [d.name for d in (tmp_path / "2026" / "06").iterdir()] == ["CLI000001 - NOME NOVO"]
         # caminho gravado no banco ficou velho: ainda acha pela pasta do código
         found = org.locate(stored.filepath, "CLI000001", "2026-06", "NFCE", stored.filename)
         assert found.is_file() and "NOME NOVO" in str(found)
 
     def test_no_folder_is_created_when_client_has_no_notes(self, tmp_path: Path) -> None:
-        assert DownloadOrganizer(tmp_path).sync_client_dir("CLI000009", "SEM NOTAS") is None
+        assert DownloadOrganizer(tmp_path).sync_client_dir("CLI000009", "SEM NOTAS") == []
         assert list(tmp_path.iterdir()) == []
 
 
@@ -220,3 +220,45 @@ def test_empty_zip_is_not_stored(tmp_path) -> None:  # noqa: ANN001
     with pytest.raises(EmptyExportError):
         org.store(src, "CLI000022", "2026-09", "NFE_EMITIDAS", "BOLO DO EDU")
     assert not (tmp_path / "downloads").exists() or not any((tmp_path / "downloads").rglob("*.zip"))
+
+
+class TestMonthFirst:
+    """Pastas ano/mês/cliente/tipo (desde a 1.2.8) e a mudança do formato antigo."""
+
+    def test_parse_note_path_both_layouts(self) -> None:
+        from app.downloads.organizer import parse_note_path
+
+        new = parse_note_path(("2026", "08", "CLI000001 - LIA", "NFCE", "CLI000001_2026-08_NFCE.zip"))
+        old = parse_note_path(("CLI000001 - LIA", "2026", "08", "NFCE", "CLI000001_2026-08_NFCE.zip"))
+        assert new == old and new is not None
+        assert (new.client_code, new.client_name, new.competence) == ("CLI000001", "LIA", "2026-08")
+        assert new.parts == ("2026", "08", "CLI000001 - LIA", "NFCE", "CLI000001_2026-08_NFCE.zip")
+        assert parse_note_path(("2026", "08", "CLI000001", "NFCE", "desktop.ini")) is None
+        assert parse_note_path(("2026", "13", "CLI000001", "NFCE", "CLI000001_2026-13_NFCE.zip")) is None
+
+    def test_reorganize_moves_old_layout_only(self, tmp_path: Path) -> None:
+        old = tmp_path / "CLI000001 - LIA" / "2026" / "08"
+        for doc, data in (("NFCE", b"PK1"), ("NFE_EMITIDAS", b"PK2")):
+            (old / doc).mkdir(parents=True)
+            (old / doc / f"CLI000001_2026-08_{doc}.zip").write_bytes(data)
+        (old / "NFCE" / "desktop.ini").write_text("x", encoding="utf-8")
+        # já existe no lugar novo: a antiga fica (nunca apaga nota)
+        new_nfe = tmp_path / "2026" / "08" / "CLI000001 - LIA" / "NFE_EMITIDAS" / "CLI000001_2026-08_NFE_EMITIDAS.zip"
+        new_nfe.parent.mkdir(parents=True)
+        new_nfe.write_bytes(b"ja estava")
+        org = DownloadOrganizer(tmp_path)
+        assert org.reorganize() == 1
+        assert (tmp_path / "2026" / "08" / "CLI000001 - LIA" / "NFCE" / "CLI000001_2026-08_NFCE.zip").read_bytes() == b"PK1"
+        assert new_nfe.read_bytes() == b"ja estava"
+        assert (old / "NFE_EMITIDAS" / "CLI000001_2026-08_NFE_EMITIDAS.zip").read_bytes() == b"PK2"
+        assert not (old / "NFCE").exists()  # vazia (só desktop.ini): removida
+        assert org.reorganize() == 0
+
+    def test_locate_after_reorganize(self, tmp_path: Path) -> None:
+        old = tmp_path / "CLI000001 - LIA" / "2026" / "08" / "NFCE" / "CLI000001_2026-08_NFCE.zip"
+        old.parent.mkdir(parents=True)
+        old.write_bytes(b"PK")
+        org = DownloadOrganizer(tmp_path)
+        org.reorganize()
+        found = org.locate(str(old), "CLI000001", "2026-08", "NFCE", old.name)
+        assert found.read_bytes() == b"PK" and found.parts[-4:-2] == ("08", "CLI000001 - LIA")

@@ -12,19 +12,17 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 import shutil
 import threading
 from pathlib import Path
 
 from app.config import Settings
-from app.downloads.organizer import DownloadFolderUnavailable, DownloadOrganizer
+from app.downloads.organizer import DownloadFolderUnavailable, DownloadOrganizer, parse_note_path
 from app.jobs.models import DocumentType, DownloadedFile
 from app.utils.files import ensure_dir
 
 log = logging.getLogger("downloads")
 
-_CLIENT_FOLDER = re.compile(r"^(?P<code>[A-Z0-9]{3,20})(?: - (?P<name>.+))?$")
 _lock = threading.Lock()
 
 
@@ -120,6 +118,15 @@ class FallbackOrganizer(DownloadOrganizer):
             return found
         return local if local.is_file() else found
 
+    def reorganize(self) -> int:
+        """Formato ano/mês/cliente na pasta das notas (se estiver no ar) e na pasta local."""
+        moved = self.local.reorganize()
+        try:
+            self.check_available()
+        except DownloadFolderUnavailable:
+            return moved
+        return moved + super().reorganize()
+
     def send_pending(self) -> int:
         """Copia para a pasta das notas as notas do plano B. Devolve quantas foram enviadas."""
         items = read_pending(self.pending_file)
@@ -132,17 +139,18 @@ class FallbackOrganizer(DownloadOrganizer):
         done: set[str] = set()
         sent = 0
         for rel in items:
+            note = parse_note_path(Path(rel).parts)
             src = self.local.base_dir / rel
-            parts = Path(rel).parts
-            match = _CLIENT_FOLDER.match(parts[0]) if len(parts) == 5 else None
-            if not src.is_file() or match is None:
+            if note is not None and not src.is_file():
+                src = self.local.base_dir.joinpath(*note.parts)  # pasta local reorganizada depois de anotar
+            if not src.is_file() or note is None:
                 done.add(rel)  # apagada da pasta local ou caminho estranho: esquece
                 continue
             tmp = ensure_dir(self.pending_file.parent / "enviando") / src.name
             try:
                 shutil.copy2(src, tmp)
                 # super(): sem o plano B aqui (senão a nota voltaria para a pasta local)
-                super().store(tmp, match["code"], f"{parts[1]}-{parts[2]}", parts[3], match["name"])
+                super().store(tmp, note.client_code, note.competence, note.document_type, note.client_name)
             except DownloadFolderUnavailable:
                 break  # caiu de novo: tenta na próxima rodada
             except (OSError, ValueError) as exc:

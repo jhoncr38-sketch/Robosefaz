@@ -159,7 +159,7 @@ class TestCollector:
         for d in repo.downloads:
             p = Path(d["filepath"])
             assert p.exists() and p.parent.name == d["document_type"]
-            assert p.parent.parent.name == "08" and p.parent.parent.parent.name == "2026"
+            assert p.parent.parent.parent.name == "08" and p.parent.parent.parent.parent.name == "2026"
             assert len(d["checksum"]) == 64
         types = [t["task_type"] for t in repo.tasks_of(job.id)]
         assert types.count(TaskType.DOWNLOAD) == 3 and types.count(TaskType.CHECK_PROCESSING) == 1

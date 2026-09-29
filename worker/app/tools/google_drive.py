@@ -30,7 +30,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from app.config import PROJECT_ROOT, Settings, get_settings
-from app.downloads.organizer import NOTE_FILE
+from app.downloads.organizer import NOTE_FILE, parse_note_path
 from app.utils.files import ensure_dir
 
 ENV_FILE = PROJECT_ROOT / ".env"
@@ -98,15 +98,17 @@ def probe_write(folder: Path) -> None:
 
 
 def copy_notes(src: Path, dst: Path) -> tuple[int, int]:
-    """Copia as notas de `src` para `dst` na mesma estrutura. Nunca sobrescreve. -> (copiadas, já existiam)."""
+    """Copia as notas de `src` para `dst` em ano/mês/cliente/tipo. Nunca sobrescreve. -> (copiadas, já existiam)."""
     copied = skipped = 0
     if not src.is_dir() or _same(src, dst):
         return 0, 0
     for file in sorted(src.rglob("*")):
         if not file.is_file() or not NOTE_FILE.match(file.name):
             continue
-        target = dst / file.relative_to(src)
-        if target.exists():
+        rel = file.relative_to(src)
+        note = parse_note_path(rel.parts)
+        target = dst.joinpath(*note.parts) if note else dst / rel
+        if target.exists() or (dst / rel).exists():
             skipped += 1
             continue
         ensure_dir(target.parent)

@@ -88,6 +88,11 @@ class Worker:
                 await self.repo.generate_certificate_expiry_notifications()
             except Exception:
                 log.exception("Falha na rotina de manutenção")
+            try:
+                # notas no formato antigo (cliente/ano/mês), ex.: copiadas por outro computador
+                await asyncio.to_thread(self.organizer.reorganize)
+            except Exception:
+                log.exception("Falha ao reorganizar a pasta das notas")
             if isinstance(self.organizer, FallbackOrganizer):
                 try:
                     # plano B: notas salvas na pasta local enquanto a pasta das notas estava fora do ar
@@ -303,12 +308,13 @@ def _clear_stale_chrome_policy(settings: Settings) -> None:
 
 
 async def _sync_client_folders(settings: Settings, client) -> None:  # noqa: ANN001
-    """Pastas de notas com o nome da empresa (renomeia 'CLI000001' e nomes antigos)."""
+    """Pastas em ano/mês/cliente, com o nome da empresa (renomeia 'CLI000001' e nomes antigos)."""
     try:
-        rows = (await client.table("clients").select("client_code, legal_name, trade_name").execute()).data or []
         organizer = organizer_for(settings)
-        for r in rows:
-            organizer.sync_client_dir(r["client_code"], r.get("trade_name") or r.get("legal_name"))
+        await asyncio.to_thread(organizer.reorganize)
+        rows = (await client.table("clients").select("client_code, legal_name, trade_name").execute()).data or []
+        names = {r["client_code"]: r.get("trade_name") or r.get("legal_name") for r in rows}
+        await asyncio.to_thread(organizer.sync_client_names, names)
     except Exception as exc:  # noqa: BLE001 - pasta indisponível/sem internet: tenta no próximo início
         log.warning("Não foi possível organizar as pastas dos clientes: %s", exc)
 

@@ -633,16 +633,19 @@ def cap_downloads() -> list:
         H1("8. Downloads e pastas das notas"),
         H2("Onde ficam os arquivos"),
         P(
-            "Os ZIPs ficam <b>no computador que fez o download</b>, organizados assim:"
+            "Os ZIPs ficam <b>no computador que fez o download</b> (ou no Google Drive, veja abaixo), "
+            "organizados por mês e depois por empresa:"
         ),
-        P(code("C:\\SIAT-Robo\\storage\\downloads\\CLI000001 - NOME DA EMPRESA\\2026\\08\\NFCE\\CLI000001_2026-08_NFCE.zip")),
+        P(code("C:\\SIAT-Robo\\storage\\downloads\\2026\\08\\CLI000001 - NOME DA EMPRESA\\NFCE\\CLI000001_2026-08_NFCE.zip")),
         *bullets(
             [
-                "Uma pasta por empresa, com o código na frente do nome. Se o nome mudar no painel, a pasta é "
-                "renomeada sozinha.",
-                "Dentro: ano, mês e tipo (" + code("NFCE") + ", " + code("NFE_EMITIDAS") + ", "
+                "Ano e mês primeiro: todas as notas de uma competência ficam numa pasta só.",
+                "Dentro do mês, uma pasta por empresa, com o código na frente do nome. Se o nome mudar no painel, "
+                "as pastas são renomeadas sozinhas.",
+                "Dentro da empresa, o tipo (" + code("NFCE") + ", " + code("NFE_EMITIDAS") + ", "
                 + code("NFE_RECEBIDAS") + ").",
-                "O robô <b>nunca apaga</b> os ZIPs. Você apaga quando quiser.",
+                "O robô <b>nunca apaga</b> os ZIPs. Você apaga quando quiser. Notas antigas, no formato "
+                "empresa/ano/mês (até a versão 1.2.7), são movidas sozinhas para o formato novo.",
             ]
         ),
         H2("Salvar as notas no Google Drive (opcional)"),
@@ -676,6 +679,22 @@ def cap_downloads() -> list:
         P(
             "Lista todas as notas baixadas, com filtros por competência, cliente e tipo. O ícone de informação (i), ao lado do nome, mostra o "
             "caminho completo e o código de conferência (SHA-256) do arquivo."
+        ),
+        H2("Baixar uma nota ou o mês inteiro (Google Drive)"),
+        P(
+            "Com as notas no Google Drive, a tela Downloads mostra o botão <b>Baixar</b> em cada nota: ele baixa o "
+            "ZIP direto do Drive, em qualquer computador, para quem tem a pasta <b>JR Sistema - Notas</b> "
+            "compartilhada. O botão libera alguns minutos depois que a nota chega ao Drive."
+        ),
+        *steps(
+            [
+                "Para baixar <b>todas as notas de um mês</b>, escolha a competência no filtro e clique em "
+                "<b>Baixar pasta do mês</b>. Para as de <b>um cliente</b> no mês, escolha também o cliente e clique "
+                "em <b>Baixar pasta do cliente</b>.",
+                "A pasta abre no Google Drive. Clique na setinha ao lado do nome da pasta (no topo) → "
+                "<b>Fazer download</b>.",
+                "O Drive gera um ZIP com as pastas dos clientes e dos tipos de nota, e o download começa.",
+            ]
         ),
         H2("Botão Abrir pasta"),
         *steps(

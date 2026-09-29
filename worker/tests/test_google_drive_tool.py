@@ -9,7 +9,9 @@ import pytest
 from app.config import Settings
 from app.tools import google_drive as gd
 
+# formato antigo (até a 1.2.7) e atual: a cópia já grava em ano/mês/cliente
 NOTE = Path("CLI000001 - LIA") / "2026" / "08" / "NFCE" / "CLI000001_2026-08_NFCE.zip"
+NEW = Path("2026") / "08" / "CLI000001 - LIA" / "NFCE" / "CLI000001_2026-08_NFCE.zip"
 
 
 def test_find_drive_roots(tmp_path: Path) -> None:
@@ -43,11 +45,11 @@ def test_copy_notes_never_overwrites(tmp_path: Path) -> None:
         (src / rel).parent.mkdir(parents=True, exist_ok=True)
         (src / rel).write_bytes(data)
     (src / "desktop.ini").write_text("x", encoding="utf-8")  # só notas são copiadas
-    (dst / NOTE).parent.mkdir(parents=True)
-    (dst / NOTE).write_bytes(b"ja estava")
+    (dst / NEW).parent.mkdir(parents=True)
+    (dst / NEW).write_bytes(b"ja estava")
     assert gd.copy_notes(src, dst) == (1, 1)
-    assert (dst / NOTE).read_bytes() == b"ja estava"
-    assert (dst / NOTE.with_name("CLI000001_2026-08_NFCE_2.zip")).read_bytes() == b"PK2"
+    assert (dst / NEW).read_bytes() == b"ja estava"
+    assert (dst / NEW.with_name("CLI000001_2026-08_NFCE_2.zip")).read_bytes() == b"PK2"
     assert not (dst / "desktop.ini").exists()
     assert gd.copy_notes(src, src) == (0, 0)
 
@@ -70,7 +72,7 @@ def test_run_switches_to_drive(settings: Settings, setup, monkeypatch: pytest.Mo
     target.mkdir()
     monkeypatch.setattr(gd, "restart_and_confirm", lambda s, t: "ok")
     assert gd.run(settings, env_file=env, ask=lambda q: "") == 0
-    assert (target / NOTE).read_bytes() == b"PK"
+    assert (target / NEW).read_bytes() == b"PK"
     assert (settings.downloads_dir / NOTE).is_file()  # original fica
     assert f"DOWNLOAD_BASE_PATH='{target.as_posix()}'" in env.read_text(encoding="utf-8")
     assert "DEVICE_EMAIL=robo@x" in env.read_text(encoding="utf-8")
@@ -107,7 +109,7 @@ def test_run_does_nothing_when_write_fails(settings: Settings, setup, monkeypatc
     monkeypatch.setattr(gd, "probe_write", denied)
     assert gd.run(settings, env_file=env, ask=lambda q: "") == 1
     assert env.read_text(encoding="utf-8") == before
-    assert not (target / NOTE).exists()
+    assert not (target / NEW).exists() and not (target / NOTE).exists()
 
 
 def test_run_without_drive(settings: Settings, setup, monkeypatch: pytest.MonkeyPatch) -> None:

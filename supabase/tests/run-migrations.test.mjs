@@ -616,6 +616,18 @@ await test("robô grava o código do Google Drive só nos downloads do próprio 
     as(DEVICE_B.authId, (tx) => tx.query("update public.downloads set drive_file_id = 'https://evil.example/x' where id = $1", [id])),
     /downloads_drive_file_id_format/,
   );
+  // pastas ano/mês e ano/mês/cliente ("Baixar todas")
+  const folders = await as(DEVICE_B.authId, (tx) =>
+    tx.query(
+      "update public.downloads set drive_client_folder_id = $2, drive_month_folder_id = $3 where id = $1 returning drive_month_folder_id",
+      [id, "1DB4jzRLko3Xm3ZtWdC4235rCAf7v8-Xp", "17sSm4IpL_iXnBG2hyRVQ6Kw_YUUVaCLX"],
+    ),
+  );
+  assert.equal(folders.rows[0].drive_month_folder_id, "17sSm4IpL_iXnBG2hyRVQ6Kw_YUUVaCLX");
+  await rejects(
+    as(DEVICE_B.authId, (tx) => tx.query("update public.downloads set drive_month_folder_id = 'javascript:alert(1)' where id = $1", [id])),
+    /downloads_drive_folders_format/,
+  );
 });
 
 await test("painel lista só os computadores do próprio escritório", async () => {

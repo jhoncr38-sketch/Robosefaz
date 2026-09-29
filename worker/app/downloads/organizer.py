@@ -1,15 +1,20 @@
-"""Organização dos arquivos baixados por cliente e competência.
+"""Organização dos arquivos baixados por competência e cliente.
 
-storage/downloads/{client_code} - {nome da empresa}/{year}/{month}/{NFCE|NFE_EMITIDAS|NFE_RECEBIDAS}/
+{pasta das notas}/{ano}/{mês}/{client_code} - {nome da empresa}/{NFCE|NFE_EMITIDAS|NFE_RECEBIDAS}/
 Nome: {client_code}_{YYYY-MM}_{TIPO}.zip  (sufixo _2, _3... para lotes múltiplos)
 
-A pasta do cliente começa sempre pelo código (CLI000001 - LIA PAPELARIA): o
-nome pode mudar ou se repetir, o código não. Se o nome mudar no painel, a
-pasta existente é renomeada; pastas antigas só com o código também.
+Mês primeiro (desde a 1.2.8): "todas as notas de 09/2026" e "LIA 08/2026" são uma
+pasta só, que o Google Drive baixa inteira como ZIP. A pasta do cliente começa
+sempre pelo código (CLI000001 - LIA PAPELARIA): o nome pode mudar ou se repetir,
+o código não. Se o nome mudar no painel, as pastas existentes são renomeadas.
+
+Notas no formato antigo (cliente/ano/mês/tipo) são movidas por `reorganize`:
+só move, nunca apaga nota.
 """
 
 from __future__ import annotations
 
+import logging
 import re
 import zipfile
 from dataclasses import dataclass
@@ -19,7 +24,13 @@ from app.jobs.models import DocumentType, DownloadedFile
 from app.utils.competence import Competence
 from app.utils.files import ensure_dir, ensure_within, move_atomic, sha256_file, sniff_kind
 
+log = logging.getLogger("downloads")
+
 _CLIENT_CODE = re.compile(r"^[A-Z0-9]{3,20}$")
+_CLIENT_FOLDER = re.compile(r"^(?P<code>[A-Z0-9]{3,20})(?: - (?P<name>.+))?$")
+_YEAR = re.compile(r"^\d{4}$")
+_MONTH = re.compile(r"^(0[1-9]|1[0-2])$")
+_DOC_VALUES = {d.value for d in DocumentType}
 _INVALID_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
 # arquivo de nota do robô: CLI000001_2026-08_NFCE.zip (lotes: _2, _3...)
 NOTE_FILE = re.compile(r"^[A-Z0-9]{3,20}_\d{4}-\d{2}_(NFCE|NFE_EMITIDAS|NFE_RECEBIDAS)(_\d+)?\.(zip|xml)$", re.IGNORECASE)
@@ -30,6 +41,44 @@ def safe_folder_name(name: str | None, max_len: int = 60) -> str:
     cleaned = _INVALID_CHARS.sub(" ", name or "")
     cleaned = re.sub(r"\s+", " ", cleaned).strip()[:max_len]
     return cleaned.rstrip(" .")
+
+
+@dataclass(frozen=True, slots=True)
+class NotePath:
+    """Nota identificada pelo caminho relativo à pasta das notas (formato novo ou antigo)."""
+
+    client_folder: str
+    client_code: str
+    client_name: str | None
+    year: str
+    month: str
+    document_type: str
+    filename: str
+
+    @property
+    def competence(self) -> str:
+        return f"{self.year}-{self.month}"
+
+    @property
+    def parts(self) -> tuple[str, str, str, str, str]:
+        """Caminho no formato atual: ano/mês/cliente/tipo/arquivo."""
+        return (self.year, self.month, self.client_folder, self.document_type, self.filename)
+
+
+def parse_note_path(parts: tuple[str, ...] | list[str]) -> NotePath | None:
+    """ano/mês/cliente/tipo/arquivo (atual) ou cliente/ano/mês/tipo/arquivo (antigo, até a 1.2.7)."""
+    if len(parts) != 5 or not NOTE_FILE.match(parts[4]) or parts[3] not in _DOC_VALUES:
+        return None
+    if _YEAR.match(parts[0]) and _MONTH.match(parts[1]):
+        year, month, client = parts[0], parts[1], parts[2]
+    elif _YEAR.match(parts[1]) and _MONTH.match(parts[2]):
+        client, year, month = parts[0], parts[1], parts[2]
+    else:
+        return None
+    m = _CLIENT_FOLDER.match(client)
+    if m is None or _YEAR.match(client):
+        return None
+    return NotePath(client, m["code"], m["name"], year, month, parts[3], parts[4])
 
 
 class InvalidDownloadError(ValueError):
@@ -62,6 +111,27 @@ class DownloadTarget:
         return self.folder / self.filename
 
 
+def _remove_empty_dirs(root: Path) -> None:
+    """Apaga pastas que ficaram vazias (só com desktop.ini do Windows) depois de mover as notas."""
+    if not root.is_dir():
+        return
+    for folder in sorted((p for p in root.rglob("*") if p.is_dir()), key=lambda p: len(p.parts), reverse=True):
+        _rmdir_if_empty(folder)
+    _rmdir_if_empty(root)
+
+
+def _rmdir_if_empty(folder: Path) -> None:
+    try:
+        entries = list(folder.iterdir())
+        if any(e.name.lower() != "desktop.ini" for e in entries):
+            return
+        for e in entries:
+            e.unlink()
+        folder.rmdir()
+    except OSError:
+        pass  # em uso (ex.: aberta no Explorer): fica para a próxima
+
+
 class DownloadOrganizer:
     def __init__(self, base_dir: Path) -> None:
         self.base_dir = base_dir
@@ -81,8 +151,9 @@ class DownloadOrganizer:
     ) -> Path:
         """Arquivo no disco DESTE computador.
 
-        `filepath` foi gravado pela máquina que baixou; em outra máquina (pasta do
-        pasta em outra letra/usuário) vale o caminho padrão cliente/ano/mês/tipo.
+        `filepath` foi gravado pela máquina que baixou; em outra máquina (pasta em
+        outra letra/usuário) ou depois de reorganizar, vale o caminho padrão
+        ano/mês/cliente/tipo.
         """
         try:
             stored = ensure_within(self.base_dir, Path(filepath))
@@ -94,26 +165,44 @@ class DownloadOrganizer:
             raise ValueError(f"Nome de arquivo inválido: {filename!r}")
         return ensure_within(self.base_dir, self.folder_for(client_code, competence, document_type) / filename)
 
-    def _existing_client_dirs(self, client_code: str) -> list[Path]:
+    def month_dir(self, competence: str) -> Path:
+        comp = Competence.parse(competence)
+        return self.base_dir / comp.year_str / comp.month_str
+
+    def _month_dirs(self) -> list[Path]:
         if not self.base_dir.is_dir():
             return []
-        prefix = re.compile(rf"^{re.escape(client_code)}( - .+)?$")
-        return sorted(d for d in self.base_dir.iterdir() if d.is_dir() and prefix.match(d.name))
+        out: list[Path] = []
+        for year in self.base_dir.iterdir():
+            if year.is_dir() and _YEAR.match(year.name):
+                out += [m for m in year.iterdir() if m.is_dir() and _MONTH.match(m.name)]
+        return sorted(out)
 
-    def client_dir(self, client_code: str, client_name: str | None = None) -> Path:
-        """Pasta do cliente: 'CLI000001 - NOME'; sem nome, a pasta que já existir para o código."""
+    @staticmethod
+    def _existing_client_dirs(client_code: str, parent: Path) -> list[Path]:
+        if not parent.is_dir():
+            return []
+        prefix = re.compile(rf"^{re.escape(client_code)}( - .+)?$")
+        return sorted(d for d in parent.iterdir() if d.is_dir() and prefix.match(d.name))
+
+    def client_dir(self, client_code: str, client_name: str | None, competence: str) -> Path:
+        """Pasta do cliente no mês: 'CLI000001 - NOME'; sem nome, a que já existir para o código."""
         if not _CLIENT_CODE.match(client_code or ""):
             raise ValueError(f"client_code inválido: {client_code!r}")
+        parent = self.month_dir(competence)
         safe = safe_folder_name(client_name)
         if safe:
-            return ensure_within(self.base_dir, self.base_dir / f"{client_code} - {safe}")
-        existing = self._existing_client_dirs(client_code)
-        return existing[0] if existing else self.base_dir / client_code
+            return ensure_within(self.base_dir, parent / f"{client_code} - {safe}")
+        existing = self._existing_client_dirs(client_code, parent)
+        return existing[0] if existing else parent / client_code
 
-    def sync_client_dir(self, client_code: str, client_name: str | None) -> Path | None:
-        """Renomeia a pasta existente do cliente para 'CÓDIGO - NOME' (nome novo ou pasta antiga só com código)."""
-        desired = self.client_dir(client_code, client_name)
-        existing = [d for d in self._existing_client_dirs(client_code) if d != desired]
+    def _sync_in(self, parent: Path, client_code: str, client_name: str | None) -> Path | None:
+        """Renomeia a pasta do cliente neste mês para 'CÓDIGO - NOME' (nome novo ou pasta só com código)."""
+        safe = safe_folder_name(client_name)
+        if not safe or not _CLIENT_CODE.match(client_code or ""):
+            return None
+        desired = parent / f"{client_code} - {safe}"
+        existing = [d for d in self._existing_client_dirs(client_code, parent) if d != desired]
         if not existing:
             return desired if desired.is_dir() else None
         if desired.exists():
@@ -124,12 +213,32 @@ class DownloadOrganizer:
         except OSError:
             return existing[0]  # pasta em uso (ex.: aberta no Explorer): tenta de novo depois
 
+    def sync_client_dir(self, client_code: str, client_name: str | None, competence: str | None = None) -> list[Path]:
+        """Nome da empresa nas pastas do cliente (num mês ou em todos)."""
+        parents = [self.month_dir(competence)] if competence else self._month_dirs()
+        return [d for p in parents if (d := self._sync_in(p, client_code, client_name)) is not None]
+
+    def sync_client_names(self, names: dict[str, str | None]) -> int:
+        """Todas as pastas de todos os meses de uma vez (início do robô). -> quantas renomeou."""
+        renamed = 0
+        for month in self._month_dirs():
+            try:
+                entries = [d for d in month.iterdir() if d.is_dir()]
+            except OSError:
+                continue
+            for d in entries:
+                m = _CLIENT_FOLDER.match(d.name)
+                if m is None or m["code"] not in names:
+                    continue
+                result = self._sync_in(month, m["code"], names[m["code"]])
+                renamed += int(result is not None and result != d and not d.exists())
+        return renamed
+
     def folder_for(
         self, client_code: str, competence: str, document_type: DocumentType | str, client_name: str | None = None
     ) -> Path:
-        comp = Competence.parse(competence)
         doc = DocumentType(document_type)
-        folder = self.client_dir(client_code, client_name) / comp.year_str / comp.month_str / doc.value
+        folder = self.client_dir(client_code, client_name, competence) / doc.value
         return ensure_within(self.base_dir, folder)
 
     def filename_for(
@@ -158,6 +267,39 @@ class DownloadOrganizer:
                 return DownloadTarget(folder, name)
             seq += 1
 
+    def reorganize(self) -> int:
+        """Move as notas do formato antigo (cliente/ano/mês/tipo) para ano/mês/cliente/tipo.
+
+        Só move (no Google Drive, mover mantém o arquivo e o link). Se a nota já
+        existe no lugar novo, a antiga fica onde está. -> quantas moveu.
+        """
+        if not self.base_dir.is_dir():
+            return 0
+        moved = 0
+        for client in sorted(self.base_dir.iterdir()):
+            if not client.is_dir() or _YEAR.match(client.name) or not _CLIENT_FOLDER.match(client.name):
+                continue
+            for file in sorted(client.rglob("*")):
+                if not file.is_file():
+                    continue
+                note = parse_note_path((client.name, *file.relative_to(client).parts))
+                if note is None:
+                    continue
+                target = self.base_dir.joinpath(*note.parts)
+                if target.exists():
+                    continue
+                try:
+                    ensure_dir(target.parent)
+                    file.rename(target)
+                except OSError as exc:
+                    log.warning("Não foi possível mover %s para %s: %s", file, target, exc)
+                    continue
+                moved += 1
+            _remove_empty_dirs(client)
+        if moved:
+            log.info("%s nota(s) reorganizada(s) em ano/mês/cliente em %s.", moved, self.base_dir)
+        return moved
+
     def store(
         self,
         source: Path,
@@ -180,9 +322,12 @@ class DownloadOrganizer:
         self.check_available()
         try:
             if client_name:
-                self.sync_client_dir(client_code, client_name)
+                month = self.month_dir(competence)
+                self._sync_in(month, client_code, client_name)
                 # pasta antiga em uso (não renomeou): grava nela em vez de criar uma segunda pasta do cliente
-                if not self.client_dir(client_code, client_name).is_dir() and self._existing_client_dirs(client_code):
+                if not self.client_dir(client_code, client_name, competence).is_dir() and self._existing_client_dirs(
+                    client_code, month
+                ):
                     client_name = None
             return self._store(source, client_code, competence, document_type, checksum, ext, client_name)
         except DownloadFolderUnavailable:

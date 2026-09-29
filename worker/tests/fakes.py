@@ -229,12 +229,14 @@ class FakeRepo:
         return None
 
     async def list_downloads_without_drive_id(self, limit: int) -> list[dict[str, Any]]:
-        return [d for d in self.downloads if not d.get("drive_file_id")][:limit]
+        return [d for d in self.downloads if not d.get("drive_client_folder_id")][:limit]
 
-    async def set_download_drive_id(self, download_id: str, drive_file_id: str) -> None:
+    async def set_download_drive_ids(
+        self, download_id: str, file_id: str, client_folder_id: str, month_folder_id: str
+    ) -> None:
         for d in self.downloads:
             if d.get("id") == download_id:
-                d["drive_file_id"] = drive_file_id
+                d.update(drive_file_id=file_id, drive_client_folder_id=client_folder_id, drive_month_folder_id=month_folder_id)
 
     async def release_lock(self, job_id: str, worker_id: str) -> None:
         if self.jobs[job_id].get("locked_by") == worker_id:

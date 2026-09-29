@@ -23,7 +23,7 @@ def test_parse_link() -> None:
 
 
 def _zip(base: Path) -> Path:
-    path = base / "CLI000001" / "2026" / "06" / "NFCE" / "CLI000001_2026-06_NFCE.zip"
+    path = base / "2026" / "06" / "CLI000001" / "NFCE" / "CLI000001_2026-06_NFCE.zip"
     path.parent.mkdir(parents=True)
     path.write_bytes(b"PK\x03\x04")
     return path

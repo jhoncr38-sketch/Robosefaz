@@ -7,11 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from app.downloads.drive_ids import DriveIdLookup, drivefs_databases, link_drive_ids
+from app.downloads.drive_ids import DriveIdLookup, DriveIds, drivefs_databases, link_drive_ids
 from fakes import FakeRepo
 
 NAME = "CLI000001_2026-09_NFE_RECEBIDAS.zip"
 CLOUD = "1jIOcup0tsxX4h2TCXGwS0YYtSbGRh33v"
+CLIENT = "1DB4jzRLko3Xm3ZtWdC4235rCAf7v8-Xp"
+MONTH = "17sSm4IpL_iXnBG2hyRVQ6Kw_YUUVaCLX"
 
 
 def _drivefs(tmp_path: Path) -> Path:
@@ -33,9 +35,9 @@ def _drivefs(tmp_path: Path) -> Path:
 
     add(1, "0ACY7Kd4vgzauUk9PVA", "Meu Drive", None, folder=True)
     add(2, "1UN2gjMmtcDCqC2dmlOQsXylSp4xg5f4Y", "JR Sistema - Notas", 1, folder=True)
-    add(3, "1DB4jzRLko3Xm3ZtWdC4235rCAf7v8-Xp", "CLI000001 - LIA PAPELARIA", 2, folder=True)
-    add(4, "1thH4fp46jEKajr11bQi3G8-tRlhFsCxg", "2026", 3, folder=True)
-    add(5, "17sSm4IpL_iXnBG2hyRVQ6Kw_YUUVaCLX", "09", 4, folder=True)
+    add(3, "1thH4fp46jEKajr11bQi3G8-tRlhFsCxg", "2026", 2, folder=True)
+    add(4, MONTH, "09", 3, folder=True)
+    add(5, CLIENT, "CLI000001 - LIA PAPELARIA", 4, folder=True)
     add(6, "1X6JppreqOf4oCV4xkwN8ChhH6PCKg_bN", "NFE_RECEBIDAS", 5, folder=True)
     add(7, CLOUD, NAME, 6)
     # cópia com o mesmo nome em outra pasta, uma na lixeira e uma nota ainda subindo
@@ -49,7 +51,7 @@ def _drivefs(tmp_path: Path) -> Path:
 
 def test_finds_id_by_name_and_folders(tmp_path: Path) -> None:
     lookup = DriveIdLookup(drivefs_databases(_drivefs(tmp_path)))
-    assert lookup.find(NAME, "CLI000001", "2026-09", "NFE_RECEBIDAS") == CLOUD
+    assert lookup.find(NAME, "CLI000001", "2026-09", "NFE_RECEBIDAS") == DriveIds(CLOUD, CLIENT, MONTH)
     assert lookup.find(NAME, "CLI000002", "2026-09", "NFE_RECEBIDAS") is None  # outro cliente
     assert lookup.find(NAME, "CLI000001", "2026-08", "NFE_RECEBIDAS") is None  # outra competência
     assert lookup.find("CLI000001_2026-09_NFCE.zip", "CLI000001", "2026-09", "NFE_RECEBIDAS") is None  # lixeira
@@ -74,6 +76,7 @@ async def test_link_drive_ids_updates_only_found(tmp_path: Path) -> None:
     ]
     lookup = DriveIdLookup(drivefs_databases(_drivefs(tmp_path)))
     assert await link_drive_ids(repo, lookup) == 1
-    assert repo.downloads[0]["drive_file_id"] == CLOUD
+    assert (repo.downloads[0]["drive_file_id"], repo.downloads[0]["drive_client_folder_id"]) == (CLOUD, CLIENT)
+    assert repo.downloads[0]["drive_month_folder_id"] == MONTH
     assert "drive_file_id" not in repo.downloads[1]
     assert await link_drive_ids(repo, lookup) == 0  # d1 já tem; d2 ainda subindo
