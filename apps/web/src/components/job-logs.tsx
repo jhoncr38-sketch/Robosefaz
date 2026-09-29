@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { format } from "date-fns";
+import { formatTime } from "@/lib/format";
 import { createClient } from "@/lib/supabase/client";
 import type { AutomationLog } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -53,7 +53,7 @@ export function JobLogs({ jobId, initialLogs }: { jobId: string; initialLogs: Au
           <ol className="divide-y font-mono text-xs">
             {visible.map((l) => (
               <li key={l.id} className="grid grid-cols-[70px_64px_150px_1fr] gap-3 px-4 py-1.5">
-                <span className="text-muted-foreground">{format(new Date(l.created_at), "HH:mm:ss")}</span>
+                <span className="text-muted-foreground">{formatTime(l.created_at)}</span>
                 <span className={cn("font-semibold", LEVEL_CLASS[l.level])}>{l.level}</span>
                 <span className="truncate text-muted-foreground" title={l.step ?? ""}>
                   {l.step ?? "—"}

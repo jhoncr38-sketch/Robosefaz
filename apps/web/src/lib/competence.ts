@@ -1,5 +1,7 @@
 // Competência: banco/API usam YYYY-MM; a interface exibe MM/YYYY.
 
+import { zonedParts } from "./timezone.ts";
+
 const KEY_RE = /^(\d{4})-(0[1-9]|1[0-2])$/;
 const DISPLAY_RE = /^(0[1-9]|1[0-2])\/(\d{4})$/;
 
@@ -37,18 +39,13 @@ export function competenceBounds(value: string): { start: string; end: string } 
 
 /** Competência anterior ao mês atual (a mais comum para exportação). */
 export function previousCompetence(now = new Date()): string {
-  const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+  return shiftCompetence(currentCompetence(now), -1) as string;
 }
 
 /** Lista das últimas N competências (mais recente primeiro), incluindo o mês atual. */
 export function recentCompetences(count = 18, now = new Date()): string[] {
-  const out: string[] = [];
-  for (let i = 0; i < count; i += 1) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    out.push(`${d.getFullYear()}-${pad(d.getMonth() + 1)}`);
-  }
-  return out;
+  const current = currentCompetence(now);
+  return Array.from({ length: count }, (_, i) => shiftCompetence(current, -i) as string);
 }
 
 /** Competência deslocada em N meses (YYYY-MM); null se a entrada for inválida. */
@@ -61,5 +58,7 @@ export function shiftCompetence(value: string, delta: number): string | null {
 
 /** Competência do mês corrente (limite para agendar). */
 export function currentCompetence(now = new Date()): string {
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+  // mês no horário do Piauí (o servidor roda em UTC: dia 30 às 22h já seria o mês seguinte)
+  const p = zonedParts(now);
+  return `${p.year}-${pad(p.month)}`;
 }

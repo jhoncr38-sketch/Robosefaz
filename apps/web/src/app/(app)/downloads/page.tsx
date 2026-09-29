@@ -1,6 +1,7 @@
-import { FolderOpen } from "lucide-react";
+import { Download, FolderOpen } from "lucide-react";
 import type { Metadata } from "next";
 
+import { BulkDownload } from "@/components/bulk-download";
 import { ListCard, ListToolbar } from "@/components/data-list";
 import { DownloadsTable } from "@/components/downloads-table";
 import { ListFilters } from "@/components/list-filters";
@@ -8,6 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { requireSession } from "@/lib/auth";
 import { formatCompetence, recentCompetences } from "@/lib/competence";
+import { bulkTarget, notesInGoogleDrive } from "@/lib/downloads";
 import { DOCUMENT_LABEL } from "@/lib/status";
 import { createClient } from "@/lib/supabase/server";
 import type { DocumentType, DownloadRow } from "@/lib/types";
@@ -28,25 +30,50 @@ export default async function DownloadsPage({ searchParams }: PageProps<"/downlo
   if (typeof params.client === "string") query = query.eq("client_id", params.client);
   if (typeof params.type === "string") query = query.eq("document_type", params.type);
 
-  const [{ data }, { data: clients }] = await Promise.all([
+  const [{ data }, { data: clients }, drive] = await Promise.all([
     query,
     supabase.from("clients").select("id, legal_name, trade_name").order("legal_name"),
+    notesInGoogleDrive(supabase),
   ]);
   const rows = (data ?? []) as DownloadRow[];
+  const competence = typeof params.competence === "string" ? params.competence : undefined;
+  const clientId = typeof params.client === "string" ? params.client : undefined;
+  const client = (clients ?? []).find((c) => c.id === clientId);
 
   return (
     <>
       <PageHeader
         title="Downloads"
-        description="Notas baixadas pelo robô. Os arquivos ficam no computador que fez o download, em storage\downloads\cliente\ano\mês\tipo."
+        description={
+          drive
+            ? "Notas baixadas pelo robô. Os arquivos ficam no Google Drive, na pasta JR Sistema - Notas\\ano\\mês\\cliente\\tipo."
+            : "Notas baixadas pelo robô. Os arquivos ficam no computador que fez o download, em storage\\downloads\\ano\\mês\\cliente\\tipo."
+        }
       />
       <Alert className="mb-4">
-        <FolderOpen />
+        {drive ? <Download /> : <FolderOpen />}
         <AlertDescription>
-          O botão <strong>Abrir pasta</strong> funciona no computador onde o robô está instalado. Na primeira vez, o
-          navegador pergunta se pode abrir o robô: marque <strong>“Sempre permitir”</strong> e clique em Abrir.
+          {drive ? (
+            <>
+              <strong>Baixar</strong> baixa a nota do Google Drive, em qualquer computador: basta estar com a pasta{" "}
+              <strong>JR Sistema - Notas</strong> compartilhada com você. O ícone de pasta abre o arquivo no computador
+              onde o robô está instalado.
+            </>
+          ) : (
+            <>
+              O botão <strong>Abrir pasta</strong> funciona no computador onde o robô está instalado. Na primeira vez, o
+              navegador pergunta se pode abrir o robô: marque <strong>“Sempre permitir”</strong> e clique em Abrir.
+            </>
+          )}
         </AlertDescription>
       </Alert>
+      {drive ? (
+        <BulkDownload
+          target={bulkTarget(rows, competence, clientId)}
+          competence={competence}
+          clientName={client ? client.trade_name || client.legal_name : undefined}
+        />
+      ) : null}
       <ListCard>
         <ListToolbar>
         <ListFilters
@@ -70,7 +97,7 @@ export default async function DownloadsPage({ searchParams }: PageProps<"/downlo
           ]}
         />
         </ListToolbar>
-        <DownloadsTable rows={rows} />
+        <DownloadsTable rows={rows} drive={drive} />
       </ListCard>
     </>
   );

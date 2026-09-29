@@ -220,6 +220,11 @@ export interface DownloadRow {
   size: number;
   checksum: string;
   downloaded_at: string;
+  /** código do arquivo no Google Drive (gravado pelo robô quando a nota sobe) */
+  drive_file_id?: string | null;
+  /** pastas no Drive: ano/mês/cliente e ano/mês ("Baixar todas") */
+  drive_client_folder_id?: string | null;
+  drive_month_folder_id?: string | null;
   clients?: ClientRef | null;
 }
 

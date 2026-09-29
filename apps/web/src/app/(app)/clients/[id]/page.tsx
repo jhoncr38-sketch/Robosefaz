@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { requireSession } from "@/lib/auth";
 import { formatCNPJ } from "@/lib/cnpj";
+import { notesInGoogleDrive } from "@/lib/downloads";
 import { daysUntil, formatDateTime } from "@/lib/format";
 import { can } from "@/lib/permissions";
 import { JOB_SELECT, loadProfilesMap } from "@/lib/queries";
@@ -47,7 +48,7 @@ export default async function ClientDetailPage({ params }: PageProps<"/clients/[
   if (!client) notFound();
   const c = client as Client;
 
-  const [certRes, jobsRes, downloadsRes, auditRes, users] = await Promise.all([
+  const [certRes, jobsRes, downloadsRes, auditRes, users, drive] = await Promise.all([
     supabase.from("certificates").select("*").eq("client_id", id).order("created_at", { ascending: false }),
     supabase.from("automation_jobs").select(JOB_SELECT).eq("client_id", id).order("created_at", { ascending: false }).limit(100),
     supabase.from("downloads").select("*").eq("client_id", id).order("downloaded_at", { ascending: false }),
@@ -55,6 +56,7 @@ export default async function ClientDetailPage({ params }: PageProps<"/clients/[
       ? supabase.from("audit_logs").select("*").eq("client_id", id).order("created_at", { ascending: false }).limit(50)
       : Promise.resolve({ data: [] }),
     loadProfilesMap(),
+    notesInGoogleDrive(supabase),
   ]);
 
   const certificates = (certRes.data ?? []) as Certificate[];
@@ -212,7 +214,7 @@ export default async function ClientDetailPage({ params }: PageProps<"/clients/[
         <TabsContent value="downloads">
           <Card className="py-0">
             <CardContent className="p-0">
-              <DownloadsTable rows={downloads} showClient={false} />
+              <DownloadsTable rows={downloads} showClient={false} drive={drive} />
             </CardContent>
           </Card>
         </TabsContent>

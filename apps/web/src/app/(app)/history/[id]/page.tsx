@@ -15,6 +15,7 @@ import { Progress } from "@/components/ui/progress";
 import { requireSession } from "@/lib/auth";
 import { formatCNPJ } from "@/lib/cnpj";
 import { formatCompetence } from "@/lib/competence";
+import { notesInGoogleDrive } from "@/lib/downloads";
 import { formatDate, formatDateTime, formatDuration } from "@/lib/format";
 import { JOB_SELECT, loadProfilesMap } from "@/lib/queries";
 import { ERROR_CODE_LABEL, MANUAL_JOB_STATUSES, TASK_TYPE_LABEL } from "@/lib/status";
@@ -44,11 +45,12 @@ export default async function JobDetailPage({ params }: PageProps<"/history/[id]
   if (!jobData) notFound();
   const job = jobData as AutomationJob;
 
-  const [tasksRes, logsRes, downloadsRes, users] = await Promise.all([
+  const [tasksRes, logsRes, downloadsRes, users, drive] = await Promise.all([
     supabase.from("automation_tasks").select("*").eq("job_id", id).order("created_at"),
     supabase.from("automation_logs").select("*").eq("job_id", id).order("created_at").limit(2000),
     supabase.from("downloads").select("*").eq("job_id", id),
     loadProfilesMap(),
+    notesInGoogleDrive(supabase),
   ]);
   const tasks = (tasksRes.data ?? []) as AutomationTask[];
   const logs = (logsRes.data ?? []) as AutomationLog[];
@@ -190,7 +192,7 @@ export default async function JobDetailPage({ params }: PageProps<"/history/[id]
             <CardTitle className="text-base">Arquivos baixados</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <DownloadsTable rows={downloads} showClient={false} />
+            <DownloadsTable rows={downloads} showClient={false} drive={drive} />
           </CardContent>
         </Card>
       ) : null}

@@ -1,24 +1,26 @@
-import { FileArchive, FolderOpen, Info } from "lucide-react";
+import { Download, FileArchive, FolderOpen, Info } from "lucide-react";
 
 import { ListEmptyText, ListHead, ListRow, PrimaryCell } from "@/components/data-list";
 import { EmptyState } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatCompetence } from "@/lib/competence";
+import { driveDownloadUrl, isEmptyZip } from "@/lib/downloads";
 import { formatBytes, formatDateTime } from "@/lib/format";
 import { DOCUMENT_LABEL } from "@/lib/status";
 import type { DownloadRow } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-// Os ZIPs ficam no computador do robô, fora do alcance do site. O botão usa o
-// link "siatrobo://" registrado pelo instalador: o Windows abre o Explorer com
-// o arquivo selecionado, no computador onde o robô do JR Sistema está instalado.
+// Os ZIPs ficam no computador do robô (ou no Google Drive), fora do alcance do site.
+// "Abrir pasta" usa o link "siatrobo://" registrado pelo instalador: o Windows abre o
+// Explorer com o arquivo selecionado, no computador onde o robô está instalado.
+// "Baixar" (notas no Google Drive) abre a nota no Drive, em qualquer computador.
 export const OPEN_FOLDER_URL = (id: string) => `siatrobo://abrir/${id}`;
 
-// sem rolagem lateral: no celular, só a primeira coluna e o botão
+// sem rolagem lateral: no celular, só a primeira coluna e os botões
 const GRID_CLIENT =
-  "grid grid-cols-[minmax(0,1fr)_auto] gap-3 md:grid-cols-[minmax(0,1.2fr)_64px_110px_minmax(0,1.6fr)_120px]";
-const GRID_NO_CLIENT = "grid grid-cols-[minmax(0,1fr)_auto] gap-3 md:grid-cols-[64px_110px_minmax(0,1fr)_120px]";
+  "grid grid-cols-[minmax(0,1fr)_auto] gap-3 md:grid-cols-[minmax(0,1.2fr)_64px_110px_minmax(0,1.6fr)_140px]";
+const GRID_NO_CLIENT = "grid grid-cols-[minmax(0,1fr)_auto] gap-3 md:grid-cols-[64px_110px_minmax(0,1fr)_140px]";
 
 function FileCell({ d, className }: { d: DownloadRow; className?: string }) {
   return (
@@ -44,13 +46,84 @@ function FileCell({ d, className }: { d: DownloadRow; className?: string }) {
         </Tooltip>
       </div>
       <span className="text-[11px] text-(--c-9a9b94) tabular-nums">
-        {formatBytes(d.size)} · baixado em {formatDateTime(d.downloaded_at)}
+        {isEmptyZip(d) ? "ZIP vazio" : formatBytes(d.size)} · baixado em {formatDateTime(d.downloaded_at)}
       </span>
     </div>
   );
 }
 
-export function DownloadsTable({ rows, showClient = true }: { rows: DownloadRow[]; showClient?: boolean }) {
+function RowActions({ d, drive }: { d: DownloadRow; drive: boolean }) {
+  if (isEmptyZip(d)) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="cursor-default rounded bg-(--c-f2f2ef) px-2 py-1 text-xs whitespace-nowrap text-(--c-6b6b66)">
+            Sem notas
+          </span>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-64 text-xs">
+          O SIAT entregou um ZIP vazio: não houve nota neste período. Não há nada para baixar.
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+  const driveUrl = driveDownloadUrl(d.drive_file_id);
+  const openFolder = (
+    <a href={OPEN_FOLDER_URL(d.id)} className="text-foreground hover:no-underline" aria-label="Abrir pasta">
+      <FolderOpen /> {drive ? null : <span className="hidden sm:inline">Abrir pasta</span>}
+    </a>
+  );
+  return (
+    <>
+      {drive ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {driveUrl ? (
+              <Button asChild variant="outline" size="sm">
+                <a href={driveUrl} target="_blank" rel="noopener noreferrer" className="text-foreground hover:no-underline">
+                  <Download /> Baixar
+                </a>
+              </Button>
+            ) : (
+              // desabilitado não recebe o mouse: o span mostra a explicação
+              <span tabIndex={0} className="inline-flex">
+                <Button variant="outline" size="sm" disabled>
+                  <Download /> Baixar
+                </Button>
+              </span>
+            )}
+          </TooltipTrigger>
+          <TooltipContent className="max-w-64 text-xs">
+            {driveUrl
+              ? "Baixa a nota do Google Drive. Funciona em qualquer computador, para quem tem a pasta JR Sistema - Notas compartilhada."
+              : "Esta nota ainda não está no Google Drive. O botão libera alguns minutos depois que ela chega lá."}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button asChild variant="outline" size={drive ? "icon-sm" : "sm"}>
+            {openFolder}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-64 text-xs">
+          Abre a pasta com o arquivo selecionado, no computador onde o robô está instalado.
+        </TooltipContent>
+      </Tooltip>
+    </>
+  );
+}
+
+export function DownloadsTable({
+  rows,
+  showClient = true,
+  drive = false,
+}: {
+  rows: DownloadRow[];
+  showClient?: boolean;
+  /** notas no Google Drive: mostra o botão Baixar */
+  drive?: boolean;
+}) {
   if (rows.length === 0) {
     return showClient ? (
       <EmptyState
@@ -97,19 +170,8 @@ export function DownloadsTable({ rows, showClient = true }: { rows: DownloadRow[
             </span>
           </span>
           <FileCell d={d} className="hidden md:flex" />
-          <div className="flex justify-end">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button asChild variant="outline" size="sm">
-                  <a href={OPEN_FOLDER_URL(d.id)} className="text-foreground hover:no-underline">
-                    <FolderOpen /> <span className="hidden sm:inline">Abrir pasta</span>
-                  </a>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-64 text-xs">
-                Abre a pasta com o arquivo selecionado, no computador onde o robô está instalado.
-              </TooltipContent>
-            </Tooltip>
+          <div className="flex items-center justify-end gap-1.5">
+            <RowActions d={d} drive={drive} />
           </div>
         </ListRow>
       ))}
