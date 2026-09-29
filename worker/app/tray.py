@@ -180,6 +180,8 @@ class RobotTray:
         self.remote = RemoteWatcher(settings)
         self._stop = threading.Event()
         self._last_color = ""
+        self._last_title = ""
+        self._last_menu: tuple | None = None
         self.icon = pystray.Icon(
             "siat-robo",
             draw("stopped"),
@@ -360,8 +362,15 @@ class RobotTray:
         if color != self._last_color:
             self.icon.icon = draw(color)
             self._last_color = color
-        self.icon.title = f"JR Sistema Robô · {self.state.text}"[:127]
-        self.icon.update_menu()
+        title = f"JR Sistema Robô · {self.state.text}"[:127]
+        if title != self._last_title:
+            self.icon.title = title
+            self._last_title = title
+        # o menu só é refeito quando algo dele muda: refazê-lo a cada 5 s, com ele aberto, trava a tela
+        menu = (self.state.text, tuple(self.state.attention), self.state.update_to, self.settings.auth_mode)
+        if menu != self._last_menu:
+            self.icon.update_menu()
+            self._last_menu = menu
 
     def _loop(self, icon: pystray.Icon) -> None:
         icon.visible = True

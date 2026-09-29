@@ -92,3 +92,43 @@ def test_menu_order_and_help_submenu(settings) -> None:  # noqa: ANN001
     help_menu = [i.text for i in items[-3].submenu.items]
     assert help_menu == ["Manual do JR Sistema", "Falar com o suporte (WhatsApp)", "Mensagens do robô (log)"]
     assert items[4].default  # duplo clique no ícone = Abrir painel
+
+
+def test_refresh_rebuilds_menu_only_when_something_changes(settings, monkeypatch) -> None:  # noqa: ANN001
+    """Refazer o menu a cada 5 s, com ele aberto, travava a tela: só quando o conteúdo muda."""
+    from types import SimpleNamespace
+
+    from app.tray import RobotTray
+
+    tray = RobotTray(settings)
+    rebuilt: list[int] = []
+    titles: list[str] = []
+
+    class FakeIcon:
+        icon = None
+
+        def update_menu(self) -> None:
+            rebuilt.append(1)
+
+        def notify(self, *_a, **_k) -> None:
+            pass
+
+        @property
+        def title(self) -> str:
+            return titles[-1] if titles else ""
+
+        @title.setter
+        def title(self, value: str) -> None:
+            titles.append(value)
+
+    tray.icon = FakeIcon()
+    monkeypatch.setattr(RobotTray, "_reload_if_activated", lambda self: None)
+    monkeypatch.setattr("app.tray.read_update_status", lambda s: None)
+    for _ in range(3):
+        tray._refresh()
+    assert len(rebuilt) == 1 and len(titles) == 1  # nada mudou: menu e texto do ícone ficam como estão
+    tray.state.attention = ["SELETO 08/2026: falhou"]
+    tray._refresh()
+    tray._refresh()
+    assert len(rebuilt) == 2 and len(titles) == 2  # mudou uma vez: refeito uma vez
+    assert SimpleNamespace  # (só para o import não ficar sem uso)
