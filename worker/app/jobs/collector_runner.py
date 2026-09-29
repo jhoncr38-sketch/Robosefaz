@@ -7,6 +7,7 @@ import asyncio
 from datetime import timedelta
 
 from app.automation.base import AutomationContext
+from app.downloads.organizer import EmptyExportError
 from app.jobs.base_runner import BaseRunner, now_utc
 from app.jobs.errors import AutomationError, ErrorCode, JobCancelled
 from app.jobs.models import ExportStatus, Job, Task, TaskStatus, TaskType
@@ -99,6 +100,27 @@ class CollectorRunner(BaseRunner):
                         )
                         try:
                             stored = await provider.download(ctx, task, st)
+                        except EmptyExportError:
+                            # ZIP vazio: igual a "Processado sem notas" (nada é salvo)
+                            await self.repo.update_task(
+                                download_task.id,
+                                status=TaskStatus.COMPLETED.value,
+                                finished_at=now_utc(),
+                                result={"export_task_id": task.id, "no_notes": True},
+                            )
+                            await self.repo.update_task(
+                                task.id,
+                                status=TaskStatus.COMPLETED.value,
+                                finished_at=now_utc(),
+                                result={"no_notes": True, "raw_status": "ZIP vazio"},
+                            )
+                            task.status = TaskStatus.COMPLETED
+                            task.result = {"no_notes": True}
+                            await logger.info(
+                                f"{task.task_type}: o SIAT entregou um ZIP vazio: nenhuma nota no período (nada a salvar).",
+                                step="downloading",
+                            )
+                            continue
                         except AutomationError as exc:
                             await self.repo.update_task(
                                 download_task.id,

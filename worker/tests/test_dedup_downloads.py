@@ -204,3 +204,19 @@ class TestClientFolderName:
     def test_no_folder_is_created_when_client_has_no_notes(self, tmp_path: Path) -> None:
         assert DownloadOrganizer(tmp_path).sync_client_dir("CLI000009", "SEM NOTAS") is None
         assert list(tmp_path.iterdir()) == []
+
+
+def test_empty_zip_is_not_stored(tmp_path) -> None:  # noqa: ANN001
+    import zipfile
+
+    import pytest
+
+    from app.downloads.organizer import DownloadOrganizer, EmptyExportError
+
+    src = tmp_path / "vazio.zip"
+    zipfile.ZipFile(src, "w").close()  # 22 bytes: só o fim do índice
+    assert src.stat().st_size == 22
+    org = DownloadOrganizer(tmp_path / "downloads")
+    with pytest.raises(EmptyExportError):
+        org.store(src, "CLI000022", "2026-09", "NFE_EMITIDAS", "BOLO DO EDU")
+    assert not (tmp_path / "downloads").exists() or not any((tmp_path / "downloads").rglob("*.zip"))

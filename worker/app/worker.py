@@ -24,7 +24,7 @@ from typing import Awaitable, Callable
 from app.automation.registry import default_registry
 from app import __version__
 from app.config import Settings, get_settings
-from app.downloads.fallback import FallbackOrganizer, organizer_for
+from app.downloads.fallback import FallbackOrganizer, notes_folder_kind, organizer_for
 from app.downloads.organizer import DownloadFolderUnavailable
 from app.jobs.base_runner import RunnerDeps
 from app.jobs.collector_runner import CollectorRunner
@@ -119,6 +119,7 @@ class Worker:
                         "browser_channel": self.settings.browser_channel,
                         "platform": sys.platform,
                         "version": __version__,
+                        "notes_folder": notes_folder_kind(self.settings.downloads_dir),
                     },
                 )
             except Exception as exc:

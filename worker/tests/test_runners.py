@@ -410,3 +410,17 @@ async def test_processed_without_notes_completes_without_download(repo: FakeRepo
     assert sorted(d["document_type"] for d in repo.downloads) == ["NFE_EMITIDAS", "NFE_RECEBIDAS"]
     assert "download:NFCE" not in provider.calls
     assert _statuses(repo, job.id)[TaskType.NFCE_EXPORT] == TaskStatus.COMPLETED
+
+
+async def test_empty_zip_counts_as_no_notes(repo: FakeRepo, provider: FakeProvider, deps) -> None:  # noqa: ANN001
+    """O SIAT processou, mas entregou um ZIP sem nenhum arquivo: igual a "sem notas" (nada salvo)."""
+    from app.downloads.organizer import EmptyExportError
+
+    _, job = _setup(repo, status="waiting_sefaz", task_status=TaskStatus.SCHEDULED)
+    provider.statuses = {doc: ExportStatus.PROCESSED for doc in DocumentType}
+    provider.download_errors = {DocumentType.NFE_EMITIDAS: EmptyExportError("ZIP vazio")}
+    await CollectorRunner(deps).run_once()
+    j = repo.job(job.id)
+    assert j["status"] == "completed"
+    assert j["last_message"] == "Concluído (NF-e emitidas sem notas no período)"
+    assert sorted(d["document_type"] for d in repo.downloads) == ["NFCE", "NFE_RECEBIDAS"]

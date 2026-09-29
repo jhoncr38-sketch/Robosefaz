@@ -16,7 +16,7 @@ from app.automation.base import AutomationContext
 from app.automation.siat.page_helpers import first_visible
 from app.automation.siat.selectors import SiatSelectors, get_selectors
 from app.automation.siat.siat_legacy import NFCE, NFE, SiatLegacy, family_of, ie_matches, recover_request_id
-from app.downloads.organizer import DownloadFolderUnavailable, InvalidDownloadError
+from app.downloads.organizer import DownloadFolderUnavailable, EmptyExportError, InvalidDownloadError
 from app.jobs.errors import AutomationError, ErrorCode, TaxpayerMismatchError
 from app.jobs.models import DocumentType, DownloadedFile, ExportStatus, ExportStatusResult, Task
 from app.jobs.state_machine import JobStatus
@@ -151,6 +151,9 @@ class SiatExportConsult:
                 task.document_type,
                 client_name=self.ctx.client.trade_name or self.ctx.client.legal_name,
             )
+        except EmptyExportError:
+            tmp_path.unlink(missing_ok=True)
+            raise  # o collector marca como "sem notas no período"
         except InvalidDownloadError as exc:
             tmp_path.unlink(missing_ok=True)
             raise AutomationError(ErrorCode.DOWNLOAD_FAILED, str(exc)) from exc

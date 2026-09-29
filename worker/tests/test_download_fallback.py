@@ -85,3 +85,11 @@ def test_pending_list_keeps_items_added_during_send(tmp_path: Path) -> None:
     assert read_pending(pend) == ["b"]
     pend.write_text("{quebrado", encoding="utf-8")
     assert read_pending(pend) == []
+
+
+def test_notes_folder_kind() -> None:
+    from app.downloads.fallback import notes_folder_kind
+
+    assert notes_folder_kind(Path(r"G:\Meu Drive\JR Sistema - Notas")) == "google_drive"
+    assert notes_folder_kind(Path(r"C:\Users\alex\My Drive\JR Sistema - Notas")) == "google_drive"
+    assert notes_folder_kind(Path(r"C:\SIAT-Robo\storage\downloads")) == "local"

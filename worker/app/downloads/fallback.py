@@ -28,6 +28,15 @@ _CLIENT_FOLDER = re.compile(r"^(?P<code>[A-Z0-9]{3,20})(?: - (?P<name>.+))?$")
 _lock = threading.Lock()
 
 
+# pastas do Google Drive para computador (unidade G: ou modo "Espelhar arquivos")
+_DRIVE_PARTS = {"meu drive", "my drive", "drives compartilhados", "shared drives"}
+
+
+def notes_folder_kind(path: Path) -> str:
+    """"google_drive" ou "local" — o painel mostra o botão Baixar (Google Drive) quando é Drive."""
+    return "google_drive" if any(part.lower() in _DRIVE_PARTS for part in path.parts) else "local"
+
+
 def organizer_for(settings: Settings) -> DownloadOrganizer:
     """Organizador da pasta das notas; com plano B quando ela não é a pasta local do robô."""
     base, local = settings.downloads_dir, settings.local_downloads_dir

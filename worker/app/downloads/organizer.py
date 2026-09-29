@@ -11,6 +11,7 @@ pasta existente é renomeada; pastas antigas só com o código também.
 from __future__ import annotations
 
 import re
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -33,6 +34,18 @@ def safe_folder_name(name: str | None, max_len: int = 60) -> str:
 
 class InvalidDownloadError(ValueError):
     pass
+
+
+class EmptyExportError(InvalidDownloadError):
+    """O SIAT entregou um ZIP sem nenhum arquivo: não houve nota no período."""
+
+
+def is_empty_zip(path: Path) -> bool:
+    try:
+        with zipfile.ZipFile(path) as zf:
+            return not zf.namelist()
+    except (zipfile.BadZipFile, OSError):
+        return False
 
 
 class DownloadFolderUnavailable(OSError):
@@ -160,6 +173,8 @@ class DownloadOrganizer:
         if kind == "html":
             # portal devolveu uma página (sessão expirada/erro) em vez do arquivo
             raise InvalidDownloadError("O portal retornou uma página HTML em vez do arquivo exportado.")
+        if kind == "zip" and is_empty_zip(source):
+            raise EmptyExportError("O SIAT entregou um ZIP vazio: nenhuma nota no período.")
         checksum = sha256_file(source)
         ext = {"zip": ".zip", "xml": ".xml"}.get(kind) or source.suffix or ".zip"
         self.check_available()
