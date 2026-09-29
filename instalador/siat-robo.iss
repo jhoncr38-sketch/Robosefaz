@@ -16,6 +16,8 @@ DefaultDirName=C:\SIAT-Robo
 DefaultGroupName={#GroupName}
 DisableProgramGroupPage=yes
 UsePreviousAppDir=yes
+; sempre "JR Sistema" no menu Iniciar (sem isto, quem instalou antes da 1.1.3 continuava com "SIAT Robô")
+UsePreviousGroup=no
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
