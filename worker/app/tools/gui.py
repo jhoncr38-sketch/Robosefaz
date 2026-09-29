@@ -41,6 +41,8 @@ C = {
 }
 FONT = "Segoe UI"
 LEVEL_ICON = {"ok": ("✔", C["ok"]), "warn": ("!", C["warn"]), "fail": ("✖", C["danger"]), "info": ("•", C["muted"])}
+# fundo do cartão de resumo e das etiquetas, por situação
+LEVEL_BG = {"ok": "#e9f6ef", "warn": "#fff4dc", "fail": "#fdecec", "info": "#f3f3f0"}
 
 
 class WindowClosed(RuntimeError):
@@ -123,7 +125,7 @@ class ToolWindow:
                 pass
         self._images: list[Any] = []
         self._waiting: list[tk.IntVar] = []
-        self._busy = False
+        self._mode = "off"  # barra de andamento: off | marquee (sem contagem) | count
         self._finished = False
         self._destroyed = False  # marcado pela própria janela; a thread de trabalho só lê
         self._style()
@@ -183,8 +185,10 @@ class ToolWindow:
         card.pack(fill="both", expand=True, padx=24, pady=(8, 0))
         self.scroll = _Scroll(card)
         self.scroll.pack(fill="both", expand=True, padx=1, pady=1)
+        self.summary_box = tk.Frame(self.scroll.inner, bg=C["card"])
+        self.summary_box.pack(fill="x", padx=16, pady=(12, 0))
         self.lines = tk.Frame(self.scroll.inner, bg=C["card"])
-        self.lines.pack(fill="x", padx=16, pady=(12, 4))
+        self.lines.pack(fill="x", padx=16, pady=(6, 4))
         self.panel = tk.Frame(self.scroll.inner, bg=C["card"])
         self.panel.pack(fill="x", padx=16, pady=(4, 12))
 
@@ -210,11 +214,15 @@ class ToolWindow:
     def _reflow(self, _event: Any = None) -> None:
         """Quebra de linha dos textos acompanha a largura da janela."""
         wrap = max(300, self.root.winfo_width() - 140)
-        for frame in (self.lines, self.panel):
-            for row in frame.winfo_children():
-                for w in [row, *row.winfo_children()]:
-                    if isinstance(w, tk.Label) and w.cget("text") and len(w.cget("text")) > 40:
-                        w.configure(wraplength=wrap)
+
+        def walk(widget: tk.Misc) -> None:
+            for w in widget.winfo_children():
+                if isinstance(w, tk.Label) and w.cget("text") and len(w.cget("text")) > 40:
+                    w.configure(wraplength=wrap)
+                walk(w)
+
+        for frame in (self.summary_box, self.lines, self.panel):
+            walk(frame)
         self.status.configure(wraplength=max(300, self.root.winfo_width() - 60))
         if hasattr(self, "_subtitle"):
             self._subtitle.configure(wraplength=max(300, self.root.winfo_width() - 130))
@@ -274,11 +282,44 @@ class ToolWindow:
         return self._destroyed
 
     # -- conteúdo -------------------------------------------------------------------
-    def add_line(self, level: str, text: str) -> None:
+    def set_summary(self, level: str, title: str, detail: str = "") -> None:
+        """Cartão no topo com a situação geral (bolinha colorida, título e contagens)."""
+        self._clear(self.summary_box)
+        bg = LEVEL_BG.get(level, LEVEL_BG["info"])
+        color = LEVEL_ICON.get(level, LEVEL_ICON["info"])[1]
+        card = tk.Frame(self.summary_box, bg=bg, highlightbackground=C["border"], highlightthickness=1)
+        card.pack(fill="x")
+        tk.Label(card, text="●", font=(FONT, 14), fg=color, bg=bg).pack(side="left", padx=(12, 8), pady=10, anchor="n")
+        texts = tk.Frame(card, bg=bg)
+        texts.pack(side="left", fill="x", expand=True, padx=(0, 12), pady=10)
+        tk.Label(texts, text=title, font=(FONT, 12, "bold"), fg=C["text"], bg=bg, anchor="w", justify="left").pack(fill="x")
+        if detail:
+            tk.Label(texts, text=detail, font=(FONT, 10), fg=C["muted"], bg=bg, anchor="w", justify="left").pack(
+                fill="x", pady=(2, 0)
+            )
+        self._reflow()
+
+    def add_section(self, title: str) -> None:
+        row = tk.Frame(self.lines, bg=C["card"])
+        row.pack(fill="x", pady=(12, 4))
+        tk.Label(row, text=title.upper(), font=(FONT, 8, "bold"), fg=C["muted"], bg=C["card"], anchor="w").pack(side="left")
+        tk.Frame(row, bg=C["border"], height=1).pack(side="left", fill="x", expand=True, padx=(10, 0), pady=7)
+
+    def add_line(self, level: str, text: str, badge: str = "") -> None:
         icon, color = LEVEL_ICON.get(level, LEVEL_ICON["info"])
         row = tk.Frame(self.lines, bg=C["card"])
         row.pack(fill="x", pady=2)
         tk.Label(row, text=icon, font=(FONT, 10, "bold"), fg=color, bg=C["card"], width=2, anchor="w").pack(side="left")
+        if badge:
+            tk.Label(
+                row,
+                text=badge,
+                font=(FONT, 9),
+                fg=C["muted"] if level == "info" else color,
+                bg=LEVEL_BG.get(level, LEVEL_BG["info"]),
+                padx=8,
+                pady=2,
+            ).pack(side="right", padx=(8, 0))
         tk.Label(
             row,
             text=text,
@@ -291,18 +332,39 @@ class ToolWindow:
         ).pack(side="left", fill="x", expand=True)
         self.scroll.scroll_end()
 
+    @property
+    def _busy(self) -> bool:
+        return self._mode != "off"
+
     def set_status(self, text: str) -> None:
         self.status.configure(text=text)
         self.busy(bool(text))
 
     def busy(self, flag: bool) -> None:
-        if flag and not self._busy:
-            self.progress.pack(fill="x", pady=(0, 6), before=self.status)
+        """Barra de andamento sem contagem (anda sozinha) ou nada."""
+        if flag and self._mode != "marquee":
+            if self._mode == "off":
+                self.progress.pack(fill="x", pady=(0, 6), before=self.status)
+            self.progress.configure(mode="indeterminate", value=0)
             self.progress.start(12)
-        elif not flag and self._busy:
+            self._mode = "marquee"
+        elif not flag and self._mode != "off":
             self.progress.stop()
             self.progress.pack_forget()
-        self._busy = flag
+            self.progress.configure(mode="indeterminate", value=0)
+            self._mode = "off"
+
+    def set_progress(self, done: int, total: int) -> None:
+        """Barra de andamento com contagem (ex.: 37 de 146)."""
+        total = max(total, 1)
+        if self._mode != "count":
+            if self._mode == "off":
+                self.progress.pack(fill="x", pady=(0, 6), before=self.status)
+            else:
+                self.progress.stop()
+            self.progress.configure(mode="determinate", maximum=total)
+            self._mode = "count"
+        self.progress.configure(maximum=total, value=min(done, total))
 
     def _clear(self, frame: tk.Frame) -> None:
         for w in frame.winfo_children():
@@ -422,7 +484,12 @@ class ToolWindow:
         for label, command in reversed(list(actions)):
             self.button(self.buttons, label, command).pack(side="right", padx=(0, 8))
         self._reflow()
-        self.scroll.scroll_end()
+        if self.summary_box.winfo_children():
+            # com resumo no topo, é ele que a pessoa quer ver; o resultado detalhado fica embaixo
+            self.scroll.canvas.update_idletasks()
+            self.scroll.canvas.yview_moveto(0.0)
+        else:
+            self.scroll.scroll_end()
 
     # -- ciclo ------------------------------------------------------------------------
     def run(self) -> None:
@@ -473,20 +540,29 @@ class WindowUI:
     def __init__(self, window: ToolWindow) -> None:
         self.window = window
 
-    def info(self, text: str) -> None:
-        self.window.call(self.window.add_line, "info", text)
+    def info(self, text: str, badge: str = "") -> None:
+        self.window.call(self.window.add_line, "info", text, badge)
 
-    def ok(self, text: str) -> None:
-        self.window.call(self.window.add_line, "ok", text)
+    def ok(self, text: str, badge: str = "") -> None:
+        self.window.call(self.window.add_line, "ok", text, badge)
 
-    def warn(self, text: str) -> None:
-        self.window.call(self.window.add_line, "warn", text)
+    def warn(self, text: str, badge: str = "") -> None:
+        self.window.call(self.window.add_line, "warn", text, badge)
 
-    def fail(self, text: str) -> None:
-        self.window.call(self.window.add_line, "fail", text)
+    def fail(self, text: str, badge: str = "") -> None:
+        self.window.call(self.window.add_line, "fail", text, badge)
+
+    def summary(self, level: str, title: str, detail: str = "") -> None:
+        self.window.call(self.window.set_summary, level, title, detail)
+
+    def section(self, title: str) -> None:
+        self.window.call(self.window.add_section, title)
 
     def status(self, text: str) -> None:
         self.window.call(self.window.set_status, text)
+
+    def progress(self, done: int, total: int) -> None:
+        self.window.call(self.window.set_progress, done, total)
 
     def choose(self, prompt: str, choices: Sequence[Choice], *, default: int = 0) -> int | None:
         return self.window.call(self.window.choose, prompt, choices, default=default)

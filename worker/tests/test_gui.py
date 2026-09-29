@@ -21,8 +21,14 @@ def test_console_ui_choose_and_confirm() -> None:
     assert "  1) G:  (já tem a pasta)" in out and "     seria criada" in out
     ui.ok("a")
     ui.warn("b")
-    ui.fail("c")
-    assert out[-3:] == ["  [OK]       a", "  [ATENCAO]  b", "  [ERRO]     c"]  # o instalador lê estes prefixos
+    ui.fail("c", badge="não instalado")
+    assert out[-3:] == ["  [OK]       a", "  [ATENCAO]  b", "  [ERRO]     c (não instalado)"]  # prefixos que o instalador lê
+    ui.section("Robô")
+    ui.summary("ok", "Tudo pronto", "3 ok")
+    assert out[-4:] == ["", "  Robô", "", "Tudo pronto"] + [] or out[-1] == "3 ok"
+    answers = iter(["ab cd ef gh"])
+    ui = ConsoleUI(ask=lambda _q: next(answers), out=out.append)
+    assert ui.ask_text("Código", transform=lambda s: s.replace(" ", "").upper()) == "ABCDEFGH"
 
 
 def _window(title: str = "Teste"):
@@ -40,10 +46,18 @@ def _window(title: str = "Teste"):
 def test_window_dialogs() -> None:
     win = _window()
     try:
-        win.add_line("ok", "linha ok")
+        win.set_summary("info", "Verificando…", "detalhe")
+        win.add_section("Robô")
+        win.add_line("ok", "linha ok", badge="versão 1.2.15")
         win.add_line("fail", "linha erro")
+        win.set_summary("fail", "2 problema(s)", "x")  # troca o cartão do topo
+        assert len(win.summary_box.winfo_children()) == 1
         win.set_status("trabalhando…")
-        assert win._busy
+        assert win._busy and win._mode == "marquee"
+        win.set_progress(37, 146)
+        assert win._mode == "count" and int(float(win.progress.cget("value"))) == 37
+        win.set_status("religando…")
+        assert win._mode == "marquee"
         # as perguntas esperam o clique; aqui o "clique" é agendado
         win.root.after(50, lambda: win._waiting[-1].set(1))
         assert win.choose("Qual?", [Choice("a"), Choice("b", badge="x")], default=1) == 1

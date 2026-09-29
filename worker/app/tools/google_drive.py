@@ -119,6 +119,13 @@ def probe_write(folder: Path) -> None:
         probe.unlink(missing_ok=True)
 
 
+def count_notes(src: Path) -> int:
+    """Quantas notas há em `src` (para o andamento com contagem)."""
+    if not src.is_dir():
+        return 0
+    return sum(1 for f in src.rglob("*") if f.is_file() and NOTE_FILE.match(f.name))
+
+
 def copy_notes(src: Path, dst: Path, on_progress: Callable[[int], None] | None = None) -> tuple[int, int]:
     """Copia as notas de `src` para `dst` em ano/mês/cliente/tipo. Nunca sobrescreve. -> (copiadas, já existiam)."""
     copied = skipped = 0
@@ -316,19 +323,22 @@ def run(
         ui.done(True, "O robô já salva nesta pasta", "Está tudo certo.")
         return 0
 
-    ui.status("Copiando as notas já baixadas (nada é apagado nem sobrescrito)…")
     sources = [current]
     if not any(_same(settings.local_downloads_dir, p) for p in (current, target)):
         sources.append(settings.local_downloads_dir)  # notas do plano B e as antigas deste computador
+    total = sum(count_notes(src) for src in sources)
+    ui.status(f"Copiando as notas já baixadas: {total} nota(s). Nada é apagado nem sobrescrito.")
     copied = skipped = 0
+    seen = 0  # copiadas + já existentes, para a contagem andar até o fim
     for src in sources:
-        base = copied
+        base = seen
+
+        def advance(n: int, base: int = base) -> None:
+            ui.progress(base + n, total)
+            ui.status(f"Copiando as notas já baixadas… {base + n} de {total}")
+
         try:
-            c, s = copy_notes(
-                src,
-                target,
-                on_progress=lambda n: ui.status(f"Copiando as notas já baixadas… {base + n}") if n % 5 == 0 else None,
-            )
+            c, s = copy_notes(src, target, on_progress=advance)
         except OSError as exc:
             ui.done(
                 False,
@@ -337,6 +347,8 @@ def run(
             )
             return 1
         copied, skipped = copied + c, skipped + s
+        seen += c + s
+    ui.progress(total, total)
     ui.ok(f"{copied} nota(s) copiada(s); {skipped} já estava(m) lá.")
     # tudo o que estava na pasta local já foi para a pasta nova
     settings.pending_notes_file.unlink(missing_ok=True)

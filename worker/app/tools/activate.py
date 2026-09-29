@@ -41,6 +41,12 @@ def normalize_code(code: str) -> str:
     return f"{raw[:4]}-{raw[4:]}"
 
 
+def format_code(text: str) -> str:
+    """Arruma o código enquanto é digitado: só letras e números, maiúsculo, com o traço (ABCD-EFGH)."""
+    raw = re.sub(r"[^A-Za-z0-9]", "", text or "").upper()[:8]
+    return f"{raw[:4]}-{raw[4:]}" if len(raw) > 4 else raw
+
+
 def set_env_values(path: Path, values: dict[str, str]) -> None:
     """Troca TODAS as ocorrências de cada chave (o .env repete chaves) e acrescenta as que faltarem."""
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
@@ -113,6 +119,7 @@ def run(settings: Settings, ui: ToolUI, code: str | None = None, panel_url: str 
             code = ui.ask_text(
                 "Código de ativação",
                 "8 caracteres, no formato ABCD-EFGH. Ele vale 30 minutos e só pode ser usado uma vez.",
+                transform=format_code,
             )
             if code is None:
                 ui.done(False, "Nada foi mudado", "Este computador continua como estava.")

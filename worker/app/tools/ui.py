@@ -25,19 +25,30 @@ Action = tuple[str, Callable[[], None]]
 
 
 class ToolUI(Protocol):
-    def info(self, text: str) -> None: ...
-    def ok(self, text: str) -> None: ...
-    def warn(self, text: str) -> None: ...
-    def fail(self, text: str) -> None: ...
+    def summary(self, level: str, title: str, detail: str = "") -> None:
+        """Cartão no topo com a situação geral (ok | warn | fail | info); pode ser trocado depois."""
+
+    def section(self, title: str) -> None:
+        """Título de um grupo de linhas (ex.: "Certificados dos clientes")."""
+
+    def info(self, text: str, badge: str = "") -> None: ...
+    def ok(self, text: str, badge: str = "") -> None: ...
+    def warn(self, text: str, badge: str = "") -> None: ...
+    def fail(self, text: str, badge: str = "") -> None: ...
     def status(self, text: str) -> None:
         """O que está sendo feito agora (com a barra de andamento); "" = nada."""
+
+    def progress(self, done: int, total: int) -> None:
+        """Andamento com contagem (ex.: copiando 37 de 146)."""
 
     def choose(self, prompt: str, choices: Sequence[Choice], *, default: int = 0) -> int | None:
         """Índice escolhido; None = cancelou."""
 
     def confirm(self, prompt: str, detail: str = "", *, yes: str = "Sim", no: str = "Não") -> bool: ...
-    def ask_text(self, prompt: str, detail: str = "", *, initial: str = "") -> str | None:
-        """Texto digitado; None = cancelou."""
+    def ask_text(
+        self, prompt: str, detail: str = "", *, initial: str = "", transform: Callable[[str], str] | None = None
+    ) -> str | None:
+        """Texto digitado (`transform` arruma enquanto digita, ex.: ABCD-EFGH); None = cancelou."""
 
     def done(self, ok: bool, title: str, detail: str = "", actions: Sequence[Action] = ()) -> None:
         """Tela final: deu certo (ok) ou não, com o que aconteceu e o que fazer."""
@@ -57,21 +68,39 @@ class ConsoleUI:
         self._ask = ask or _input
         self._out = out
 
-    def info(self, text: str) -> None:
-        self._out(text)
+    @staticmethod
+    def _with_badge(text: str, badge: str) -> str:
+        return f"{text} ({badge})" if badge else text
 
-    def ok(self, text: str) -> None:
-        self._out(f"  [OK]       {text}")
+    def summary(self, level: str, title: str, detail: str = "") -> None:
+        self._out("")
+        self._out(title)
+        if detail:
+            self._out(detail)
 
-    def warn(self, text: str) -> None:
-        self._out(f"  [ATENCAO]  {text}")
+    def section(self, title: str) -> None:
+        self._out("")
+        self._out(f"  {title}")
 
-    def fail(self, text: str) -> None:
-        self._out(f"  [ERRO]     {text}")
+    def info(self, text: str, badge: str = "") -> None:
+        self._out(f"  {self._with_badge(text, badge)}")
+
+    def ok(self, text: str, badge: str = "") -> None:
+        self._out(f"  [OK]       {self._with_badge(text, badge)}")
+
+    def warn(self, text: str, badge: str = "") -> None:
+        self._out(f"  [ATENCAO]  {self._with_badge(text, badge)}")
+
+    def fail(self, text: str, badge: str = "") -> None:
+        self._out(f"  [ERRO]     {self._with_badge(text, badge)}")
 
     def status(self, text: str) -> None:
         if text:
             self._out(text)
+
+    def progress(self, done: int, total: int) -> None:
+        if done == total or done % 10 == 0:
+            self._out(f"  {done} de {total}")
 
     def choose(self, prompt: str, choices: Sequence[Choice], *, default: int = 0) -> int | None:
         self._out(prompt)
@@ -95,11 +124,15 @@ class ConsoleUI:
             self._out(detail)
         return self._ask(f"{yes}? [s/N] ").strip().lower() in ("s", "sim", "y")
 
-    def ask_text(self, prompt: str, detail: str = "", *, initial: str = "") -> str | None:
+    def ask_text(
+        self, prompt: str, detail: str = "", *, initial: str = "", transform: Callable[[str], str] | None = None
+    ) -> str | None:
         if detail:
             self._out(detail)
-        answer = self._ask(f"{prompt}: ").strip()
-        return answer or initial or None
+        answer = self._ask(f"{prompt}: ").strip() or initial
+        if answer and transform is not None:
+            answer = transform(answer)
+        return answer or None
 
     def done(self, ok: bool, title: str, detail: str = "", actions: Sequence[Action] = ()) -> None:
         self._out("")
