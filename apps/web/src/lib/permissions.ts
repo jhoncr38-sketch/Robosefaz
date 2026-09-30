@@ -2,6 +2,7 @@ import type { UserRole } from "@/lib/types";
 
 export type Permission =
   | "clients:write"
+  | "clients:delete"
   | "certificates:write"
   | "automation:run"
   | "automation:force"
@@ -14,6 +15,7 @@ export type Permission =
 const MATRIX: Record<UserRole, Permission[]> = {
   admin: [
     "clients:write",
+    "clients:delete",
     "certificates:write",
     "automation:run",
     "automation:force",

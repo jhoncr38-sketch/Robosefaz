@@ -12,6 +12,7 @@ import {
   SecretDialog,
 } from "@/components/certificates/certificate-actions";
 import { ClientFormDialog } from "@/components/clients/client-form-dialog";
+import { DeleteClientDialog } from "@/components/clients/delete-client-dialog";
 import { DownloadsTable } from "@/components/downloads-table";
 import { JobsTable } from "@/components/jobs-table";
 import { EmptyState } from "@/components/page-header";
@@ -87,6 +88,9 @@ export default async function ClientDetailPage({ params }: PageProps<"/clients/[
         </div>
         <div className="flex flex-wrap gap-2">
           {admin ? <ClientFormDialog client={c} /> : null}
+          {can(profile.role, "clients:delete") ? (
+            <DeleteClientDialog client={c} jobs={jobs.length} downloads={downloads.length} />
+          ) : null}
           {can(profile.role, "automation:run") ? (
             <RunAutomationDialog
               client={c}

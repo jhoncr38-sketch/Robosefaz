@@ -52,3 +52,25 @@ export async function setClientActive(id: string, active: boolean): Promise<Acti
   revalidatePath(`/clients/${id}`);
   return { ok: true, message: active ? "Cliente ativado." : "Cliente desativado." };
 }
+
+/** Exclui cliente cadastrado por engano: só administrador e só cliente sem histórico (o banco confere). */
+export async function deleteClient(id: string): Promise<ActionResult> {
+  const auth = await authorize("clients:delete");
+  if ("error" in auth) return { ok: false, error: auth.error };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("delete_client", { p_client_id: id });
+  if (error) {
+    if (/HAS_HISTORY/.test(error.message)) {
+      return {
+        ok: false,
+        error: `Este cliente não pode ser excluído: ${error.message.replace(/^HAS_HISTORY:\s*/, "")}. Desative-o para tirar das automações sem perder o histórico.`,
+      };
+    }
+    if (/FORBIDDEN/.test(error.message)) return { ok: false, error: "Somente administradores podem excluir clientes." };
+    if (/CLIENT_NOT_FOUND/.test(error.message)) return { ok: false, error: "Cliente não encontrado." };
+    return { ok: false, error: dbError(error.message, error.code) };
+  }
+  revalidatePath("/clients");
+  revalidatePath("/dashboard");
+  return { ok: true, message: "Cliente excluído." };
+}

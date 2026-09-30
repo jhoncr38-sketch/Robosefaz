@@ -730,5 +730,34 @@ await test("EFD: conclusão avisa com o resultado; reprocessar recoloca a consul
   assert.equal(t.status, "pending");
 });
 
+await test("excluir cliente: só admin, só sem histórico, só do próprio escritório, com auditoria", async () => {
+  const errado = (
+    await as(ADMIN, (tx) =>
+      tx.query("insert into public.clients (legal_name, cnpj) values ('CADASTRADO POR ENGANO', '45723174000110') returning id, client_code"),
+    )
+  ).rows[0];
+  await as(ADMIN, (tx) =>
+    tx.query(
+      "insert into public.certificates (client_id, type, subject_name, valid_until) values ($1, 'A1', 'ENGANO', now() + interval '1 year')",
+      [errado.id],
+    ),
+  );
+  // operador e visualizador não excluem
+  await rejects(as(OPERATOR, (tx) => tx.query("select public.delete_client($1)", [errado.id])), /FORBIDDEN/);
+  await rejects(as(VIEWER, (tx) => tx.query("select public.delete_client($1)", [errado.id])), /FORBIDDEN/);
+  // admin de outro escritório não enxerga
+  await rejects(as(ADMIN_B, (tx) => tx.query("select public.delete_client($1)", [errado.id])), /CLIENT_NOT_FOUND/);
+  // cliente com agendamento: bloqueado (o histórico não some)
+  await rejects(as(ADMIN, (tx) => tx.query("select public.delete_client($1)", [CLIENT_A])), /HAS_HISTORY/);
+  // sem histórico: sai, com o certificado do painel, e fica na auditoria
+  await as(ADMIN, (tx) => tx.query("select public.delete_client($1)", [errado.id]));
+  const left = (await db.query("select (select count(*)::int from public.clients where id = $1) c, (select count(*)::int from public.certificates where client_id = $1) k", [errado.id])).rows[0];
+  assert.deepEqual(left, { c: 0, k: 0 });
+  const audit = (await db.query("select data, org_id from public.audit_logs where action = 'client.deleted' and entity_id = $1", [errado.id])).rows[0];
+  assert.equal(audit.data.client_code, errado.client_code);
+  assert.equal(audit.data.cnpj, "45723174000110");
+  assert.equal(audit.org_id, ORG_A);
+});
+
 console.log(`\n${passed} teste(s) de banco passaram${process.exitCode ? " (com falhas)" : ""}.`);
 await db.close();
