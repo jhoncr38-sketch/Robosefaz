@@ -162,6 +162,22 @@
   animation: live-pulse 1.6s infinite;
 }
 .no-scrollbar { scrollbar-width: none; }
+
+/* menu lateral: grupos entram deslizando; contador da fila "respira" quando há serviço */
+@keyframes nav-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: none; }
+}
+.nav-in { animation: nav-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes nav-badge-live {
+  0% { box-shadow: 0 0 0 0 rgba(224, 160, 25, 0.45); }
+  70% { box-shadow: 0 0 0 5px rgba(224, 160, 25, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(224, 160, 25, 0); }
+}
+.nav-badge-live { animation: nav-badge-live 2.2s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  [data-nav], [data-nav] * { animation: none !important; transition: none !important; }
+}
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
 /* cores fixas do redesenho, com versão para o modo noturno (gerado por codemod) */

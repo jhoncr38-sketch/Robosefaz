@@ -1,5 +1,7 @@
+import { cookies } from "next/headers";
+
 import { Header } from "@/components/layout/header";
-import type { NavCounts } from "@/components/layout/nav-items";
+import { NAV_STATE_COOKIE, parseFolderState, type NavCounts } from "@/components/layout/nav-items";
 import { Sidebar } from "@/components/layout/sidebar";
 import { ThemeSync } from "@/components/theme/theme";
 import { requireSession } from "@/lib/auth";
@@ -17,6 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     downloads: n(stats.downloads_available),
     clients: n(stats.clients_active),
   };
+  const folderState = parseFolderState((await cookies()).get(NAV_STATE_COOKIE)?.value);
 
   return (
     <div className="min-h-screen bg-background">
@@ -26,9 +29,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         isOwner={profile.is_platform_owner}
         orgName={profile.organizations?.name ?? null}
         counts={counts}
+        folderState={folderState}
       />
       <div className="flex min-h-screen min-w-0 flex-col lg:pl-[232px]">
-        <Header profile={profile} counts={counts} />
+        <Header profile={profile} counts={counts} folderState={folderState} />
         <main className="w-full max-w-[1360px] p-4 lg:p-6">{children}</main>
         <footer className="mt-auto w-full px-4 pt-2 pb-5 text-center text-xs text-muted-foreground lg:-ml-[232px] lg:w-[calc(100%+232px)]">
           JR Sistema © {new Date().getFullYear()}

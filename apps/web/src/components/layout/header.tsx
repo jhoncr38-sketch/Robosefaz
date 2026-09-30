@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { GlobalSearch } from "@/components/layout/global-search";
-import { navLocation, type NavCounts } from "@/components/layout/nav-items";
+import { navLocation, type NavCounts, type NavFolderState } from "@/components/layout/nav-items";
 import { NotificationsBell } from "@/components/layout/notifications-bell";
 import { RobotStatusPill } from "@/components/layout/robot-status-pill";
 import { Brand, SidebarNav } from "@/components/layout/sidebar";
@@ -25,7 +25,15 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { ROLE_LABEL } from "@/lib/permissions";
 import type { Profile } from "@/lib/types";
 
-export function Header({ profile, counts }: { profile: Profile; counts: NavCounts }) {
+export function Header({
+  profile,
+  counts,
+  folderState,
+}: {
+  profile: Profile;
+  counts: NavCounts;
+  folderState: NavFolderState;
+}) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const theme = useThemeChoice();
@@ -59,6 +67,7 @@ export function Header({ profile, counts }: { profile: Profile; counts: NavCount
               role={profile.role}
               isOwner={profile.is_platform_owner}
               counts={counts}
+              folderState={folderState}
               onNavigate={() => setOpen(false)}
             />
           </div>
