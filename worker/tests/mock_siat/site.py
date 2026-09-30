@@ -63,6 +63,9 @@ class MockState:
     deleted: list[str] = field(default_factory=list)
     # Consulta de Malhas: [{source: DIEF_PGDAS|EFD_OIE, identification, periods, icms, nfe}]
     malhas: list[dict] = field(default_factory=list)
+    # como no SIAT real com certificado de contador: IE e razão social vêm vazias e a IE precisa
+    # ser validada (✔) antes de "Consulta", senão "Você deve validar a inscrição estadual"
+    malhas_prefilled: bool = True
 
 
 LOGIN_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>SIAT WEB</title></head>
@@ -261,8 +264,9 @@ LEGACY_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><
 
 <section id="malhas" style="display:none">
   <h3>Consulta de Malhas</h3>
-  <label for="m-ie">Inscrição Estadual:</label><input id="m-ie" value="__MALHAS_IE__">
-  <label for="m-razao">Razão Social:</label><input id="m-razao" value="__USER__" disabled>
+  <div class="ui-messages" id="m-msg" style="display:none"></div>
+  <label for="m-ie">Inscrição Estadual:</label><input id="m-ie" value="__MALHAS_IE__"> <a href="#" id="m-validate" title="Validar Inscrição"><img alt="ok"></a>
+  <label for="m-razao">Razão Social:</label><input id="m-razao" value="__MALHAS_RAZAO__" disabled>
   <button id="m-consulta">Consulta</button>
   <p>OBS: Os períodos intimados pelo Sistema Eletrônico de Malhas via DT-e não estão disponíveis para consulta nesta página.</p>
   <div id="m-result" style="display:none">
@@ -320,7 +324,18 @@ document.querySelectorAll('[data-go]').forEach((a) => a.onclick = (e) => {
   render();
 });
 const malhas = __MALHAS__;
+const malhasIe = __MALHAS_IE_JSON__;
+$('m-validate').onclick = (e) => {
+  e.preventDefault();
+  $('m-razao').value = $('m-ie').value.replace(/\\D/g, '') === malhasIe ? $('user').textContent : '';
+};
 $('m-consulta').onclick = () => {
+  if (!$('m-razao').value) {
+    $('m-msg').textContent = 'Você deve validar a inscrição estadual'; $('m-msg').style.display = 'block';
+    $('m-result').style.display = 'none';
+    return;
+  }
+  $('m-msg').style.display = 'none';
   [['DIEF_PGDAS', 'm-dief'], ['EFD_OIE', 'm-efd']].forEach(([source, id]) => {
     const tb = $(id).querySelector('tbody'); tb.innerHTML = '';
     const rows = malhas.filter((m) => m.source === source);
@@ -467,7 +482,9 @@ def build_handler(state: MockState):
                 .replace("__IE_OVERRIDE__", json.dumps(state.rows_ie_override))
                 .replace("__NOTICE__", json.dumps(state.show_notice))
                 .replace("__REJECT_DUP__", json.dumps(state.reject_duplicates))
-                .replace("__MALHAS_IE__", state.inscricoes[0] if state.inscricoes else "")
+                .replace("__MALHAS_IE__", (state.inscricoes[0] if state.inscricoes else "") if state.malhas_prefilled else "")
+                .replace("__MALHAS_RAZAO__", state.legacy_user if state.malhas_prefilled else "")
+                .replace("__MALHAS_IE_JSON__", json.dumps(state.inscricoes[0] if state.inscricoes else ""))
                 .replace("__MALHAS__", json.dumps(state.malhas)),
             )
         else:

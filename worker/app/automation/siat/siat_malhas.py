@@ -11,13 +11,14 @@ consultar confere que a IE da página é a do cliente (nunca lê malha de outro)
 
 from __future__ import annotations
 
+import asyncio
 import re
 from dataclasses import asdict, dataclass, field
 
 from playwright.async_api import Error as PlaywrightError, Locator, Page
 
 from app.automation.base import AutomationContext
-from app.automation.siat.page_helpers import find_clickable, find_field, wait_idle
+from app.automation.siat.page_helpers import find_clickable, find_field, first_visible, text_visible, wait_idle
 from app.automation.siat.selectors import SiatSelectors, get_selectors
 from app.automation.siat.siat_legacy import SiatLegacy, ie_matches, only_digits
 from app.jobs.errors import AutomationError, ErrorCode, TaxpayerMismatchError
@@ -171,6 +172,48 @@ class SiatMalhas:
             rows.append(await trs.nth(i).locator("td").all_inner_texts())  # cabeçalhos (th) ficam vazios
         return rows
 
+    async def _validate_ie(self, ie_field: Locator) -> str:
+        """Clica no ✔ ao lado da IE e espera o SIAT preencher a razão social. -> razão social."""
+        icon = await first_visible(
+            [
+                self.page.get_by_title(self.sel.rx("malhas_validate_icon")),
+                self.page.get_by_role("link", name=self.sel.rx("malhas_validate_icon")),
+                self.page.get_by_role("button", name=self.sel.rx("malhas_validate_icon")),
+                ie_field.locator("xpath=following::*[self::a or self::button][1]"),
+                ie_field.locator("xpath=following::img[1]"),
+            ],
+            3_000,
+        )
+        if icon is None:
+            await ie_field.press("Enter")
+        else:
+            await icon.click()
+        await wait_idle(self.page)
+        for _ in range(20):  # o SIAT preenche a razão social por AJAX
+            name = await self._field_value("malhas_name_label")
+            if name:
+                return name
+            await asyncio.sleep(0.5)
+        return ""
+
+    async def _click_consult(self) -> None:
+        button = await find_clickable(self.page, self.sel.rx("malhas_consult_button"), timeout_ms=10_000)
+        if button is None:
+            raise AutomationError(ErrorCode.SELECTOR_NOT_FOUND, "Botão 'Consulta' das malhas não encontrado.")
+        await button.click()
+        await wait_idle(self.page)
+
+    async def _wait_tables(self, timeout_s: float = 15) -> None:
+        """As tabelas chegam por AJAX depois do 'Consulta'."""
+        rx = self.sel.rx("malhas_table_dief")
+        for _ in range(int(timeout_s * 2)):
+            try:
+                if await self.page.get_by_text(rx).first.is_visible():
+                    return
+            except PlaywrightError:
+                pass
+            await asyncio.sleep(0.5)
+
     async def consult(self) -> MalhaResult:
         await self.ctx.reporter.step(JobStatus.CHECKING_PROCESSING, "Consultando malhas fiscais")
         client_ie = self.legacy.require_ie()
@@ -186,12 +229,17 @@ class SiatMalhas:
         if not current:
             await ie_field.fill(client_ie)
         legal_name = await self._field_value("malhas_name_label")
+        if not legal_name:
+            # página abriu sem a IE (ex.: certificado de contador): o SIAT só aceita a consulta
+            # depois de validar a inscrição pelo ✔ ao lado do campo, que preenche a razão social
+            legal_name = await self._validate_ie(ie_field)
 
-        button = await find_clickable(self.page, self.sel.rx("malhas_consult_button"), timeout_ms=10_000)
-        if button is None:
-            raise AutomationError(ErrorCode.SELECTOR_NOT_FOUND, "Botão 'Consulta' das malhas não encontrado.")
-        await button.click()
-        await wait_idle(self.page)
+        await self._click_consult()
+        if await text_visible(self.page, self.sel.rx("malhas_validate_error"), timeout_ms=1_500):
+            await self.ctx.logger.info("O SIAT pediu para validar a inscrição estadual; validando.", step="checking_processing")
+            legal_name = await self._validate_ie(ie_field)
+            await self._click_consult()
+        await self._wait_tables()
         await self.ctx.reporter.screenshot("malhas_result")
 
         findings: list[MalhaFinding] = []

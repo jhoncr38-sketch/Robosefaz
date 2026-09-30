@@ -376,3 +376,17 @@ async def test_malhas_of_other_ie_blocks(repo: FakeRepo, integration_settings: S
             await _open(provider, ctx, state)
             await provider.read_malhas(ctx)
     assert exc.value.code == ErrorCode.SECURITY_CLIENT_MISMATCH
+
+
+async def test_malhas_validates_ie_when_the_page_opens_empty(repo: FakeRepo, integration_settings: Settings) -> None:
+    """Certificado de contador: IE e razão social vazias; o robô digita a IE, valida no ✔ e consulta."""
+    state = MockState(malhas_prefilled=False, malhas=[{"source": "DIEF_PGDAS", "identification": "[DIEF] Omissão", "periods": 2, "icms": "50,00", "nfe": ""}])
+    ctx, _ = await _context(repo, integration_settings)
+    provider = SiatAutomationProvider()
+    async with provider.open_session(ctx):
+        await _open(provider, ctx, state)
+        result = await provider.read_malhas(ctx)
+    assert result.state_registration == "123456789" and result.legal_name == "EMPRESA A LTDA"
+    assert [(f.source, f.identification, f.periods, f.icms, f.nfe_count) for f in result.findings] == [
+        ("DIEF_PGDAS", "[DIEF] Omissão", 2, 50.0, None),
+    ]
