@@ -156,15 +156,16 @@ def pick_new_request_id(
 
     Normal: exatamente um ID novo na lista (antes x depois do clique). Quando essa comparação não
     serve — a lista de NF-e é paginada e, depois de excluir um agendamento (forçar reagendamento),
-    o "antes" não bate com o "depois" —, vale o MAIOR ID da mesma IE criado desde o clique: os IDs
-    do SIAT são sequenciais e o robô faz um pedido de cada vez. IDs já usados por outras tarefas do
-    mesmo trabalho (`claimed`) nunca são escolhidos.
+    o "antes" não bate com o "depois" —, vale o pedido da mesma IE criado por ÚLTIMO desde o
+    clique (o robô faz um pedido de cada vez). Pelo horário, não pelo maior ID: o SIAT não numera
+    sempre em ordem crescente (30/09: 9329755 às 19:01, depois de 9329768 às 18:50). IDs já usados
+    por outras tarefas do mesmo trabalho (`claimed`) nunca são escolhidos.
     """
     new = [i for i in new_request_ids(before, after, client_ie) if i not in claimed]
     if len(new) == 1:
         return new[0]
     since = _utc(submitted_at) - tolerance
-    recent = []
+    recent: list[tuple[datetime, int, str]] = []
     for r in after:
         if r.request_id in claimed or not r.request_id.isdigit():
             continue
@@ -172,8 +173,8 @@ def pick_new_request_id(
             continue
         created = parse_siat_datetime(r.created)
         if created and created >= since:
-            recent.append(r)
-    return max(recent, key=lambda r: int(r.request_id)).request_id if recent else None
+            recent.append((created, int(r.request_id), r.request_id))
+    return max(recent)[2] if recent else None
 
 
 def recover_request_ids(

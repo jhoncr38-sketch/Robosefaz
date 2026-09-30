@@ -815,5 +815,61 @@ await test("Malhas: uma foto por cliente (upsert), só o próprio escritório l�
   assert.deepEqual(note, { title: "Consulta de malhas concluída.", link: "/malhas" });
 });
 
+await test("repasse: computador sem o certificado devolve o trabalho para outro do escritório", async () => {
+  await db.query("update public.automation_jobs set status = 'cancelled' where org_id = $1 and status in ('queued', 'waiting_sefaz')", [ORG_A]);
+  await db.query("update public.automation_jobs set locked_by = null, locked_at = null");
+  await as(OPERATOR, (tx) => tx.query("select public.create_malha_check_jobs(array[$1]::uuid[])", [CLIENT_A]));
+  const JOB = (await db.query("select id from public.automation_jobs where org_id = $1 and status = 'queued' order by created_at desc limit 1", [ORG_A])).rows[0].id;
+  await db.query("delete from public.worker_heartbeats");
+  await as(DEVICE_A.authId, (tx) =>
+    tx.query(`insert into public.worker_heartbeats (worker_id, kind, hostname, meta) values
+      ('ALEX-111', 'all', 'ALEX', '{"version":"1.2.25"}'), ('ALEX-999', 'all', 'ALEX', '{"version":"1.2.25"}'),
+      ('ESCRITORIO-222', 'all', 'ESCRITORIO', '{"version":"1.2.25"}')`),
+  );
+
+  // Alex pega, não tem o certificado e repassa (sem contar tentativa)
+  const got = await as(DEVICE_A.authId, (tx) => tx.query("select id from public.claim_next_job('ALEX-111')"));
+  assert.equal(got.rows[0].id, JOB);
+  const h1 = await as(DEVICE_A.authId, (tx) => tx.query("select public.hand_over_job($1, 'ALEX-111') as r", [JOB]));
+  assert.deepEqual(h1.rows[0].r, { handed_over: true, tried: ["ALEX"], waiting_for: ["ESCRITORIO"] });
+  const row = (await db.query("select status, locked_by, attempts, skip_hosts from public.automation_jobs where id = $1", [JOB])).rows[0];
+  assert.deepEqual(row, { status: "queued", locked_by: null, attempts: 0, skip_hosts: ["ALEX"] });
+
+  // Alex (mesmo reiniciado, outro pid) não pega de novo; o outro computador pega
+  const again = await as(DEVICE_A.authId, (tx) => tx.query("select id from public.claim_next_job('ALEX-999')"));
+  assert.equal(again.rows.length, 0, "o computador sem o certificado não pode pegar o trabalho de novo");
+  const other = await as(DEVICE_A.authId, (tx) => tx.query("select id from public.claim_next_job('ESCRITORIO-222')"));
+  assert.equal(other.rows[0].id, JOB);
+
+  // o outro também não tem: não sobrou ninguém -> só anota quem tentou (o robô marca "certificado necessário")
+  const h2 = await as(DEVICE_A.authId, (tx) => tx.query("select public.hand_over_job($1, 'ESCRITORIO-222') as r", [JOB]));
+  assert.deepEqual(h2.rows[0].r, { handed_over: false, tried: ["ALEX", "ESCRITORIO"], waiting_for: [] });
+
+  // só quem está com o trabalho repassa; robô de B nunca mexe no trabalho de A
+  await rejects(as(DEVICE_A.authId, (tx) => tx.query("select public.hand_over_job($1, 'ALEX-111')", [JOB])), /INVALID_STATE/);
+  await rejects(as(DEVICE_B.authId, (tx) => tx.query("select public.hand_over_job($1, 'ESCRITORIO-222')", [JOB])), /FORBIDDEN/);
+  await rejects(as(OPERATOR, (tx) => tx.query("select public.hand_over_job($1, 'ESCRITORIO-222')", [JOB])), /FORBIDDEN/);
+
+  // coleta: volta a aguardar a SEFAZ, sem contar consulta, e o computador sem o certificado não consulta
+  await db.query(
+    "update public.automation_jobs set status = 'waiting_sefaz', locked_by = null, skip_hosts = '{}', next_check_at = now(), check_count = 3 where id = $1",
+    [JOB],
+  );
+  const c1 = await as(DEVICE_A.authId, (tx) => tx.query("select id, check_count from public.claim_next_collection('ALEX-111')"));
+  assert.deepEqual(c1.rows[0], { id: JOB, check_count: 4 });
+  const h3 = await as(DEVICE_A.authId, (tx) => tx.query("select public.hand_over_job($1, 'ALEX-111', true) as r", [JOB]));
+  assert.equal(h3.rows[0].r.handed_over, true);
+  const coll = (await db.query("select status, check_count, locked_by from public.automation_jobs where id = $1", [JOB])).rows[0];
+  assert.deepEqual(coll, { status: "waiting_sefaz", check_count: 3, locked_by: null });
+  assert.equal((await as(DEVICE_A.authId, (tx) => tx.query("select id from public.claim_next_collection('ALEX-999')"))).rows.length, 0);
+  assert.equal((await as(DEVICE_A.authId, (tx) => tx.query("select id from public.claim_next_collection('ESCRITORIO-222')"))).rows[0].id, JOB);
+
+  // Reprocessar (depois de instalar o certificado) zera a lista
+  await db.query("update public.automation_jobs set status = 'certificate_required', locked_by = null, skip_hosts = '{ALEX,ESCRITORIO}' where id = $1", [JOB]);
+  await as(OPERATOR, (tx) => tx.query("select public.retry_automation_job($1)", [JOB]));
+  const reset = (await db.query("select status, skip_hosts from public.automation_jobs where id = $1", [JOB])).rows[0];
+  assert.deepEqual(reset, { status: "queued", skip_hosts: [] });
+});
+
 console.log(`\n${passed} teste(s) de banco passaram${process.exitCode ? " (com falhas)" : ""}.`);
 await db.close();

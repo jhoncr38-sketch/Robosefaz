@@ -296,6 +296,8 @@ class CollectorRunner(BaseRunner):
     async def _failed(
         self, job: Job, reporter: JobReporter, logger: JobLogger, ctx: AutomationContext | None, exc: BaseException
     ) -> None:
+        if await self.hand_over(job, logger, exc, collect=True):
+            return
         code, message = self.describe(exc)
         screenshot = await self.error_screenshot(ctx, job, logger)
         await logger.error(f"[{code}] {message}", step=reporter.state.value, metadata={"error_code": code.value})

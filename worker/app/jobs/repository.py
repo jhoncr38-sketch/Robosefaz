@@ -31,6 +31,7 @@ def iso(dt: datetime | None) -> str | None:
 class JobRepository(Protocol):
     async def claim_next_job(self, worker_id: str) -> Job | None: ...
     async def claim_next_collection(self, worker_id: str) -> Job | None: ...
+    async def hand_over_job(self, job_id: str, worker_id: str, *, collect: bool = False) -> dict[str, Any]: ...
     async def get_job(self, job_id: str) -> Job | None: ...
     async def get_client(self, client_id: str) -> Client | None: ...
     async def get_active_certificate(self, client_id: str) -> Certificate | None: ...
@@ -129,6 +130,14 @@ class SupabaseJobRepository:
         res = await self._db.rpc("claim_next_collection", {"p_worker_id": worker_id}).execute()
         rows = res.data or []
         return Job.model_validate(rows[0]) if rows else None
+
+    @_transient
+    async def hand_over_job(self, job_id: str, worker_id: str, *, collect: bool = False) -> dict[str, Any]:
+        """Sem o certificado neste computador: devolve o trabalho para outro PC do escritório."""
+        res = await self._db.rpc(
+            "hand_over_job", {"p_job_id": job_id, "p_worker_id": worker_id, "p_collect": collect}
+        ).execute()
+        return res.data if isinstance(res.data, dict) else {}
 
     @_transient
     async def release_lock(self, job_id: str, worker_id: str) -> None:

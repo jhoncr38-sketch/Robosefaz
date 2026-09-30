@@ -264,6 +264,13 @@ class TestNfeRequestIds:
         receb = pick_new_request_id(set(), _lia_rows(LIA_NFE), "196622590", _pi("14:31:56"), {"9328520"})
         assert receb == "9328521"
 
+    def test_newest_by_creation_time_not_by_biggest_id(self) -> None:
+        """30/09 19:01: o SIAT deu 9329755 depois de já ter dado 9329768 (IDs não são sempre crescentes)."""
+        from app.automation.siat.siat_legacy import pick_new_request_id
+
+        rows = _lia_rows([("9329768", "30/09/2026 19:01:10"), ("9329755", "30/09/2026 19:01:33")])
+        assert pick_new_request_id(set(), rows, "196622590", _pi("19:01:31")) == "9329755"
+
     def test_never_takes_the_previous_task_id_when_the_new_row_is_not_listed_yet(self) -> None:
         from app.automation.siat.siat_legacy import pick_new_request_id
 

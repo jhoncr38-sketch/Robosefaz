@@ -76,6 +76,9 @@ class FakeRepo:
         self.heartbeats: list[dict[str, Any]] = []
         self.retention_calls: list[tuple] = []
         self.heartbeat_rows: dict[str, dict[str, Any]] = {}
+        # outros computadores do escritório (hostname) para o repasse de trabalho sem certificado
+        self.other_hosts: list[str] = []
+        self.handovers: list[tuple[str, str, bool]] = []
 
     # -- setup helpers --------------------------------------------------------
     def add_client(self, client: Client, certificate: Certificate | None = None) -> None:
@@ -248,6 +251,25 @@ class FakeRepo:
         for d in self.downloads:
             if d.get("id") == download_id:
                 d.update(drive_file_id=file_id, drive_client_folder_id=client_folder_id, drive_month_folder_id=month_folder_id)
+
+    async def hand_over_job(self, job_id: str, worker_id: str, *, collect: bool = False) -> dict[str, Any]:
+        import re
+
+        self.handovers.append((job_id, worker_id, collect))
+        job = self.jobs[job_id]
+        host = re.sub(r"-[0-9]+$", "", worker_id)
+        skip = list(job.get("skip_hosts") or [])
+        if host not in skip:
+            skip.append(host)
+        job["skip_hosts"] = skip
+        others = [h for h in self.other_hosts if h not in skip]
+        if not others:
+            return {"handed_over": False, "tried": skip, "waiting_for": []}
+        if collect:
+            job.update(status="waiting_sefaz", locked_by=None, check_count=max(job["check_count"] - 1, 0))
+        else:
+            job.update(status="queued", locked_by=None, attempts=max(job.get("attempts", 1) - 1, 0))
+        return {"handed_over": True, "tried": skip, "waiting_for": others}
 
     async def release_lock(self, job_id: str, worker_id: str) -> None:
         if self.jobs[job_id].get("locked_by") == worker_id:

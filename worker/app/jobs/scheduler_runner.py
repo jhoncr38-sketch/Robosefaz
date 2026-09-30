@@ -285,11 +285,15 @@ class SchedulerRunner(BaseRunner):
         ctx: AutomationContext | None,
         exc: BaseException,
     ) -> None:
+        running = [t for t in tasks if t.status == TaskStatus.RUNNING]
+        if await self.hand_over(job, logger, exc, collect=False):
+            for t in running:
+                await self.repo.update_task(t.id, status=TaskStatus.PENDING.value)
+            return
         code, message = self.describe(exc)
         screenshot = await self.error_screenshot(ctx, job, logger)
         await logger.error(f"[{code}] {message}", step=reporter.state.value, metadata={"error_code": code.value})
 
-        running = [t for t in tasks if t.status == TaskStatus.RUNNING]
         if code in (ErrorCode.CERTIFICATE_REQUIRED, ErrorCode.CERTIFICATE_EXPIRED):
             await self.repo.update_job(
                 job.id,

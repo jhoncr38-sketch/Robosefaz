@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 from app.certificates.windows_store import StoreCertificate, find_in_store, list_user_certificates
-from app.jobs.errors import AutomationError, ErrorCode
+from app.jobs.errors import AutomationError, CertificateNotInstalledError, ErrorCode
 from app.jobs.models import Certificate, Client
 from app.utils.cnpj import extract_cnpjs, normalize_cnpj
 
@@ -84,16 +84,12 @@ class CertificateManager:
             match = find_in_store(store, thumbprint=certificate.thumbprint, serial_number=certificate.serial_number)
             installed = match is not None
             if not installed:
-                raise AutomationError(
-                    ErrorCode.CERTIFICATE_REQUIRED,
+                raise CertificateNotInstalledError(
                     "Certificado não encontrado no repositório do Windows (Cert:\\CurrentUser\\My). "
-                    "Instale o A1 antes de executar a automação.",
+                    "Instale o A1 antes de executar a automação."
                 )
             if not match.has_private_key:
-                raise AutomationError(
-                    ErrorCode.CERTIFICATE_REQUIRED,
-                    "Certificado instalado sem chave privada; reinstale o arquivo PFX.",
-                )
+                raise CertificateNotInstalledError("Certificado instalado sem chave privada; reinstale o arquivo PFX.")
 
         return CertificateCheck(
             certificate=certificate, status=status, days_left=days_left, installed=installed, warnings=warnings

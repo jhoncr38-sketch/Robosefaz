@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -15,7 +16,7 @@ from app.certificates.certificate_manager import CertificateManager
 from app.config import Settings
 from app.downloads.fallback import organizer_for
 from app.downloads.organizer import DownloadOrganizer
-from app.jobs.errors import AutomationError, ErrorCode, error_code_of
+from app.jobs.errors import AutomationError, CertificateNotInstalledError, ErrorCode, error_code_of
 from app.jobs.models import Certificate, Client, Job
 from app.jobs.reporter import JobReporter
 from app.jobs.repository import JobRepository
@@ -116,6 +117,35 @@ class BaseRunner:
             logger=logger,
             organizer=self.deps.organizer,
         )
+
+    async def hand_over(self, job: Job, logger: JobLogger, exc: BaseException, *, collect: bool) -> bool:
+        """Certificado do cliente não instalado NESTE computador: repassa o trabalho a outro PC do escritório.
+
+        True = repassado (o trabalho voltou para a fila e este computador não o pega de novo).
+        False = não há outro computador para tentar: a mensagem do erro passa a dizer quem tentou.
+        """
+        if not isinstance(exc, CertificateNotInstalledError):
+            return False
+        try:
+            result = await self.repo.hand_over_job(job.id, self.deps.worker_id, collect=collect)
+        except Exception as err:  # noqa: BLE001 - banco antigo/sem rede: segue como antes
+            await logger.warning(f"Não foi possível repassar o trabalho a outro computador: {err}", step="starting")
+            return False
+        tried = ", ".join(result.get("tried") or [])
+        if result.get("handed_over"):
+            others = ", ".join(result.get("waiting_for") or [])
+            await logger.warning(
+                f"O certificado deste cliente não está instalado neste computador ({re.sub(r'-[0-9]+$', '', self.deps.worker_id)}); "
+                f"trabalho repassado para: {others}.",
+                step="starting",
+            )
+            return True
+        if tried:
+            exc.message = (
+                f"Certificado não instalado em nenhum computador disponível (tentado em: {tried}). "
+                "Instale o A1 do cliente em um deles e clique em Reprocessar."
+            )
+        return False
 
     async def error_screenshot(self, ctx: AutomationContext | None, job: Job, logger: JobLogger) -> str | None:
         # o provider captura antes de fechar o navegador; senão tenta agora

@@ -82,6 +82,17 @@ class TaxpayerMismatchError(AutomationError):
         )
 
 
+class CertificateNotInstalledError(AutomationError):
+    """Certificado do cliente ausente (ou sem chave privada) NESTE Windows.
+
+    Problema só deste computador: o trabalho pode ser repassado a outro computador do
+    escritório que tenha o certificado instalado (ver BaseRunner.hand_over).
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(ErrorCode.CERTIFICATE_REQUIRED, message)
+
+
 class ManualActionRequired(AutomationError):
     def __init__(self, message: str) -> None:
         super().__init__(ErrorCode.MANUAL_ACTION_REQUIRED, message)

@@ -411,6 +411,10 @@ def cap_instalacao() -> list:
                 "Repita os passos 1 a 3 em cada computador. Cada um precisa dos certificados instalados.",
                 "O computador que estiver ligado pega os agendamentos da fila. Se os dois estiverem ligados, "
                 "eles dividem o trabalho, e o mesmo cliente nunca é processado por dois robôs ao mesmo tempo.",
+                "Se um computador pegar um cliente cujo certificado <b>não está instalado nele</b>, ele repassa o "
+                "trabalho para outro computador do escritório (a fila mostra “repassado para …”) e não o pega de "
+                "novo. Se nenhum computador tiver o certificado, o trabalho fica em <b>certificado necessário</b> "
+                "dizendo onde foi tentado: instale o A1 em um deles e clique em <b>Reprocessar</b>.",
                 "Sem o Google Drive, cada computador guarda as notas que <b>ele</b> baixou. Com o Google Drive "
                 "(capítulo 8), use a <b>mesma pasta</b> em todos os computadores: as notas ficam juntas e o "
                 "“Baixar pasta do mês” sai completo.",
