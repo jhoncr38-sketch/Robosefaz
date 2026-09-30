@@ -871,5 +871,73 @@ await test("repasse: computador sem o certificado devolve o trabalho para outro 
   assert.deepEqual(reset, { status: "queued", skip_hosts: [] });
 });
 
+await test("saúde da plataforma: só o dono vê números; robô parado, desatualizado, falhas e parados viram aviso sem repetir", async () => {
+  await rejects(as(ADMIN_B, (tx) => tx.query("select * from public.platform_health()")), /FORBIDDEN/);
+  await rejects(as(OPERATOR, (tx) => tx.query("select * from public.platform_health()")), /FORBIDDEN/);
+  await rejects(as(ADMIN, (tx) => tx.query("select * from public.platform_health_data()")), /permission denied/);
+  await rejects(as(ADMIN, (tx) => tx.query("select public.generate_platform_alerts()")), /permission denied/);
+
+  // B no 1.2.25 (lançado há 5 dias) e ligado; A no 1.2.23, sem sinal há 3 h, mas ligado ontem
+  await db.query("update public.devices set status = 'active', revoked_at = null where id in ($1, $2)", [DEVICE_A.deviceId, DEVICE_B.deviceId]);
+  await db.query("update public.organizations set status = 'active' where id in ($1, $2)", [ORG_A, ORG_B]);
+  await db.query("update public.devices set robot_version = '1.2.25', last_seen_at = now() where id = $1", [DEVICE_B.deviceId]);
+  await db.query("update public.devices set robot_version = '1.2.23', last_seen_at = now() - interval '3 hours' where id = $1", [DEVICE_A.deviceId]);
+  await db.query(
+    "insert into public.worker_heartbeats (worker_id, kind, hostname, meta, started_at, last_seen_at) values ('PC-B-1', 'all', 'PC-B', '{\"version\":\"1.2.25\"}', now() - interval '5 days', now())",
+  );
+  await db.query("update public.app_settings set value = '1' where key = 'health_failures_day'");
+  const jobsA = (await db.query("select id from public.automation_jobs where org_id = $1 order by created_at limit 2", [ORG_A])).rows.map((r) => r.id);
+  await db.query(
+    "update public.automation_jobs set status = 'failed', error_code = 'SCHEDULE_FAILED', finished_at = now(), created_at = now() where id = $1",
+    [jobsA[0]],
+  );
+  await db.query(
+    "update public.automation_jobs set status = 'waiting_sefaz', started_at = now() - interval '8 hours', created_at = now(), locked_by = null where id = $1",
+    [jobsA[1]],
+  );
+
+  const rows = (await as(ADMIN, (tx) => tx.query("select * from public.platform_health()"))).rows;
+  const a = rows.find((r) => r.org_id === ORG_A);
+  const b = rows.find((r) => r.org_id === ORG_B);
+  assert.equal(a.latest_version, "1.2.25");
+  assert.deepEqual(
+    a.robots.map((x) => [x.name, x.version, x.outdated]),
+    [["PC-ESCRITORIO-A", "1.2.23", true]],
+  );
+  assert.deepEqual(b.robots.map((x) => x.outdated), [false]);
+  assert.ok(Number(a.hours_since_signal) >= 2.9);
+  assert.equal(a.failed_today, 1);
+  assert.equal(a.stuck, 1);
+  assert.deepEqual(a.failures_by_code, { SCHEDULE_FAILED: 1 });
+  assert.equal(Number(a.limits.failures_day), 1);
+  // só números: nenhuma coluna com cliente, CNPJ, nota ou mensagem de trabalho
+  assert.ok(!Object.keys(a).some((k) => /cnpj|client_id|legal|note|message|file/.test(k)));
+
+  // quarta-feira, 10h no Piauí: robô parado + desatualizado + falhas + parados para o dono
+  const weekday = "2026-09-30 13:00:00+00";
+  const created = (await db.query("select public.generate_platform_alerts($1) n", [weekday])).rows[0].n;
+  assert.equal(created, 4);
+  const again = (await db.query("select public.generate_platform_alerts($1) n", [weekday])).rows[0].n;
+  assert.equal(again, 0, "o mesmo aviso não se repete");
+  const titles = (
+    await as(ADMIN, (tx) => tx.query("select title from public.notifications where dedup_key like 'health:%' order by title"))
+  ).rows.map((r) => r.title);
+  assert.equal(titles.length, 4);
+  assert.deepEqual(
+    titles.map((t) => t.split(": ")[0]),
+    ["Falhas no robô", "Robô desatualizado", "Robô parado", "Trabalhos parados"],
+  );
+  assert.ok(titles.every((t) => t.endsWith(`: ${a.name}`)), "todos os avisos são do escritório A");
+  const others = (await as(ADMIN_B, (tx) => tx.query("select count(*)::int n from public.notifications where dedup_key like 'health:%'"))).rows[0].n;
+  assert.equal(others, 0, "só o dono da plataforma recebe");
+
+  // sábado: PC desligado é normal, sem aviso de robô parado
+  const saturday = "2026-10-03 13:00:00+00";
+  await db.query("select public.generate_platform_alerts($1)", [saturday]);
+  const offline = (await db.query("select count(*)::int n from public.notifications where dedup_key like 'health:offline:%'")).rows[0].n;
+  assert.equal(offline, 1);
+  await db.query("update public.app_settings set value = '5' where key = 'health_failures_day'");
+});
+
 console.log(`\n${passed} teste(s) de banco passaram${process.exitCode ? " (com falhas)" : ""}.`);
 await db.close();
