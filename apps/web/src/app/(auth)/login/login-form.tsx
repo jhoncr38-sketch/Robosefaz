@@ -46,7 +46,7 @@ export function LoginForm({ initialError, next }: { initialError?: string; next:
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5 text-center">
         <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.02em] text-(--c-13294b)">Bem-vindo de volta</h1>
         <p className="text-sm text-muted-foreground">Entre para acompanhar automações, certificados e downloads.</p>
       </div>
