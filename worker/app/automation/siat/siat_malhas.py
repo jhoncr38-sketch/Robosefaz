@@ -27,6 +27,14 @@ from app.jobs.state_machine import JobStatus
 SOURCES = ("DIEF_PGDAS", "EFD_OIE")
 SOURCE_LABEL = {"DIEF_PGDAS": "DIEF/PGDAS", "EFD_OIE": "EFD/OIE"}
 _HEADER_CELL = re.compile(r"identifica[çc][ãa]o", re.I)
+# rótulo escondido dos botões lupa/ⓘ (PrimeFaces) que vem junto no texto da coluna "Opções"
+_HIDDEN_LABEL = re.compile(r"\bui-[a-z-]+\b", re.I)
+
+
+def clean_text(text: str) -> str:
+    """Texto de uma tabela do SIAT sem rótulos internos de botão e sem linhas vazias sobrando."""
+    lines = [" ".join(_HIDDEN_LABEL.sub("", line).split()) for line in text.splitlines()]
+    return "\n".join(line for line in lines if line)
 
 
 @dataclass(slots=True)
@@ -89,7 +97,7 @@ def parse_rows(source: str, rows: list[list[str]], sel: SiatSelectors | None = N
     empty = sel.rx("malhas_empty")
     out: list[MalhaFinding] = []
     for cells in rows:
-        cells = [c.strip() for c in cells]
+        cells = [clean_text(c) for c in cells]
         joined = " | ".join(cells)
         if not joined or empty.search(joined) or len(cells) < 4 or _HEADER_CELL.search(cells[0]):
             continue
@@ -172,6 +180,17 @@ class SiatMalhas:
             rows.append(await trs.nth(i).locator("td").all_inner_texts())  # cabeçalhos (th) ficam vazios
         return rows
 
+    async def _wait_loading_gone(self, timeout_s: float = 10) -> None:
+        """O SIAT web mostra um "Carregando..." por cima da tabela enquanto busca os dados."""
+        rx = self.sel.rx("malhas_loading")
+        for _ in range(int(timeout_s * 2)):
+            try:
+                if not await self.page.get_by_text(rx).first.is_visible():
+                    return
+            except PlaywrightError:
+                return
+            await asyncio.sleep(0.5)
+
     async def _validate_ie(self, ie_field: Locator) -> str:
         """Clica no ✔ ao lado da IE e espera o SIAT preencher a razão social. -> razão social."""
         icon = await first_visible(
@@ -209,10 +228,11 @@ class SiatMalhas:
         for _ in range(int(timeout_s * 2)):
             try:
                 if await self.page.get_by_text(rx).first.is_visible():
-                    return
+                    break
             except PlaywrightError:
                 pass
             await asyncio.sleep(0.5)
+        await self._wait_loading_gone()
 
     async def consult(self) -> MalhaResult:
         await self.ctx.reporter.step(JobStatus.CHECKING_PROCESSING, "Consultando malhas fiscais")
@@ -251,7 +271,7 @@ class SiatMalhas:
                 continue
             found_tables += 1
             findings += parse_rows(source, await self._rows(table), self.sel)
-            texts.append(" ".join((await table.inner_text()).split("\t")))
+            texts.append(clean_text(" ".join((await table.inner_text()).split("\t"))))
         if found_tables == 0:
             raise AutomationError(
                 ErrorCode.SELECTOR_NOT_FOUND, "As tabelas da Consulta de Malhas (DIEF/PGDAS e EFD/OIE) não apareceram."

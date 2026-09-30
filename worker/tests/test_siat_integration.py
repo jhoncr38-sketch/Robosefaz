@@ -363,6 +363,7 @@ async def test_malhas_consult_reads_both_tables(repo: FakeRepo, integration_sett
         ("EFD_OIE", "[EFD][NFe] Entradas Não Registradas", 1, 110.07, 13),
     ]
     assert "DIEF/PGDAS" in result.raw_text and "Nenhum registro encontrado" in result.raw_text
+    assert "ui-button" not in result.raw_text and "ui-button" not in result.findings[0].raw
     assert state.scheduled == []
 
 

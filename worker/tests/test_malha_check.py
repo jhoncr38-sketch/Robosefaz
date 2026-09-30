@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.automation.siat.siat_malhas import MalhaFinding, MalhaResult, format_brl, parse_brl, parse_rows, summary
+from app.automation.siat.siat_malhas import MalhaFinding, MalhaResult, clean_text, format_brl, parse_brl, parse_rows, summary
 from app.jobs.errors import ErrorCode
 from app.jobs.models import TaskStatus, TaskType
 from app.jobs.scheduler_runner import SchedulerRunner
@@ -72,13 +72,21 @@ def test_parse_rows_skips_headers_and_empty() -> None:
         ["Nenhum registro encontrado"],
         ["[EFD][NFe] Entradas Não Registradas", "1", "110,07", "13", ""],
         ["[DIEF] Omissão de receita", "3", "R$ 1.234,56", "", ""],
+        ["[PGDASD] Receita Bruta X DIMP", "5", "-", "-", "ui-button\nui-button"],  # botões lupa/ⓘ do SIAT
     ]
     found = parse_rows("EFD_OIE", rows)
     assert [(f.identification, f.periods, f.icms, f.nfe_count) for f in found] == [
         ("[EFD][NFe] Entradas Não Registradas", 1, 110.07, 13),
         ("[DIEF] Omissão de receita", 3, 1234.56, None),
+        ("[PGDASD] Receita Bruta X DIMP", 5, None, None),
     ]
+    assert found[2].raw == "[PGDASD] Receita Bruta X DIMP | 5 | - | - | "
     assert parse_rows("DIEF_PGDAS", [["Nenhum registro encontrado"]]) == []
+
+
+def test_clean_text_drops_hidden_button_labels() -> None:
+    raw = "Identificação da Malha Qtd. Períodos\n[EFD][NFe] Entradas Não Registradas 1 110,07 13 \nui-button\nui-button\n\n"
+    assert clean_text(raw) == "Identificação da Malha Qtd. Períodos\n[EFD][NFe] Entradas Não Registradas 1 110,07 13"
 
 
 def test_brl() -> None:

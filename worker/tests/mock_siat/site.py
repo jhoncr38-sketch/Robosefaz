@@ -269,6 +269,7 @@ LEGACY_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><
   <label for="m-razao">Razão Social:</label><input id="m-razao" value="__MALHAS_RAZAO__" disabled>
   <button id="m-consulta">Consulta</button>
   <p>OBS: Os períodos intimados pelo Sistema Eletrônico de Malhas via DT-e não estão disponíveis para consulta nesta página.</p>
+  <div id="m-loading" style="display:none;position:absolute;left:40%;top:40%;background:#fff;border:1px solid #363">Carregando...</div>
   <div id="m-result" style="display:none">
     <table id="m-dief"><thead><tr><th colspan="5">DECLARAÇÃO DIEF/PGDAS</th></tr>
       <tr><th>Identificação da Malha</th><th>Qtd. Períodos</th><th>ICMS Devido/Destacado</th><th>Qtd. NFe</th><th>Opções</th></tr></thead><tbody></tbody></table>
@@ -344,13 +345,16 @@ $('m-consulta').onclick = () => {
     } else {
       rows.forEach((m) => {
         const tr = document.createElement('tr');
-        tr.innerHTML = '<td>' + m.identification + '</td><td>' + m.periods + '</td><td>' + m.icms + '</td><td>' + (m.nfe ?? '') + '</td><td><button>🔍</button> <button>ℹ</button></td>';
+        tr.innerHTML = '<td>' + m.identification + '</td><td>' + m.periods + '</td><td>' + m.icms + '</td><td>' + (m.nfe ?? '') + '</td>'
+          + '<td><button class="ui-button"><span class="ui-button-text">ui-button</span></button> <button class="ui-button"><span class="ui-button-text">ui-button</span></button></td>';
         tb.appendChild(tr);
       });
     }
     $(id + '-total').textContent = 'Total de Registros: ' + rows.length;
   });
   $('m-result').style.display = 'block';
+  $('m-loading').style.display = 'block';
+  setTimeout(() => { $('m-loading').style.display = 'none'; }, 700);
 };
 $('entendi').onclick = () => { $('overlay').style.display = 'none'; $('notice').style.display = 'none'; sessionStorage.setItem('noticeSeen', '1'); };
 ['n-chave', 'n-emit', 'n-dest'].forEach((id) => $(id).onchange = () => {

@@ -117,6 +117,7 @@ class SiatSelectors:
     # IE digitada precisa ser validada (✔ ao lado do campo) antes de "Consulta"
     malhas_validate_icon: str = r"validar|confirmar"
     malhas_validate_error: str = r"validar\s+a\s+inscri[çc][ãa]o"
+    malhas_loading: str = r"^\s*carregando"
     legacy_user_label: str = r"usu[áa]rio\s*:\s*(.+)"
     legacy_radio_emitente: str = r"contribuinte\s+como\s+emitente"
     legacy_radio_destinatario: str = r"contribuinte\s+como\s+destinat[áa]rio"
