@@ -68,6 +68,8 @@ class Settings(BaseSettings):
     automation_dry_run: bool = True
     automation_screenshots: bool = False
     browser_channel: str = "chrome"  # chrome | msedge | chromium
+    # hidden = janela do navegador fora da tela (volta pelo ícone ou quando o robô pede ajuda) | visible
+    browser_window: str = "hidden"
     max_parallel_jobs: int = 1
     page_load_timeout: int = 60_000
     action_timeout: int = 30_000
@@ -134,6 +136,14 @@ class Settings(BaseSettings):
         v = v.strip().lower()
         if v not in {"chrome", "msedge", "chromium"}:
             raise ValueError("BROWSER_CHANNEL deve ser chrome, msedge ou chromium")
+        return v
+
+    @field_validator("browser_window")
+    @classmethod
+    def _window(cls, v: str) -> str:
+        v = v.strip().lower()
+        if v not in {"hidden", "visible"}:
+            raise ValueError("BROWSER_WINDOW deve ser hidden ou visible")
         return v
 
     @field_validator("nfe_status")
@@ -224,6 +234,11 @@ class Settings(BaseSettings):
     @property
     def status_file(self) -> Path:
         return _resolve(self.status_file_path)
+
+    @property
+    def browser_flag(self) -> Path:
+        """Criado pelo ícone ("Mostrar/Esconder navegador do robô"): o worker lê e apaga."""
+        return self.status_file.with_name("navegador.flag")
 
     @property
     def update_flag(self) -> Path:

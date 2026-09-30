@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from app.tray import TrayState, read_local_status
+from app.tray import TrayState, read_browser_state, read_local_status
 from app.tray_icons import draw, save_ico
 
 NOW = datetime(2026, 9, 25, 20, 0, tzinfo=timezone.utc)
@@ -28,6 +28,43 @@ def test_stale_or_missing_file_means_stopped(tmp_path: Path) -> None:
     assert read_local_status(tmp_path / "nao-existe.json", NOW)[0] == "stopped"
     (tmp_path / "ruim.json").write_text("{", encoding="utf-8")
     assert read_local_status(tmp_path / "ruim.json", NOW)[0] == "stopped"
+
+
+def test_browser_state_from_status_file(tmp_path: Path) -> None:
+    path = tmp_path / "worker-status.json"
+
+    def write(browser: str | None, age_s: float) -> Path:
+        data = {"status": "busy", "updated_at": (NOW - timedelta(seconds=age_s)).isoformat()}
+        if browser is not None:
+            data["browser"] = browser
+        path.write_text(json.dumps(data), encoding="utf-8")
+        return path
+
+    assert read_browser_state(write("hidden", 2), NOW) == "hidden"
+    assert read_browser_state(write("shown", 2), NOW) == "shown"
+    assert read_browser_state(write("none", 2), NOW) == "none"
+    assert read_browser_state(write(None, 2), NOW) == "none"  # robô de versão antiga
+    assert read_browser_state(write("shown", 120), NOW) == "none"  # robô parou
+    assert read_browser_state(tmp_path / "nao-existe.json", NOW) == "none"
+
+
+def test_toggle_browser_writes_request_for_worker(settings, monkeypatch) -> None:  # noqa: ANN001
+    from app import tray as tray_mod
+    from app.tray import RobotTray
+
+    allowed: list[int] = []
+    if tray_mod.sys.platform == "win32":
+        monkeypatch.setattr(tray_mod.ctypes.windll.user32, "AllowSetForegroundWindow", lambda v: allowed.append(v))
+    tray = RobotTray(settings)
+    tray.state.browser = "hidden"
+    tray.toggle_browser()
+    assert settings.browser_flag.read_text(encoding="utf-8") == "mostrar"
+    assert tray.state.browser == "shown"
+    tray.toggle_browser()
+    assert settings.browser_flag.read_text(encoding="utf-8") == "esconder"
+    assert tray.state.browser == "hidden"
+    if tray_mod.sys.platform == "win32":
+        assert allowed == [-1]  # só ao mostrar: libera o Chrome do robô a vir para a frente
 
 
 def test_colors_and_text() -> None:
@@ -77,6 +114,7 @@ def test_menu_order_and_help_submenu(settings) -> None:  # noqa: ANN001
         "- - - -",
         "Abrir painel",
         "Abrir pasta das notas",
+        "Mostrar navegador do robô",  # desabilitado enquanto o robô não abriu o navegador
         "- - - -",
         "Ligar robô",
         "Parar robô",

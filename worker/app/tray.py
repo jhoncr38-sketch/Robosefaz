@@ -4,7 +4,8 @@ r"""Ícone do robô ao lado do relógio (bandeja do Windows).
 
 - Cor: verde = ligado e aguardando; azul = trabalhando no SIAT;
   vermelho = algum agendamento precisa de atenção; cinza = robô parado.
-- Menu: abrir painel, abrir pasta das notas, ligar/parar o robô, ver log.
+- Menu: abrir painel, abrir pasta das notas, mostrar/esconder o navegador do
+  robô (ele trabalha com a janela fora da tela), ligar/parar o robô, ver log.
 - Avisos no canto da tela: notas baixadas neste computador e agendamentos
   que falharam ou aguardam você.
 
@@ -62,6 +63,7 @@ class TrayState:
     attention: list[str] = field(default_factory=list)
     dry_run: bool = False
     update_to: str | None = None  # versão nova disponível
+    browser: str = "none"  # navegador do robô: none (fechado) | hidden | shown
 
     @property
     def color(self) -> str:
@@ -97,6 +99,20 @@ def read_local_status(path: Path, now: datetime | None = None) -> tuple[str, boo
     if status not in ("idle", "busy") or (now - updated).total_seconds() > STALE_SECONDS:
         return "stopped", bool(data.get("dry_run"))
     return status, bool(data.get("dry_run"))
+
+
+def read_browser_state(path: Path, now: datetime | None = None) -> str:
+    """Janela do navegador do robô (none | hidden | shown), pelo mesmo arquivo de status."""
+    now = now or datetime.now(timezone.utc)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        updated = datetime.fromisoformat(data["updated_at"])
+    except (OSError, ValueError, KeyError):
+        return "none"
+    state = data.get("browser")
+    if state not in ("hidden", "shown") or (now - updated).total_seconds() > STALE_SECONDS:
+        return "none"
+    return state
 
 
 def read_update_status(settings: Settings) -> str | None:
@@ -200,6 +216,11 @@ class RobotTray:
                 # todo dia
                 pystray.MenuItem("Abrir painel", self.open_panel, default=True),
                 pystray.MenuItem("Abrir pasta das notas", self.open_downloads),
+                pystray.MenuItem(
+                    lambda _i: "Esconder navegador do robô" if self.state.browser == "shown" else "Mostrar navegador do robô",
+                    self.toggle_browser,
+                    enabled=lambda _i: self.state.browser != "none",
+                ),
                 pystray.Menu.SEPARATOR,
                 # controle do robô
                 pystray.MenuItem("Ligar robô", self.start_robot, enabled=lambda _i: self.state.robot == "stopped"),
@@ -249,6 +270,18 @@ class RobotTray:
             folder = current.local_downloads_dir
             folder.mkdir(parents=True, exist_ok=True)
         os.startfile(folder)  # noqa: S606
+
+    def toggle_browser(self, *_a) -> None:
+        """O robô trabalha com o Chrome fora da tela; aqui ele aparece (na frente) ou volta a se esconder."""
+        wanted = "esconder" if self.state.browser == "shown" else "mostrar"
+        if wanted == "mostrar" and sys.platform == "win32":
+            # quem clicou no menu pode trazer janelas para a frente: libera para o Chrome do robô
+            ctypes.windll.user32.AllowSetForegroundWindow(-1)  # ASFW_ANY
+        flag = self.settings.browser_flag
+        flag.parent.mkdir(parents=True, exist_ok=True)
+        flag.write_text(wanted, encoding="utf-8")
+        # o worker atende em até 1 s; o texto do menu já muda agora
+        self.state.browser = "shown" if wanted == "mostrar" else "hidden"
 
     def setup_google_drive(self, *_a) -> None:
         """Janela que liga o robô a uma pasta do Google Drive (pede administrador, igual ao robô)."""
@@ -350,6 +383,7 @@ class RobotTray:
         self._reload_if_activated()
         robot, dry_run = read_local_status(self.settings.status_file)
         self.state.robot, self.state.dry_run = robot, dry_run
+        self.state.browser = read_browser_state(self.settings.status_file) if robot != "stopped" else "none"
         update = read_update_status(self.settings)
         if update and update != self.state.update_to:
             self.icon.notify(
@@ -367,7 +401,7 @@ class RobotTray:
             self.icon.title = title
             self._last_title = title
         # o menu só é refeito quando algo dele muda: refazê-lo a cada 5 s, com ele aberto, trava a tela
-        menu = (self.state.text, tuple(self.state.attention), self.state.update_to, self.settings.auth_mode)
+        menu = (self.state.text, tuple(self.state.attention), self.state.update_to, self.settings.auth_mode, self.state.browser)
         if menu != self._last_menu:
             self.icon.update_menu()
             self._last_menu = menu

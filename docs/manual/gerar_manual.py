@@ -872,6 +872,12 @@ def cap_icone() -> list:
                 ["(linha cinza)", "Estado atual do robô. Se houver problemas, aparece “Precisam de atenção” com a lista."],
                 ["Abrir painel", "Abre o site. Dois cliques no ícone fazem o mesmo."],
                 ["Abrir pasta das notas", "Abre a pasta das notas em uso (a do Google Drive, se estiver ligada)."],
+                [
+                    "Mostrar navegador do robô",
+                    "O robô trabalha no SIAT com o Chrome <b>escondido fora da tela</b>. Este item traz a janela "
+                    "para a frente, para acompanhar; depois vira <b>Esconder navegador do robô</b>. Fica cinza "
+                    "quando o robô não está com o navegador aberto.",
+                ],
                 ["Ligar robô", "Liga o robô, se estiver parado."],
                 ["Parar robô", "Termina o trabalho atual e para. Nada se perde."],
                 ["Atualizar agora", "Aparece quando há versão nova. O robô termina o trabalho atual, instala e volta sozinho."],
@@ -889,6 +895,17 @@ def cap_icone() -> list:
                 ["Sair", "O robô termina o trabalho atual e para, e o ícone fecha. Para ligar de novo: menu Iniciar → JR Sistema → Ligar robô (ou entrar no Windows de novo)."],
             ],
             [50, 120],
+        ),
+        H2("Navegador do robô escondido"),
+        P(
+            "Para não atrapalhar quem usa o computador, o Chrome do robô abre <b>fora da tela</b>: ele funciona "
+            "igual (certificado, Web PKI e as fotos de cada etapa no Histórico), só não aparece e não rouba o "
+            "foco de quem está digitando. Para ver o que ele está fazendo, use <b>Mostrar navegador do robô</b> no "
+            "ícone ou clique no botão do Chrome do robô na barra de tarefas. Quando o robô precisa de você "
+            "(escolher o certificado, clicar em "
+            "Permitir no Web PKI, resolver um CAPTCHA), a janela <b>aparece sozinha</b> e o painel mostra o "
+            "pedido; depois ela volta a se esconder. Para ver sempre a janela, como antes, coloque "
+            + code("BROWSER_WINDOW=visible") + " no arquivo " + code("C:\\SIAT-Robo\\.env") + " e reinicie o robô."
         ),
         P(
             "O ícone também mostra avisos no canto da tela, por exemplo <i>“Notas baixadas: EMPRESA 08/2026 "

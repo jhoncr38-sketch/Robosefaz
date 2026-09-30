@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Awaitable, Callable
 
 from app.browser.screenshots import capture_step_screenshot
+from app.browser.window import robot_windows
 from app.jobs.errors import JobCancelled, ManualActionRequired
 from app.jobs.state_machine import JobStateMachine, JobStatus, label_for
 
@@ -113,24 +114,26 @@ class JobReporter:
         deadline = loop.time() + timeout
         last_heartbeat = loop.time()
         confirmed_by_user = False
-        while True:
-            await self.check_cancel()
-            if resolved is not None:
-                try:
-                    if await resolved():
-                        break
-                except Exception:  # condição best effort (página pode estar navegando)
-                    pass
-            confirmed = await self.repo.get_manual_confirmation(self.job.id)
-            if confirmed is not None and confirmed >= requested_at:
-                confirmed_by_user = True
-                break
-            if loop.time() >= deadline:
-                raise ManualActionRequired(f"Tempo esgotado aguardando intervenção: {message}")
-            if loop.time() - last_heartbeat > 60:
-                await self.repo.update_job(self.job.id, locked_at=datetime.now(timezone.utc))
-                last_heartbeat = loop.time()
-            await self._sleep(self.poll_interval)
+        # navegador escondido: aparece na tela enquanto espera (sem roubar o foco) e se esconde depois
+        async with robot_windows.shown_for_intervention():
+            while True:
+                await self.check_cancel()
+                if resolved is not None:
+                    try:
+                        if await resolved():
+                            break
+                    except Exception:  # condição best effort (página pode estar navegando)
+                        pass
+                confirmed = await self.repo.get_manual_confirmation(self.job.id)
+                if confirmed is not None and confirmed >= requested_at:
+                    confirmed_by_user = True
+                    break
+                if loop.time() >= deadline:
+                    raise ManualActionRequired(f"Tempo esgotado aguardando intervenção: {message}")
+                if loop.time() - last_heartbeat > 60:
+                    await self.repo.update_job(self.job.id, locked_at=datetime.now(timezone.utc))
+                    last_heartbeat = loop.time()
+                await self._sleep(self.poll_interval)
 
         await self.logger.info(
             "Intervenção confirmada pelo usuário." if confirmed_by_user else "Intervenção concluída; retomando.",

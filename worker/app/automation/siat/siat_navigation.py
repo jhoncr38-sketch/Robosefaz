@@ -16,6 +16,7 @@ from app.automation.base import AutomationContext
 from app.automation.siat.page_helpers import find_clickable, text_visible, wait_idle
 from app.automation.siat.selectors import SiatSelectors, get_selectors
 from app.automation.siat.siat_legacy import SiatLegacy
+from app.browser.window import bring_tab_to_front
 from app.jobs.errors import AutomationError, ErrorCode
 from app.jobs.state_machine import JobStatus
 
@@ -37,7 +38,7 @@ class SiatNavigation:
             if len(context.pages) > pages_before:
                 new_page = context.pages[-1]
                 await new_page.wait_for_load_state("domcontentloaded")
-                await new_page.bring_to_front()
+                await bring_tab_to_front(new_page)
                 self.ctx.page = new_page
                 await self.ctx.logger.debug("Módulo aberto em nova aba.", step="opening_siat_module")
                 return
@@ -104,7 +105,7 @@ class SiatNavigation:
             if self.page is not painel:
                 await self.page.close()
                 self.ctx.page = painel
-                await painel.bring_to_front()
+                await bring_tab_to_front(painel)
             await asyncio.sleep(self.ctx.settings.module_retry_delay * attempt)
             await painel.goto(painel_url, wait_until="domcontentloaded")
             await wait_idle(painel)

@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Awaitable, Callable
 
 from app.automation.registry import default_registry
+from app.browser.window import robot_windows
 from app import __version__
 from app.config import Settings, get_settings
 from app.downloads.drive_ids import DriveIdLookup, drivefs_databases, link_drive_ids, probe_account, update_link_state
@@ -194,6 +195,8 @@ class Worker:
                         "pid": os.getpid(),
                         "status": status,
                         "dry_run": self.settings.automation_dry_run,
+                        # navegador do robô para o ícone: none (fechado) | hidden | shown
+                        "browser": robot_windows.state,
                         "updated_at": datetime.now(timezone.utc).isoformat(),
                     }
                 ),
@@ -251,11 +254,47 @@ class Worker:
                 return
             await self._sleep(3)
 
+    async def handle_browser_flag(self) -> bool:
+        """Ícone "Mostrar/Esconder navegador do robô" grava o pedido em storage/navegador.flag."""
+        flag = self.settings.browser_flag
+        try:
+            wanted = flag.read_text(encoding="utf-8").strip().lower()
+        except OSError:
+            return False
+        flag.unlink(missing_ok=True)
+        if wanted == "mostrar":
+            done = await robot_windows.show(reason="user")
+        elif wanted == "esconder":
+            done = await robot_windows.hide()
+        else:
+            return False
+        if done:
+            log.info("Navegador do robô: %s a pedido do ícone.", "mostrado" if wanted == "mostrar" else "escondido")
+        self._write_local_status("busy" if self.activity.busy else "idle")
+        return done
+
+    async def _watch_browser_flag(self) -> None:
+        while not self.stop_event.is_set():
+            try:
+                if self.settings.browser_flag.exists():
+                    await self.handle_browser_flag()
+                elif robot_windows.state == "hidden":
+                    guarded = await robot_windows.guard_focus()
+                    if guarded == "shown":
+                        log.info("Navegador do robô: mostrado (clique no botão do Chrome na barra de tarefas).")
+                        self._write_local_status("busy" if self.activity.busy else "idle")
+                    elif guarded == "focus":
+                        log.debug("Navegador do robô escondido pegou o foco; devolvido.")
+            except Exception:
+                log.exception("Falha ao mostrar/esconder o navegador do robô")
+            await self._sleep(0.5)
+
     async def run(self) -> None:
         tasks: list[asyncio.Task] = [
             asyncio.create_task(self._heartbeat(), name="heartbeat"),
             asyncio.create_task(self._maintenance(), name="maintenance"),
             asyncio.create_task(self._watch_stop_flag(), name="stop-flag"),
+            asyncio.create_task(self._watch_browser_flag(), name="browser-flag"),
             asyncio.create_task(self._local_status(), name="local-status"),
             asyncio.create_task(self._recovery(), name="recovery"),
             asyncio.create_task(self._session(), name="session"),
@@ -340,6 +379,7 @@ async def amain(mode: str) -> None:
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_file)
     settings.stop_flag.unlink(missing_ok=True)  # sinal antigo não derruba o worker novo
+    settings.browser_flag.unlink(missing_ok=True)  # pedido de mostrar navegador de uma sessão anterior
     settings.update_flag.unlink(missing_ok=True)  # o serviço já tratou a atualização antes de ligar o robô
     organizer = organizer_for(settings)
     try:

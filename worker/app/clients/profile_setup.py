@@ -63,6 +63,7 @@ class ProfileSetupService:
             user_data_dir, _ = profile.prepare()
             options = BrowserOptions.from_settings(settings, user_data_dir, profile.downloads_tmp_dir, owner="profile-setup")
             options.headless = False
+            options.window = "visible"
             async with BrowserSession(options) as browser:
                 assert browser.page is not None and browser.context is not None
                 await browser.page.goto(settings.siat_login_url, wait_until="domcontentloaded")

@@ -41,6 +41,7 @@ from app.automation.siat.page_helpers import (
     wait_idle,
 )
 from app.automation.siat.selectors import SiatSelectors, get_selectors
+from app.browser.window import bring_tab_to_front
 from app.efd.parser import BRT, parse_subject
 from app.jobs.errors import AutomationError, ErrorCode
 from app.jobs.state_machine import JobStatus
@@ -107,7 +108,7 @@ class SiatDte:
             if len(context.pages) > pages_before:
                 new_page = context.pages[-1]
                 await new_page.wait_for_load_state("domcontentloaded")
-                await new_page.bring_to_front()
+                await bring_tab_to_front(new_page)
                 self.ctx.page = new_page
                 return
             await asyncio.sleep(0.25)

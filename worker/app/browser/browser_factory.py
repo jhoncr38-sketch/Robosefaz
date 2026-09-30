@@ -11,6 +11,7 @@ from playwright.async_api import BrowserContext, Error as PlaywrightError, Page,
 
 from app.browser.event_loop import run_playwright
 from app.browser.profile_lock import ProfileLock
+from app.browser.window import foreground_window, hidden_launch_args, robot_windows
 from app.config import Settings
 from app.jobs.errors import AutomationError, ErrorCode
 
@@ -26,6 +27,7 @@ class BrowserOptions:
     page_load_timeout: int
     action_timeout: int
     owner: str
+    window: str = "hidden"  # hidden (fora da tela) | visible; ferramentas interativas usam visible
 
     @classmethod
     def from_settings(cls, settings: Settings, user_data_dir: Path, downloads_dir: Path, owner: str) -> "BrowserOptions":
@@ -37,6 +39,7 @@ class BrowserOptions:
             page_load_timeout=settings.page_load_timeout,
             action_timeout=settings.action_timeout,
             owner=owner,
+            window=settings.browser_window,
         )
 
 
@@ -49,6 +52,7 @@ class BrowserSession:
         self.context: BrowserContext | None = None
         self.page: Page | None = None
         self._lock = ProfileLock(options.user_data_dir.parent, options.owner)
+        self._hidden = False
 
     async def __aenter__(self) -> "BrowserSession":
         self._lock.acquire()
@@ -70,6 +74,10 @@ class BrowserSession:
             }
             if self.options.channel != "chromium":
                 launch_kwargs["channel"] = self.options.channel
+            hidden_args = hidden_launch_args(headless=self.options.headless, window=self.options.window)
+            if hidden_args:
+                launch_kwargs["args"] = hidden_args
+            previous_foreground = foreground_window() if hidden_args else 0
             try:
                 self.context = await self._pw.chromium.launch_persistent_context(**launch_kwargs)
             except PlaywrightError as exc:
@@ -82,6 +90,9 @@ class BrowserSession:
             self.context.set_default_navigation_timeout(self.options.page_load_timeout)
             self.context.set_default_timeout(self.options.action_timeout)
             self.page = self.context.pages[0] if self.context.pages else await self.context.new_page()
+            if hidden_args:
+                self._hidden = True
+                await robot_windows.register(self.context, previous_foreground=previous_foreground)
             return self
         except AutomationError:
             await self._cleanup()
@@ -96,6 +107,9 @@ class BrowserSession:
         await self._cleanup()
 
     async def _cleanup(self) -> None:
+        if self._hidden and self.context is not None:
+            robot_windows.unregister(self.context)
+            self._hidden = False
         try:
             if self.context is not None:
                 await self.context.close()

@@ -34,6 +34,7 @@ async def run(client_code: str) -> None:
     user_data_dir, _ = profile.prepare()
     options = BrowserOptions.from_settings(settings, user_data_dir, profile.downloads_tmp_dir, owner="inspect")
     options.headless = False
+    options.window = "visible"
     async with BrowserSession(options) as session:
         assert session.page is not None
         await session.page.goto(settings.siat_login_url)

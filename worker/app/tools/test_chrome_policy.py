@@ -129,6 +129,7 @@ async def run(client_code: str) -> int:
             print(f"1) Regra gravada no Registro (valor {', '.join(created) or 'já existente'}).")
             options = BrowserOptions.from_settings(settings, tmp / "chrome", tmp / "downloads", owner="policy-test")
             options.headless = False
+            options.window = "visible"
             async with BrowserSession(options) as session:
                 page = session.page
                 assert page is not None
