@@ -105,6 +105,15 @@ class SiatSelectors:
     legacy_menu_nfe: str = r"^\s*nf-?e\s*$"
     # "Consultar/Exportar NF-e" (NÃO a opção "... Detalhada")
     legacy_menu_nfe_export: str = r"^\s*consultar\s*/\s*exportar\s+nf-?e\s*$"
+    # Autoatendimento -> Malhas Fiscais -> Consulta de Malhas (somente leitura)
+    legacy_menu_malhas: str = r"^\s*malhas\s+fiscais\s*$"
+    legacy_menu_malhas_consulta: str = r"^\s*consulta\s+de\s+malhas\s*$"
+    malhas_ie_label: str = r"inscri[çc][ãa]o\s+estadual"
+    malhas_name_label: str = r"raz[ãa]o\s+social"
+    malhas_consult_button: str = r"^\s*consultar?\s*$"
+    malhas_table_dief: str = r"declara[çc][ãa]o\s+dief\s*/\s*pgdas"
+    malhas_table_efd: str = r"declara[çc][ãa]o\s+efd\s*/\s*oie"
+    malhas_empty: str = r"nenhum\s+registro\s+encontrado"
     legacy_user_label: str = r"usu[áa]rio\s*:\s*(.+)"
     legacy_radio_emitente: str = r"contribuinte\s+como\s+emitente"
     legacy_radio_destinatario: str = r"contribuinte\s+como\s+destinat[áa]rio"

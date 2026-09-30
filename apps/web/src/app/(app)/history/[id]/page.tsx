@@ -84,6 +84,13 @@ export default async function JobDetailPage({ params }: PageProps<"/history/[id]
               </Link>
             </Button>
           ) : null}
+          {job.operations.includes("MALHA_CHECK") ? (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/malhas" className="text-foreground hover:no-underline">
+                Ver resultado das malhas
+              </Link>
+            </Button>
+          ) : null}
           <ContinueButton job={job} role={profile.role} />
           <JobActions job={job} role={profile.role} />
         </div>

@@ -16,6 +16,7 @@ class TaskType(StrEnum):
     CHECK_PROCESSING = "CHECK_PROCESSING"
     DOWNLOAD = "DOWNLOAD"
     EFD_CHECK = "EFD_CHECK"  # consulta do processamento da EFD (mensagens do DT-e)
+    MALHA_CHECK = "MALHA_CHECK"  # Consulta de Malhas Fiscais (SIAT web, somente leitura)
 
 
 EXPORT_TASK_TYPES: tuple[TaskType, ...] = (

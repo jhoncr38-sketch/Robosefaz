@@ -116,6 +116,10 @@ class AutomationProvider(ABC):
         """Lê as notificações da EFD (DT-e) da competência; lista de app.automation.siat.siat_dte.DteMessage."""
         raise NotImplementedError(f"{self.name} não consulta o processamento da EFD")
 
+    async def read_malhas(self, ctx: AutomationContext):  # noqa: ANN201
+        """Lê a Consulta de Malhas do contribuinte; app.automation.siat.siat_malhas.MalhaResult."""
+        raise NotImplementedError(f"{self.name} não consulta malhas fiscais")
+
     def document_for(self, task: Task) -> DocumentType:
         if task.document_type is None:
             raise ValueError(f"Tarefa {task.id} sem document_type")

@@ -343,3 +343,36 @@ async def test_user_type_dialog_without_the_client_blocks(repo: FakeRepo, integr
     assert exc.value.code == ErrorCode.TAXPAYER_MISMATCH
     assert "Nenhuma das 2 opções" in exc.value.message
     assert state.scheduled == []
+
+
+async def test_malhas_consult_reads_both_tables(repo: FakeRepo, integration_settings: Settings) -> None:
+    """Autoatendimento > Malhas Fiscais > Consulta de Malhas: lê DIEF/PGDAS e EFD/OIE, sem tocar em nada."""
+    state = MockState(
+        malhas=[
+            {"source": "EFD_OIE", "identification": "[EFD][NFe] Entradas Não Registradas", "periods": 1, "icms": "110,07", "nfe": 13},
+        ]
+    )
+    ctx, _ = await _context(repo, integration_settings)
+    provider = SiatAutomationProvider()
+    async with provider.open_session(ctx):
+        await _open(provider, ctx, state)
+        result = await provider.read_malhas(ctx)
+    assert result.state_registration == "123456789"
+    assert result.legal_name == "EMPRESA A LTDA"
+    assert [(f.source, f.identification, f.periods, f.icms, f.nfe_count) for f in result.findings] == [
+        ("EFD_OIE", "[EFD][NFe] Entradas Não Registradas", 1, 110.07, 13),
+    ]
+    assert "DIEF/PGDAS" in result.raw_text and "Nenhum registro encontrado" in result.raw_text
+    assert state.scheduled == []
+
+
+async def test_malhas_of_other_ie_blocks(repo: FakeRepo, integration_settings: Settings) -> None:
+    # a página abriu com a IE de OUTRO contribuinte: nunca lê
+    state = MockState(inscricoes=["987654321"])
+    ctx, _ = await _context(repo, integration_settings)
+    provider = SiatAutomationProvider()
+    with pytest.raises(AutomationError) as exc:
+        async with provider.open_session(ctx):
+            await _open(provider, ctx, state)
+            await provider.read_malhas(ctx)
+    assert exc.value.code == ErrorCode.SECURITY_CLIENT_MISMATCH

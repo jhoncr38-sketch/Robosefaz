@@ -30,7 +30,8 @@ export type TaskType =
   | "NFE_RECEIVED_EXPORT"
   | "CHECK_PROCESSING"
   | "DOWNLOAD"
-  | "EFD_CHECK";
+  | "EFD_CHECK"
+  | "MALHA_CHECK";
 
 export type ExportTaskType = Extract<TaskType, "NFCE_EXPORT" | "NFE_ISSUED_EXPORT" | "NFE_RECEIVED_EXPORT">;
 
@@ -148,8 +149,8 @@ export interface AutomationJob {
   competence: string;
   start_date: string;
   end_date: string;
-  /** exportações de notas ou ["EFD_CHECK"] (consulta do processamento da EFD) */
-  operations: (ExportTaskType | "EFD_CHECK")[];
+  /** exportações de notas, ["EFD_CHECK"] (processamento da EFD) ou ["MALHA_CHECK"] (Consulta de Malhas) */
+  operations: (ExportTaskType | "EFD_CHECK" | "MALHA_CHECK")[];
   force_reschedule: boolean;
   status: JobStatus;
   current_step: string | null;
@@ -286,6 +287,32 @@ export interface EfdDeclaration {
   message_sent_at: string | null;
   subject: string | null;
   inconsistencies: EfdInconsistency[];
+  raw_text: string | null;
+  checked_at: string;
+}
+
+/** Consulta de Malhas Fiscais (SIAT web): uma foto por cliente, lida pelo robô. */
+export type MalhaSource = "DIEF_PGDAS" | "EFD_OIE";
+
+export interface MalhaFinding {
+  source: MalhaSource;
+  identification: string;
+  periods: number | null;
+  icms: number | null;
+  nfe_count: number | null;
+  raw: string;
+}
+
+export interface MalhaCheck {
+  id: string;
+  client_id: string;
+  job_id: string | null;
+  state_registration: string | null;
+  legal_name: string | null;
+  findings: MalhaFinding[];
+  total: number;
+  icms_total: number | string | null;
+  nfe_total: number | null;
   raw_text: string | null;
   checked_at: string;
 }

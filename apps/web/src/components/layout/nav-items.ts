@@ -13,6 +13,7 @@ import {
   TriangleAlert,
   Users,
   type LucideIcon,
+  ScanSearch,
 } from "lucide-react";
 
 import type { Permission } from "@/lib/permissions";
@@ -48,6 +49,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/automation", label: "Automação SIAT", icon: Bot, permission: "automation:run" },
       { href: "/efd", label: "Consulta EFD", icon: FileSearch },
+      { href: "/malhas", label: "Consulta de Malhas", icon: ScanSearch },
       { href: "/queue", label: "Fila de processamento", icon: ListOrdered, badge: "queue", badgeWarn: true },
       { href: "/downloads", label: "Downloads", icon: Download, badge: "downloads" },
       { href: "/history", label: "Histórico", icon: History },

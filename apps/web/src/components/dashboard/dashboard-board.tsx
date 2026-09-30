@@ -51,11 +51,12 @@ export interface DashboardTotals {
   failed: number;
 }
 
-const OP_TAG: Record<ExportTaskType | "EFD_CHECK", string> = {
+const OP_TAG: Record<ExportTaskType | "EFD_CHECK" | "MALHA_CHECK", string> = {
   NFCE_EXPORT: "NFC-e",
   NFE_ISSUED_EXPORT: "Emit.",
   NFE_RECEIVED_EXPORT: "Receb.",
   EFD_CHECK: "EFD",
+  MALHA_CHECK: "Malhas",
 };
 
 const EXEC_GRID =

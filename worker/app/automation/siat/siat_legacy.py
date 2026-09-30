@@ -236,6 +236,20 @@ class SiatLegacy:
         await self.dismiss_notices()
         await self.ctx.reporter.screenshot(f"legacy_{family}")
 
+    async def go_to_malhas(self) -> None:
+        """Autoatendimento -> Malhas Fiscais -> Consulta de Malhas."""
+        if self.ctx.state.get("legacy_page") == "malhas":
+            return
+        await self._menu(
+            self.sel.rx("legacy_menu_root"),
+            self.sel.rx("legacy_menu_malhas"),
+            self.sel.rx("legacy_menu_malhas_consulta"),
+            what="Autoatendimento > Malhas Fiscais > Consulta de Malhas",
+        )
+        self.ctx.state["legacy_page"] = "malhas"
+        await self.dismiss_notices()
+        await self.ctx.reporter.screenshot("legacy_malhas")
+
     async def dismiss_notices(self) -> None:
         """Fecha avisos informativos ("Comunicado Importante" -> [Entendi]), registrando o texto."""
         for _ in range(3):

@@ -61,6 +61,8 @@ class MockState:
     # como o SIAT real: recusa pedido com os mesmos parâmetros ("Já existe um agendamento ... busque o ID")
     reject_duplicates: bool = False
     deleted: list[str] = field(default_factory=list)
+    # Consulta de Malhas: [{source: DIEF_PGDAS|EFD_OIE, identification, periods, icms, nfe}]
+    malhas: list[dict] = field(default_factory=list)
 
 
 LOGIN_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>SIAT WEB</title></head>
@@ -218,6 +220,9 @@ LEGACY_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><
       <li class="grp"><a href="#">NF-e</a>
         <ul class="sub"><li><a href="#" data-go="none">Consultar/Exportar NF-e Detalhada</a></li><li><a href="#" data-go="nfe">Consultar/Exportar NF-e</a></li></ul>
       </li>
+      <li class="grp"><a href="#">Malhas Fiscais</a>
+        <ul class="sub"><li><a href="#" data-go="malhas">Consulta de Malhas</a></li><li><a href="#" data-go="none">Consulta Pendencias DIEF</a></li></ul>
+      </li>
     </ul>
   </li>
   <li><a href="#">Trânsito</a></li>
@@ -252,6 +257,22 @@ LEGACY_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><
   <button id="c-agendar">Agendar exportação</button>
   <h4>Agendamentos de exportação NFCe</h4>
   <table id="c-table"><thead><tr><th>ID</th><th>Situação</th><th>Data de criação</th><th>Data processamento</th><th>CNPJ<select><option>Selecione...</option></select></th><th>IE<select><option>Selecione...</option></select></th><th>Ações</th></tr></thead><tbody></tbody></table>
+</section>
+
+<section id="malhas" style="display:none">
+  <h3>Consulta de Malhas</h3>
+  <label for="m-ie">Inscrição Estadual:</label><input id="m-ie" value="__MALHAS_IE__">
+  <label for="m-razao">Razão Social:</label><input id="m-razao" value="__USER__" disabled>
+  <button id="m-consulta">Consulta</button>
+  <p>OBS: Os períodos intimados pelo Sistema Eletrônico de Malhas via DT-e não estão disponíveis para consulta nesta página.</p>
+  <div id="m-result" style="display:none">
+    <table id="m-dief"><thead><tr><th colspan="5">DECLARAÇÃO DIEF/PGDAS</th></tr>
+      <tr><th>Identificação da Malha</th><th>Qtd. Períodos</th><th>ICMS Devido/Destacado</th><th>Qtd. NFe</th><th>Opções</th></tr></thead><tbody></tbody></table>
+    <p id="m-dief-total"></p>
+    <table id="m-efd"><thead><tr><th colspan="5">DECLARACAO EFD/OIE</th></tr>
+      <tr><th>Identificação da Malha</th><th>Qtd. Períodos</th><th>ICMS Devido/Destacado</th><th>Qtd. NFe</th><th>Opções</th></tr></thead><tbody></tbody></table>
+    <p id="m-efd-total"></p>
+  </div>
 </section>
 
 <section id="nfe" style="display:none">
@@ -291,12 +312,31 @@ document.querySelectorAll('[data-go]').forEach((a) => a.onclick = (e) => {
   if (a.dataset.go === 'none') return;
   $('nfce').style.display = a.dataset.go === 'nfce' ? 'block' : 'none';
   $('nfe').style.display = a.dataset.go === 'nfe' ? 'block' : 'none';
+  $('malhas').style.display = a.dataset.go === 'malhas' ? 'block' : 'none';
   $('msg').style.display = 'none';
   if (a.dataset.go === 'nfce' && __NOTICE__ && !sessionStorage.getItem('noticeSeen')) {
     $('overlay').style.display = 'block'; $('notice').style.display = 'block';
   }
   render();
 });
+const malhas = __MALHAS__;
+$('m-consulta').onclick = () => {
+  [['DIEF_PGDAS', 'm-dief'], ['EFD_OIE', 'm-efd']].forEach(([source, id]) => {
+    const tb = $(id).querySelector('tbody'); tb.innerHTML = '';
+    const rows = malhas.filter((m) => m.source === source);
+    if (rows.length === 0) {
+      tb.innerHTML = '<tr><td colspan="5">Nenhum registro encontrado</td></tr>';
+    } else {
+      rows.forEach((m) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + m.identification + '</td><td>' + m.periods + '</td><td>' + m.icms + '</td><td>' + (m.nfe ?? '') + '</td><td><button>🔍</button> <button>ℹ</button></td>';
+        tb.appendChild(tr);
+      });
+    }
+    $(id + '-total').textContent = 'Total de Registros: ' + rows.length;
+  });
+  $('m-result').style.display = 'block';
+};
 $('entendi').onclick = () => { $('overlay').style.display = 'none'; $('notice').style.display = 'none'; sessionStorage.setItem('noticeSeen', '1'); };
 ['n-chave', 'n-emit', 'n-dest'].forEach((id) => $(id).onchange = () => {
   const periodo = !$('n-chave').checked;
@@ -426,7 +466,9 @@ def build_handler(state: MockState):
                 .replace("__STATUS__", json.dumps(state.export_status))
                 .replace("__IE_OVERRIDE__", json.dumps(state.rows_ie_override))
                 .replace("__NOTICE__", json.dumps(state.show_notice))
-                .replace("__REJECT_DUP__", json.dumps(state.reject_duplicates)),
+                .replace("__REJECT_DUP__", json.dumps(state.reject_duplicates))
+                .replace("__MALHAS_IE__", state.inscricoes[0] if state.inscricoes else "")
+                .replace("__MALHAS__", json.dumps(state.malhas)),
             )
         else:
             await route.fulfill(status=404, body="not found")

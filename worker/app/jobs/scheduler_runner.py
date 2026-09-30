@@ -14,6 +14,7 @@ from app.automation.base import AutomationContext
 from app.jobs.base_runner import BaseRunner, now_utc
 from app.jobs.dedup import DuplicateGuard
 from app.jobs.efd_check import run_efd_check
+from app.jobs.malha_check import run_malha_check
 from app.jobs.errors import AutomationError, ErrorCode, JobCancelled
 from app.jobs.models import EXPORT_TASK_TYPES, Job, Task, TaskStatus, TaskType
 from app.jobs.reporter import JobReporter
@@ -80,6 +81,21 @@ class SchedulerRunner(BaseRunner):
                 provider = self.deps.registry.get(job.provider)
                 ctx = self.build_context(job, client, certificate, reporter, logger)
                 await run_efd_check(self.repo, provider, ctx, job, efd_tasks, reporter, logger)
+                return
+
+            # Consulta de Malhas Fiscais (SIAT web): só lê, conclui na hora
+            malha_tasks = [
+                t
+                for t in all_tasks
+                if t.task_type == TaskType.MALHA_CHECK
+                and not t.superseded
+                and t.status in (TaskStatus.PENDING, TaskStatus.RUNNING)
+            ]
+            if malha_tasks:
+                tasks = malha_tasks
+                provider = self.deps.registry.get(job.provider)
+                ctx = self.build_context(job, client, certificate, reporter, logger)
+                await run_malha_check(self.repo, provider, ctx, job, malha_tasks, reporter, logger)
                 return
 
             tasks = sorted(

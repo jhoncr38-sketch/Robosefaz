@@ -793,6 +793,26 @@ def cap_historico() -> list:
                 "de leitura no SIAT, como quando você abre à mão.",
             ]
         ),
+        H2("Consulta de Malhas"),
+        P(
+            "Mostra, para cada cliente, as malhas fiscais em aberto no SIAT: o que aparece em Autoatendimento → "
+            "Malhas Fiscais → Consulta de Malhas (tabelas DIEF/PGDAS e EFD/OIE), com a identificação da malha, "
+            "a quantidade de períodos, o ICMS devido/destacado e a quantidade de NF-e."
+        ),
+        *steps(
+            [
+                "Marque os clientes (ou <b>Selecionar os sem resultado</b>) e clique em <b>Consultar malhas no SIAT</b>.",
+                "O robô entra no SIAT de cada cliente, confere que a inscrição estadual da página é a do cliente, clica "
+                "em <b>Consulta</b> e lê as duas tabelas. Só leitura: a lupa de cada malha não é aberta e nada é alterado.",
+                "O resultado aparece na tela sozinho: <b>Sem malha</b> (verde) ou <b>Com malha</b> (vermelho), com o "
+                "ICMS e a data da consulta. Clique na linha para ver cada malha e o texto da página do SIAT.",
+            ]
+        ),
+        *tip(
+            "A consulta não é por competência: ela mostra o que está em aberto agora. Peça de novo quando quiser "
+            "atualizar. Malhas intimadas pelo DT-e não aparecem nessa página do SIAT; para essas, veja o e-AGEAT → "
+            "Malhas Fiscais → Manifestação do Contribuinte."
+        ),
         H2("Configurações (administrador)"),
         table(
             [

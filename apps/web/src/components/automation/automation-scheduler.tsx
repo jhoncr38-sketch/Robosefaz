@@ -123,6 +123,7 @@ export function AutomationScheduler({
       .select("client_id, competence, status, created_at")
       .eq("competence", competence)
       .not("operations", "cs", "{EFD_CHECK}")
+      .not("operations", "cs", "{MALHA_CHECK}")
       .order("created_at", { ascending: false })
       .limit(5000)
       .then(({ data, error }) => {

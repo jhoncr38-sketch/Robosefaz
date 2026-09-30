@@ -118,7 +118,8 @@ async def recover_orphaned_jobs(
             elif t.status == TaskStatus.RUNNING:
                 # exportação que não chegou a ser enviada (ou consulta de EFD, que só lê) volta a pendente;
                 # consulta/download interrompido falha
-                status = TaskStatus.PENDING if t.is_export or t.task_type == TaskType.EFD_CHECK else TaskStatus.FAILED
+                read_only = t.task_type in (TaskType.EFD_CHECK, TaskType.MALHA_CHECK)
+                status = TaskStatus.PENDING if t.is_export or read_only else TaskStatus.FAILED
                 await repo.update_task(t.id, status=status.value)
         await repo.add_log(
             job_id=job["id"], task_id=None, level=LogLevel.WARNING, step="recovery",

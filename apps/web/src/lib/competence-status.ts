@@ -94,7 +94,7 @@ export function blocksNewRequest(status: ClientCompetenceStatus): boolean {
 
 /** Agendamento de notas (a consulta de EFD não conta na situação da competência). */
 export function isExportJob(job: { operations?: readonly string[] | null }): boolean {
-  return !(job.operations ?? []).includes("EFD_CHECK");
+  return !(job.operations ?? []).some((op) => op === "EFD_CHECK" || op === "MALHA_CHECK");
 }
 
 /** Job mais recente de cada cliente na competência. */

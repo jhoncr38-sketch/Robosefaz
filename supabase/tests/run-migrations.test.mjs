@@ -759,5 +759,61 @@ await test("excluir cliente: só admin, só sem histórico, só do próprio escr
   assert.equal(audit.org_id, ORG_A);
 });
 
+// ---------------------------------------------------------------------
+// Consulta de Malhas Fiscais (SIAT web)
+// ---------------------------------------------------------------------
+let MALHA_JOB;
+await test("Malhas: operador pede a consulta; visualizador não; pedido repetido é ignorado", async () => {
+  await rejects(as(VIEWER, (tx) => tx.query("select public.create_malha_check_jobs($1)", [[CLIENT_A]])), /FORBIDDEN/);
+  const first = (await as(OPERATOR, (tx) => tx.query("select public.create_malha_check_jobs($1) r", [[CLIENT_A]]))).rows[0].r;
+  assert.equal(first.created, 1);
+  MALHA_JOB = first.results[0].job_id;
+  const job = (await db.query("select operations, status, org_id, competence from public.automation_jobs where id = $1", [MALHA_JOB])).rows[0];
+  assert.equal(job.status, "queued");
+  assert.equal(job.org_id, ORG_A);
+  assert.match(String(job.operations), /MALHA_CHECK/);
+  assert.match(job.competence, /^\d{4}-\d{2}$/);
+  const tasks = (await db.query("select task_type, operation_type, dedup_key from public.automation_tasks where job_id = $1", [MALHA_JOB])).rows;
+  assert.deepEqual(tasks, [{ task_type: "MALHA_CHECK", operation_type: "MALHA", dedup_key: null }]);
+  const again = (await as(OPERATOR, (tx) => tx.query("select public.create_malha_check_jobs($1) r", [[CLIENT_A]]))).rows[0].r;
+  assert.deepEqual([again.created, again.skipped], [0, 1]);
+  await rejects(as(ADMIN_B, (tx) => tx.query("select public.create_malha_check_jobs($1)", [[CLIENT_A]])), /CLIENT_NOT_FOUND|FORBIDDEN/);
+});
+
+await test("Malhas: só robô 1.2.19+ pega a consulta; a de EFD continua com o 1.2.0", async () => {
+  await db.query("update public.automation_jobs set status = 'cancelled' where org_id = $1 and status = 'queued' and id <> $2", [ORG_A, MALHA_JOB]);
+  await db.query("update public.automation_jobs set locked_by = null, locked_at = null");
+  await as(DEVICE_A.authId, (tx) =>
+    tx.query(`insert into public.worker_heartbeats (worker_id, kind, meta) values ('PC-A-1219', 'all', '{"version":"1.2.19"}')
+      on conflict (worker_id) do update set meta = excluded.meta`),
+  );
+  const efdOnly = await as(DEVICE_A.authId, (tx) => tx.query("select id from public.claim_next_job('PC-A-NOVO')"));
+  assert.equal(efdOnly.rows.length, 0, "robô 1.2.0 não deve pegar consulta de malhas");
+  const fresh = await as(DEVICE_A.authId, (tx) => tx.query("select id from public.claim_next_job('PC-A-1219')"));
+  assert.equal(fresh.rows[0].id, MALHA_JOB);
+});
+
+await test("Malhas: uma foto por cliente (upsert), só o próprio escritório lê; conclusão avisa e leva à tela", async () => {
+  const sql = `insert into public.malha_checks (client_id, job_id, state_registration, legal_name, findings, total, icms_total, nfe_total)
+               values ($1, $2, '197381820', 'CONSULT RL', $3, 1, 110.07, 13)
+               on conflict (org_id, client_id) do update set findings = excluded.findings, total = excluded.total, icms_total = excluded.icms_total, checked_at = now()
+               returning org_id, total`;
+  const one = JSON.stringify([{ source: "EFD_OIE", identification: "[EFD][NFe] Entradas Não Registradas", periods: 1, icms: 110.07, nfe_count: 13, raw: "" }]);
+  const r1 = await as(DEVICE_A.authId, (tx) => tx.query(sql, [CLIENT_A, MALHA_JOB, one]));
+  assert.equal(r1.rows[0].org_id, ORG_A);
+  const r2 = await as(DEVICE_A.authId, (tx) => tx.query(sql, [CLIENT_A, MALHA_JOB, one]));
+  assert.equal(r2.rows.length, 1);
+  const n = (await db.query("select count(*)::int n from public.malha_checks where client_id = $1", [CLIENT_A])).rows[0].n;
+  assert.equal(n, 1);
+  const mine = await as(OPERATOR, (tx) => tx.query("select total from public.malha_checks"));
+  assert.deepEqual(mine.rows, [{ total: 1 }]);
+  const other = await as(ADMIN_B, (tx) => tx.query("select count(*)::int n from public.malha_checks"));
+  assert.equal(other.rows[0].n, 0);
+  await rejects(as(ADMIN, (tx) => tx.query("insert into public.malha_checks (client_id) values ($1)", [CLIENT_A])), /row-level security/);
+  await db.query("update public.automation_jobs set status = 'completed', last_message = 'Malhas fiscais: 1 malha em aberto (EFD/OIE)' where id = $1", [MALHA_JOB]);
+  const note = (await db.query("select title, link from public.notifications where dedup_key = $1 limit 1", [`job-completed:${MALHA_JOB}`])).rows[0];
+  assert.deepEqual(note, { title: "Consulta de malhas concluída.", link: "/malhas" });
+});
+
 console.log(`\n${passed} teste(s) de banco passaram${process.exitCode ? " (com falhas)" : ""}.`);
 await db.close();

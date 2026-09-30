@@ -10,6 +10,7 @@ from app.automation.siat.selectors import SiatSelectors, get_selectors
 from app.automation.siat.siat_downloads import SiatExportConsult
 from app.automation.siat.siat_dte import DteMessage, SiatDte
 from app.automation.siat.siat_legacy import SiatLegacy
+from app.automation.siat.siat_malhas import MalhaResult, SiatMalhas
 from app.automation.siat.siat_login import SiatLogin
 from app.automation.siat.siat_navigation import SiatNavigation
 from app.automation.siat.siat_nfce import schedule_nfce_export
@@ -135,6 +136,11 @@ class SiatAutomationProvider(AutomationProvider):
         await SiatTaxpayer(ctx, self.sel).verify(security=True)
         await SiatNavigation(ctx, self.sel).open_module()
         return await SiatDte(ctx, self.sel).read_efd(competence)
+
+    async def read_malhas(self, ctx: AutomationContext) -> MalhaResult:
+        # CNPJ confirmado no painel antes de sair dele; no SIAT web, a IE da página é conferida
+        await self._ensure_export_area(ctx)
+        return await SiatMalhas(ctx, self.sel).consult()
 
     async def download(self, ctx: AutomationContext, task: Task, status: ExportStatusResult) -> DownloadedFile:
         consult = SiatExportConsult(ctx, lambda: self.verify_company(ctx), self.sel)

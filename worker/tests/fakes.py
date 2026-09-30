@@ -124,7 +124,7 @@ class FakeRepo:
                 "status": task_status,
                 "competence": competence,
                 "document_type": doc,
-                "operation_type": "EXPORT" if doc else "EFD",
+                "operation_type": "EXPORT" if doc else str(op).split("_")[0],  # EFD | MALHA
                 "dedup_key": build_dedup_key(client.id, competence, doc) if doc else None,
                 "superseded": False,
                 "retry_count": 0,
@@ -224,6 +224,11 @@ class FakeRepo:
     async def upsert_efd_declaration(self, **fields: Any) -> None:
         self.efd = [d for d in getattr(self, "efd", []) if d["epe_number"] != fields["epe_number"]]
         self.efd.append(fields)
+
+    async def upsert_malha_check(self, **fields: Any) -> None:
+        if not hasattr(self, "malhas"):
+            self.malhas = {}
+        self.malhas[fields["client_id"]] = fields
 
     async def get_download(self, download_id: str) -> dict[str, Any] | None:
         return None
@@ -334,6 +339,8 @@ class FakeProvider(AutomationProvider):
         self.on_schedule: Callable[[Task], None] | None = None
         self.efd_messages: list = []  # DteMessage devolvidas pelo "DT-e"
         self.efd_error: Exception | None = None
+        self.malha_result = None  # MalhaResult devolvido pela "Consulta de Malhas"
+        self.malha_error: Exception | None = None
 
     @asynccontextmanager
     async def open_session(self, ctx: AutomationContext) -> AsyncIterator[AutomationContext]:
@@ -410,6 +417,18 @@ async def _read_efd_messages(self, ctx: AutomationContext, competence: str) -> l
 
 
 FakeProvider.read_efd_messages = _read_efd_messages  # type: ignore[method-assign]
+
+
+async def _read_malhas(self, ctx: AutomationContext):  # noqa: ANN202
+    from app.automation.siat.siat_malhas import MalhaResult
+
+    self.calls.append("read_malhas")
+    if self.malha_error:
+        raise self.malha_error
+    return self.malha_result or MalhaResult(state_registration=ctx.client.state_registration or "", legal_name="")
+
+
+FakeProvider.read_malhas = _read_malhas  # type: ignore[method-assign]
 
 
 def registry_with(provider: FakeProvider) -> ProviderRegistry:
