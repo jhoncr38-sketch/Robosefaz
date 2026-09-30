@@ -61,6 +61,7 @@ class Worker:
         self.scheduler = SchedulerRunner(deps)
         self.collector = CollectorRunner(deps)
         self.retention = RetentionService(repo, settings)
+        robot_windows.always_visible = settings.browser_window == "visible"
         self._next_retention_at: float | None = None
 
     async def _sleep(self, seconds: float) -> None:
@@ -197,6 +198,7 @@ class Worker:
                         "dry_run": self.settings.automation_dry_run,
                         # navegador do robô para o ícone: none (fechado) | hidden | shown
                         "browser": robot_windows.state,
+                        "browser_mode": self.settings.browser_window,  # hidden | visible
                         "updated_at": datetime.now(timezone.utc).isoformat(),
                     }
                 ),
@@ -262,13 +264,19 @@ class Worker:
         except OSError:
             return False
         flag.unlink(missing_ok=True)
-        if wanted == "mostrar":
+        if wanted in ("visivel", "oculto"):
+            # "Deixar navegador sempre visível" no ícone (o .env já foi gravado por ele)
+            self.settings.browser_window = "visible" if wanted == "visivel" else "hidden"
+            await robot_windows.set_always_visible(wanted == "visivel")
+            log.info("Navegador do robô: %s.", "sempre visível" if wanted == "visivel" else "volta a trabalhar escondido")
+            done = True
+        elif wanted == "mostrar":
             done = await robot_windows.show(reason="user")
         elif wanted == "esconder":
             done = await robot_windows.hide()
         else:
             return False
-        if done:
+        if done and wanted in ("mostrar", "esconder"):
             log.info("Navegador do robô: %s a pedido do ícone.", "mostrado" if wanted == "mostrar" else "escondido")
         self._write_local_status("busy" if self.activity.busy else "idle")
         return done

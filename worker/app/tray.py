@@ -5,7 +5,8 @@ r"""Ícone do robô ao lado do relógio (bandeja do Windows).
 - Cor: verde = ligado e aguardando; azul = trabalhando no SIAT;
   vermelho = algum agendamento precisa de atenção; cinza = robô parado.
 - Menu: abrir painel, abrir pasta das notas, mostrar/esconder o navegador do
-  robô (ele trabalha com a janela fora da tela), ligar/parar o robô, ver log.
+  robô (ele trabalha com a janela fora da tela) ou deixá-lo sempre visível,
+  ligar/parar o robô, ver log.
 - Avisos no canto da tela: notas baixadas neste computador e agendamentos
   que falharam ou aguardam você.
 
@@ -64,6 +65,7 @@ class TrayState:
     dry_run: bool = False
     update_to: str | None = None  # versão nova disponível
     browser: str = "none"  # navegador do robô: none (fechado) | hidden | shown
+    always_visible: bool = False  # "Deixar navegador sempre visível" (BROWSER_WINDOW=visible)
 
     @property
     def color(self) -> str:
@@ -113,6 +115,15 @@ def read_browser_state(path: Path, now: datetime | None = None) -> str:
     if state not in ("hidden", "shown") or (now - updated).total_seconds() > STALE_SECONDS:
         return "none"
     return state
+
+
+def read_browser_mode(path: Path) -> str | None:
+    """Modo em uso pelo robô ligado (hidden | visible); None se o arquivo não informa."""
+    try:
+        mode = json.loads(path.read_text(encoding="utf-8")).get("browser_mode")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return mode if mode in ("hidden", "visible") else None
 
 
 def read_update_status(settings: Settings) -> str | None:
@@ -198,6 +209,8 @@ class RobotTray:
         self._last_color = ""
         self._last_title = ""
         self._last_menu: tuple | None = None
+        self.env_file = PROJECT_ROOT / ".env"
+        self.state.always_visible = settings.browser_window == "visible"
         self.icon = pystray.Icon(
             "siat-robo",
             draw("stopped"),
@@ -219,7 +232,12 @@ class RobotTray:
                 pystray.MenuItem(
                     lambda _i: "Esconder navegador do robô" if self.state.browser == "shown" else "Mostrar navegador do robô",
                     self.toggle_browser,
-                    enabled=lambda _i: self.state.browser != "none",
+                    enabled=lambda _i: self.state.browser != "none" and not self.state.always_visible,
+                ),
+                pystray.MenuItem(
+                    "Deixar navegador sempre visível",
+                    self.toggle_always_visible,
+                    checked=lambda _i: self.state.always_visible,
                 ),
                 pystray.Menu.SEPARATOR,
                 # controle do robô
@@ -282,6 +300,33 @@ class RobotTray:
         flag.write_text(wanted, encoding="utf-8")
         # o worker atende em até 1 s; o texto do menu já muda agora
         self.state.browser = "shown" if wanted == "mostrar" else "hidden"
+
+    def toggle_always_visible(self, *_a) -> None:
+        """Liga/desliga o navegador sempre visível: grava no .env e avisa o robô ligado (vale na hora)."""
+        from app.tools.activate import set_env_values
+
+        on = not self.state.always_visible
+        saved = True
+        try:
+            set_env_values(self.env_file, {"BROWSER_WINDOW": "visible" if on else "hidden"})
+        except OSError as exc:
+            log.warning("Não foi possível gravar BROWSER_WINDOW no .env: %s", exc)
+            saved = False
+        if self.state.robot != "stopped":
+            if on and sys.platform == "win32":
+                ctypes.windll.user32.AllowSetForegroundWindow(-1)  # ASFW_ANY: a janela aberta vem para a frente
+            flag = self.settings.browser_flag
+            flag.parent.mkdir(parents=True, exist_ok=True)
+            flag.write_text("visivel" if on else "oculto", encoding="utf-8")
+        self.state.always_visible = on
+        message = (
+            "O navegador do robô vai ficar sempre visível."
+            if on
+            else "O navegador do robô volta a trabalhar escondido (use Mostrar navegador do robô para ver)."
+        )
+        if not saved:
+            message += " Não foi possível salvar a escolha: ela vale até o robô ser reiniciado."
+        self.icon.notify(message, "JR Sistema Robô")
 
     def setup_google_drive(self, *_a) -> None:
         """Janela que liga o robô a uma pasta do Google Drive (pede administrador, igual ao robô)."""
@@ -384,6 +429,9 @@ class RobotTray:
         robot, dry_run = read_local_status(self.settings.status_file)
         self.state.robot, self.state.dry_run = robot, dry_run
         self.state.browser = read_browser_state(self.settings.status_file) if robot != "stopped" else "none"
+        mode = read_browser_mode(self.settings.status_file) if robot != "stopped" else None
+        if mode is not None:
+            self.state.always_visible = mode == "visible"
         update = read_update_status(self.settings)
         if update and update != self.state.update_to:
             self.icon.notify(
@@ -401,7 +449,14 @@ class RobotTray:
             self.icon.title = title
             self._last_title = title
         # o menu só é refeito quando algo dele muda: refazê-lo a cada 5 s, com ele aberto, trava a tela
-        menu = (self.state.text, tuple(self.state.attention), self.state.update_to, self.settings.auth_mode, self.state.browser)
+        menu = (
+            self.state.text,
+            tuple(self.state.attention),
+            self.state.update_to,
+            self.settings.auth_mode,
+            self.state.browser,
+            self.state.always_visible,
+        )
         if menu != self._last_menu:
             self.icon.update_menu()
             self._last_menu = menu

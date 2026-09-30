@@ -266,6 +266,22 @@ async def test_bring_tab_to_front_marks_robot_activation(monkeypatch: pytest.Mon
     assert page.fronted == 1 and desk.front == 1 and desk.given_back == [1]
 
 
+async def test_always_visible_mode(no_win32_focus: list[str]) -> None:
+    windows = RobotWindows()
+    ctx = FakeContext()
+    ctx.add_page(1)
+    await windows.register(ctx, hidden=False)  # type: ignore[arg-type]  # abriu visível (modo sempre visível)
+    assert windows.state == "shown" and ctx.moves == []  # fica onde o Chrome abriu
+    async with windows.shown_for_intervention():
+        pass
+    assert windows.state == "shown"  # intervenção não esconde nada no modo visível
+
+    await windows.set_always_visible(False)  # desligou no ícone: esconde na hora
+    assert windows.state == "hidden" and ctx.moves[-1] == (1, 3000, 2000) and not windows.always_visible
+    await windows.set_always_visible(True)  # ligou de novo: aparece na hora
+    assert windows.state == "shown" and ctx.moves[-1] == (1, *SHOW_AT) and windows.always_visible
+
+
 async def test_intervention_without_browser_is_a_no_op() -> None:
     windows = RobotWindows()
     async with windows.shown_for_intervention():
@@ -295,6 +311,21 @@ async def test_worker_handles_browser_flag_from_tray(settings, monkeypatch: pyte
     assert not settings.browser_flag.exists()
     settings.browser_flag.write_text("esconder\n", encoding="utf-8")
     assert await worker.handle_browser_flag()
+    settings.browser_flag.write_text("qualquer coisa", encoding="utf-8")
+    assert not await worker.handle_browser_flag()
+    modes: list[bool] = []
+
+    async def set_always_visible(on: bool) -> None:
+        modes.append(on)
+
+    monkeypatch.setattr(worker_mod.robot_windows, "set_always_visible", set_always_visible)
+    settings.browser_flag.write_text("visivel", encoding="utf-8")
+    assert await worker.handle_browser_flag()
+    assert settings.browser_window == "visible"  # próximos trabalhos já abrem visíveis
+    assert json.loads(Path(settings.status_file).read_text(encoding="utf-8"))["browser_mode"] == "visible"
+    settings.browser_flag.write_text("oculto", encoding="utf-8")
+    assert await worker.handle_browser_flag()
+    assert settings.browser_window == "hidden" and modes == [True, False]
     settings.browser_flag.write_text("qualquer coisa", encoding="utf-8")
     assert not await worker.handle_browser_flag()
     assert not await worker.handle_browser_flag()  # sem arquivo

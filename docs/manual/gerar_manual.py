@@ -878,6 +878,12 @@ def cap_icone() -> list:
                     "para a frente, para acompanhar; depois vira <b>Esconder navegador do robô</b>. Fica cinza "
                     "quando o robô não está com o navegador aberto.",
                 ],
+                [
+                    "Deixar navegador sempre visível",
+                    "Liga e desliga (aparece uma marca quando está ligado). Ligado, o Chrome do robô trabalha "
+                    "<b>na tela</b>, como nas versões antigas; desligado, volta a trabalhar escondido. Vale na "
+                    "hora, inclusive para o trabalho em andamento, e continua valendo depois de reiniciar.",
+                ],
                 ["Ligar robô", "Liga o robô, se estiver parado."],
                 ["Parar robô", "Termina o trabalho atual e para. Nada se perde."],
                 ["Atualizar agora", "Aparece quando há versão nova. O robô termina o trabalho atual, instala e volta sozinho."],
@@ -904,8 +910,9 @@ def cap_icone() -> list:
             "ícone ou clique no botão do Chrome do robô na barra de tarefas. Quando o robô precisa de você "
             "(escolher o certificado, clicar em "
             "Permitir no Web PKI, resolver um CAPTCHA), a janela <b>aparece sozinha</b> e o painel mostra o "
-            "pedido; depois ela volta a se esconder. Para ver sempre a janela, como antes, coloque "
-            + code("BROWSER_WINDOW=visible") + " no arquivo " + code("C:\\SIAT-Robo\\.env") + " e reinicie o robô."
+            "pedido; depois ela volta a se esconder. Para ver sempre a janela, como antes, marque "
+            "<b>Deixar navegador sempre visível</b> no ícone (a escolha fica gravada como "
+            + code("BROWSER_WINDOW=visible") + " em " + code("C:\\SIAT-Robo\\.env") + ")."
         ),
         P(
             "O ícone também mostra avisos no canto da tela, por exemplo <i>“Notas baixadas: EMPRESA 08/2026 "

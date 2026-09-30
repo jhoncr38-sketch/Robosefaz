@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from app.tray import TrayState, read_browser_state, read_local_status
+from app.tray import TrayState, read_browser_mode, read_browser_state, read_local_status
 from app.tray_icons import draw, save_ico
 
 NOW = datetime(2026, 9, 25, 20, 0, tzinfo=timezone.utc)
@@ -67,6 +67,56 @@ def test_toggle_browser_writes_request_for_worker(settings, monkeypatch) -> None
         assert allowed == [-1]  # só ao mostrar: libera o Chrome do robô a vir para a frente
 
 
+def test_browser_mode_from_status_file(tmp_path: Path) -> None:
+    path = tmp_path / "worker-status.json"
+    path.write_text(json.dumps({"browser_mode": "visible"}), encoding="utf-8")
+    assert read_browser_mode(path) == "visible"
+    path.write_text(json.dumps({"browser_mode": "hidden"}), encoding="utf-8")
+    assert read_browser_mode(path) == "hidden"
+    path.write_text(json.dumps({"status": "idle"}), encoding="utf-8")  # robô de versão antiga
+    assert read_browser_mode(path) is None
+    assert read_browser_mode(tmp_path / "nao-existe.json") is None
+
+
+def test_always_visible_toggle_saves_env_and_tells_running_robot(settings, tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    from app import tray as tray_mod
+    from app.tray import RobotTray
+
+    if tray_mod.sys.platform == "win32":
+        monkeypatch.setattr(tray_mod.ctypes.windll.user32, "AllowSetForegroundWindow", lambda v: None)
+    tray = RobotTray(settings)
+    notices: list[str] = []
+    monkeypatch.setattr(tray.icon, "notify", lambda msg, title=None: notices.append(msg))
+    tray.env_file = tmp_path / ".env"
+    tray.env_file.write_text("SUPABASE_URL=x\nBROWSER_WINDOW=hidden\n", encoding="utf-8")
+    item = next(i for i in tray.icon.menu.items if i.text == "Deixar navegador sempre visível")
+    assert not item.checked
+
+    tray.state.robot = "busy"
+    tray.toggle_always_visible()
+    assert tray.env_file.read_text(encoding="utf-8") == "SUPABASE_URL=x\nBROWSER_WINDOW=visible\n"
+    assert settings.browser_flag.read_text(encoding="utf-8") == "visivel"  # vale na hora
+    assert item.checked and "sempre visível" in notices[-1]
+
+    settings.browser_flag.unlink()
+    tray.state.robot = "stopped"
+    tray.toggle_always_visible()
+    assert "BROWSER_WINDOW=hidden" in tray.env_file.read_text(encoding="utf-8")
+    assert not settings.browser_flag.exists()  # robô parado: vale quando ligar (lê o .env)
+    assert not item.checked and "escondido" in notices[-1]
+
+
+def test_show_hide_item_is_disabled_when_always_visible(settings) -> None:  # noqa: ANN001
+    from app.tray import RobotTray
+
+    tray = RobotTray(settings)
+    item = next(i for i in tray.icon.menu.items if i.text in ("Mostrar navegador do robô", "Esconder navegador do robô"))
+    tray.state.browser = "hidden"
+    assert item.enabled
+    tray.state.always_visible = True
+    assert not item.enabled
+
+
 def test_colors_and_text() -> None:
     assert TrayState("idle").color == "idle"
     assert TrayState("busy").color == "busy"
@@ -115,6 +165,7 @@ def test_menu_order_and_help_submenu(settings) -> None:  # noqa: ANN001
         "Abrir painel",
         "Abrir pasta das notas",
         "Mostrar navegador do robô",  # desabilitado enquanto o robô não abriu o navegador
+        "Deixar navegador sempre visível",  # liga/desliga (com marca)
         "- - - -",
         "Ligar robô",
         "Parar robô",

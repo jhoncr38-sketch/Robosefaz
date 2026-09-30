@@ -8,6 +8,8 @@
 - Escondido, o Chrome nunca fica com o foco: quando o robô troca de aba (o que
   ativa a janela no Windows) ou o Chrome se ativa sozinho, o foco volta na hora
   para a janela da pessoa, e o que ela digita não vai parar no SIAT.
+- "Deixar navegador sempre visível" (ícone) troca o modo na hora: a janela
+  aberta aparece ou se esconde e os próximos trabalhos já abrem assim.
 - "Mostrar navegador do robô" (ícone ao lado do relógio) ou um clique no botão
   do Chrome na barra de tarefas traz a janela para a frente; quando o robô pede
   intervenção (certificado, Web PKI, CAPTCHA), ela volta para a tela sozinha e
@@ -270,6 +272,7 @@ class RobotWindows:
         self._focus_task: asyncio.Future | None = None
         self._front_was_ours = False
         self._robot_activated_at = float("-inf")  # última vez que o próprio robô trouxe uma aba para a frente
+        self.always_visible = False  # BROWSER_WINDOW=visible / "Deixar navegador sempre visível" no ícone
         self._last_other = 0  # última janela da pessoa que esteve na frente (para devolver o foco)
 
     @property
@@ -278,9 +281,14 @@ class RobotWindows:
             return "none"
         return "shown" if self.shown else "hidden"
 
-    async def register(self, context: "BrowserContext", *, previous_foreground: int = 0) -> None:
+    async def register(self, context: "BrowserContext", *, previous_foreground: int = 0, hidden: bool = True) -> None:
+        """`hidden`: o Chrome abriu fora da tela; senão abriu visível (modo "sempre visível")."""
         self._contexts.append(context)
         context.on("page", self._on_new_page)
+        if not hidden:
+            self.shown = True
+            self._shown_for = "user"
+            return
         await self._move_all(context, visible=self.shown)
         self._watch_focus(previous_foreground)
 
@@ -367,6 +375,14 @@ class RobotWindows:
         give_back_focus()  # estava na frente: o foco vai para a próxima janela da pessoa
         self._front_was_ours = foreground_window() in own_windows()
         return True
+
+    async def set_always_visible(self, on: bool) -> None:
+        """Liga/desliga o modo "sempre visível": vale na hora para a janela aberta e para as próximas."""
+        self.always_visible = on
+        if on:
+            await self.show(reason="user")
+        else:
+            await self.hide()
 
     def robot_activated(self, previous: int) -> None:
         """O robô acabou de trazer uma aba para a frente (isso ativa a janela): devolve o foco na hora."""

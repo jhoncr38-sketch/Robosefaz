@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
@@ -52,7 +53,7 @@ class BrowserSession:
         self.context: BrowserContext | None = None
         self.page: Page | None = None
         self._lock = ProfileLock(options.user_data_dir.parent, options.owner)
-        self._hidden = False
+        self._tracked = False
 
     async def __aenter__(self) -> "BrowserSession":
         self._lock.acquire()
@@ -90,9 +91,12 @@ class BrowserSession:
             self.context.set_default_navigation_timeout(self.options.page_load_timeout)
             self.context.set_default_timeout(self.options.action_timeout)
             self.page = self.context.pages[0] if self.context.pages else await self.context.new_page()
-            if hidden_args:
-                self._hidden = True
-                await robot_windows.register(self.context, previous_foreground=previous_foreground)
+            if not self.options.headless and sys.platform == "win32":
+                # visível ou escondido, o robô controla a janela ("sempre visível" liga/desliga na hora)
+                self._tracked = True
+                await robot_windows.register(
+                    self.context, previous_foreground=previous_foreground, hidden=bool(hidden_args)
+                )
             return self
         except AutomationError:
             await self._cleanup()
@@ -107,9 +111,9 @@ class BrowserSession:
         await self._cleanup()
 
     async def _cleanup(self) -> None:
-        if self._hidden and self.context is not None:
+        if self._tracked and self.context is not None:
             robot_windows.unregister(self.context)
-            self._hidden = False
+            self._tracked = False
         try:
             if self.context is not None:
                 await self.context.close()
