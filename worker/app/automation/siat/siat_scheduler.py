@@ -13,6 +13,7 @@ surge na lista logo após o clique (comparação antes/depois).
 
 from __future__ import annotations
 
+import asyncio
 import re
 from datetime import date, datetime, timezone
 from typing import Awaitable, Callable, Literal
@@ -22,7 +23,14 @@ from playwright.async_api import Error as PlaywrightError, Page
 from app.automation.base import AutomationContext
 from app.automation.siat.page_helpers import dialog_by_title, fill_field, find_clickable, first_visible, wait_idle
 from app.automation.siat.selectors import SiatSelectors, get_selectors
-from app.automation.siat.siat_legacy import NFCE, SiatLegacy, family_of, ie_matches, new_request_ids
+from app.automation.siat.siat_legacy import (
+    NFCE,
+    SiatLegacy,
+    family_of,
+    ie_matches,
+    new_request_ids,
+    pick_new_request_id,
+)
 from app.jobs.errors import AutomationError, ErrorCode, TaxpayerMismatchError
 from app.jobs.models import DocumentType, ExportRequestResult
 from app.utils.competence import format_br_date
@@ -173,7 +181,7 @@ class SiatExportScheduler:
             raise AutomationError(ErrorCode.SELECTOR_NOT_FOUND, "Botão 'Sim' da exclusão não encontrado.")
         await yes.click()
         await wait_idle(self.page, 20_000)
-        if await self.legacy.find_row(request_id) is not None:
+        if not await self._row_gone(request_id):
             raise AutomationError(
                 ErrorCode.SCHEDULE_FAILED,
                 f"O agendamento {request_id} continua na lista depois da exclusão.",
@@ -185,6 +193,21 @@ class SiatExportScheduler:
         )
         await self.ctx.reporter.screenshot(f"deleted_{request_id}")
         return True
+
+    async def _row_gone(self, request_id: str, timeout_s: float = 20) -> bool:
+        """Depois do "Sim" o SIAT atualiza a lista por AJAX, às vezes com atraso: espera a linha sumir.
+
+        Conferir cedo demais dava "continua na lista" com a exclusão já feita (e o pedido novo
+        nunca era enviado).
+        """
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout_s
+        while True:
+            if await self.legacy.find_row(request_id) is None:
+                return True
+            if loop.time() >= deadline:
+                return False
+            await asyncio.sleep(1)
 
     async def schedule(
         self,
@@ -232,6 +255,7 @@ class SiatExportScheduler:
             raise AutomationError(ErrorCode.SELECTOR_NOT_FOUND, "Botão 'Agendar exportação' não encontrado.")
         if self.ctx.on_submit is not None:
             await self.ctx.on_submit()
+        submitted_at = datetime.now(timezone.utc)
         await button.click()
         await wait_idle(self.page, 20_000)
 
@@ -239,6 +263,10 @@ class SiatExportScheduler:
         kind = classify_message(message, self.sel)
         await self.ctx.logger.info(f"Retorno do SIAT: {message or '(sem mensagem)'}", step="scheduling")
         await self.ctx.reporter.screenshot(f"result_{document_type.value}")
+        if kind in ("duplicate", "error") and self.ctx.on_rejected is not None:
+            # o SIAT NÃO criou pedido novo: a tarefa deixa de constar como enviada (senão, se algo
+            # falhar daqui para a frente, ela fica "agendada" sem pedido e o Reprocessar não a refaz)
+            await self.ctx.on_rejected()
         if kind == "error":
             raise AutomationError(ErrorCode.SCHEDULE_FAILED, f"SIAT recusou o agendamento: {message}", retryable=False)
 
@@ -249,7 +277,17 @@ class SiatExportScheduler:
         if foreign:
             raise TaxpayerMismatchError(f"IE {client_ie}", f"IE {foreign[0].ie}", security=True)
         new_ids = new_request_ids(before, after_rows, client_ie)
-        request_id = new_ids[0] if len(new_ids) == 1 else extract_protocol(message, self.sel)
+        claimed: set[str] = self.ctx.state.setdefault("claimed_request_ids", set())
+        if kind == "duplicate":
+            request_id = new_ids[0] if len(new_ids) == 1 else extract_protocol(message, self.sel)
+        else:
+            # NF-e: a mensagem não traz o ID ("Você é numero 3 da fila") e a lista é paginada
+            request_id = pick_new_request_id(before, after_rows, client_ie, submitted_at, claimed)
+            request_id = request_id or extract_protocol(message, self.sel)
+            if request_id and len(new_ids) != 1:
+                await self.ctx.logger.info(
+                    f"ID do pedido identificado pela data de criação: {request_id}.", step="scheduling"
+                )
         if kind == "duplicate" and request_id is not None:
             # Forçar reagendamento: exclui o existente e pede de novo (uma única vez por tarefa)
             if self.ctx.job.force_reschedule and replaced is None:
@@ -272,6 +310,8 @@ class SiatExportScheduler:
                 f"Agendamento confirmado pela mensagem, mas o ID não foi identificado (novos: {new_ids}).",
                 step="scheduling",
             )
+        if request_id:
+            claimed.add(request_id)
         return ExportRequestResult(
             document_type=document_type,
             external_request_id=request_id,

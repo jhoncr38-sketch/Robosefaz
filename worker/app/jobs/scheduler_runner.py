@@ -138,8 +138,9 @@ class SchedulerRunner(BaseRunner):
                     await reporter.step(TASK_STEP[task.task_type])
                     await self.repo.update_task(task.id, status=TaskStatus.RUNNING.value, started_at=now_utc())
                     ctx.on_submit = self._submit_marker(task, logger)
+                    ctx.on_rejected = self._submit_unmark(task, logger)
                     result = await provider.schedule(ctx, task)
-                    ctx.on_submit = None
+                    ctx.on_submit = ctx.on_rejected = None
                     new_status = TaskStatus.DRY_RUN if result.dry_run else TaskStatus.SCHEDULED
                     await self.repo.update_task(
                         task.id,
@@ -189,6 +190,17 @@ class SchedulerRunner(BaseRunner):
             await logger.debug(f"{task.task_type}: marcada como enviada antes do clique.", step="scheduling")
 
         return mark
+
+    def _submit_unmark(self, task: Task, logger: JobLogger):  # noqa: ANN202
+        """O SIAT respondeu sem criar pedido ("já existe"/recusa): a tarefa volta a "em andamento"."""
+
+        async def unmark() -> None:
+            await self.repo.update_task(task.id, status=TaskStatus.RUNNING.value, requested_at=None, result={})
+            task.status = TaskStatus.RUNNING
+            task.requested_at = None
+            await logger.debug(f"{task.task_type}: SIAT não criou pedido; marcação de envio desfeita.", step="scheduling")
+
+        return unmark
 
     # -- desfechos ---------------------------------------------------------------
     async def _finish_without_work(self, job: Job, reporter: JobReporter, all_tasks: list[Task]) -> None:

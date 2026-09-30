@@ -139,6 +139,84 @@ def recover_request_id(
     return unique[0] if len(unique) == 1 else None
 
 
+def _utc(value: datetime) -> datetime:
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+
+def pick_new_request_id(
+    before: set[str],
+    after: list[LegacyRow],
+    client_ie: str | None,
+    submitted_at: datetime,
+    claimed: set[str] | frozenset[str] = frozenset(),
+    *,
+    tolerance: timedelta = timedelta(minutes=2),
+) -> str | None:
+    """ID do pedido que acabou de ser criado.
+
+    Normal: exatamente um ID novo na lista (antes x depois do clique). Quando essa comparação não
+    serve — a lista de NF-e é paginada e, depois de excluir um agendamento (forçar reagendamento),
+    o "antes" não bate com o "depois" —, vale o MAIOR ID da mesma IE criado desde o clique: os IDs
+    do SIAT são sequenciais e o robô faz um pedido de cada vez. IDs já usados por outras tarefas do
+    mesmo trabalho (`claimed`) nunca são escolhidos.
+    """
+    new = [i for i in new_request_ids(before, after, client_ie) if i not in claimed]
+    if len(new) == 1:
+        return new[0]
+    since = _utc(submitted_at) - tolerance
+    recent = []
+    for r in after:
+        if r.request_id in claimed or not r.request_id.isdigit():
+            continue
+        if r.ie and client_ie and not ie_matches(r.ie, client_ie):
+            continue
+        created = parse_siat_datetime(r.created)
+        if created and created >= since:
+            recent.append(r)
+    return max(recent, key=lambda r: int(r.request_id)).request_id if recent else None
+
+
+def recover_request_ids(
+    rows: list[LegacyRow],
+    client_ie: str,
+    pending: list[tuple[str, datetime]],
+    claimed: set[str],
+    *,
+    before: timedelta = timedelta(minutes=2),
+    after: timedelta = timedelta(minutes=10),
+) -> dict[str, str]:
+    """IDs dos pedidos cujo ID não foi anotado (tarefa -> ID), pela IE e data de criação.
+
+    `pending`: (id da tarefa, horário do clique). Os pedidos de um trabalho são feitos um de cada
+    vez e os IDs do SIAT são sequenciais: se as linhas candidatas (mesma IE, criadas na janela dos
+    cliques, ainda sem dono) são tantas quanto os pedidos, a ordem de criação casa com a ordem dos
+    cliques — é o caso de NF-e emitidas e recebidas, pedidas com segundos de diferença e listadas
+    juntas. Senão, cada pedido só fica com um ID se houver exatamente um candidato só dele.
+    """
+    if not pending:
+        return {}
+    ordered = sorted(((task, _utc(at)) for task, at in pending), key=lambda p: p[1])
+    lo, hi = ordered[0][1] - before, ordered[-1][1] + after
+    candidates: dict[str, datetime] = {}
+    for r in rows:
+        if r.request_id in claimed or r.request_id in candidates or not ie_matches(r.ie, client_ie):
+            continue
+        created = parse_siat_datetime(r.created)
+        if created and lo <= created <= hi:
+            candidates[r.request_id] = created
+    by_creation = sorted(candidates.items(), key=lambda c: (c[1], int(c[0]) if c[0].isdigit() else 0))
+    if len(by_creation) == len(ordered) and all(
+        at - before <= created <= at + after for (_, at), (_, created) in zip(ordered, by_creation)
+    ):
+        return {task: rid for (task, _), (rid, _) in zip(ordered, by_creation)}
+    found: dict[str, str] = {}
+    for task, at in ordered:
+        rid = recover_request_id(rows, client_ie, at, claimed | set(found.values()), before=before, after=after)
+        if rid:
+            found[task] = rid
+    return found
+
+
 def pick_inscricao_option(options: list[str], client_ie: str) -> str | None:
     """Opção do select "Inscrição" que corresponde exatamente à IE do cliente."""
     matches = [o for o in options if ie_matches(o, client_ie)]

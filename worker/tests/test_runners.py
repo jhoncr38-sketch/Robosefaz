@@ -77,6 +77,33 @@ class TestScheduler:
         await SchedulerRunner(deps).run_once()
         assert _statuses(repo, job2.id)[TaskType.NFCE_EXPORT] == TaskStatus.SCHEDULED
 
+    async def test_rejected_click_does_not_leave_task_scheduled(self, repo: FakeRepo, provider: FakeProvider, deps) -> None:  # noqa: ANN001
+        """30/09: "já existe" + exclusão não confirmada deixava a tarefa "agendada" sem pedido no SIAT,
+        e o Reprocessar não a refazia (ele só refaz as que falharam)."""
+        _, job = _setup(repo, operations=[TaskType.NFCE_EXPORT])
+
+        async def schedule(ctx, task):  # noqa: ANN001, ANN202
+            await ctx.on_submit()  # marcada como enviada antes do clique
+            await ctx.on_rejected()  # SIAT: "Já existe um agendamento ... ID: 9319330"
+            raise AutomationError(ErrorCode.SCHEDULE_FAILED, "O agendamento 9319330 continua na lista depois da exclusão.", retryable=False)
+
+        provider.schedule = schedule  # type: ignore[method-assign]
+        await SchedulerRunner(deps).run_once()
+        assert repo.job(job.id)["status"] == "failed"
+        assert _statuses(repo, job.id)[TaskType.NFCE_EXPORT] == TaskStatus.FAILED  # o Reprocessar refaz
+
+    async def test_click_without_answer_keeps_task_scheduled(self, repo: FakeRepo, provider: FakeProvider, deps) -> None:  # noqa: ANN001
+        """Clique enviado e erro antes de ler a resposta: continua "agendada" (nunca reenviar o pedido)."""
+        _, job = _setup(repo, operations=[TaskType.NFCE_EXPORT])
+
+        async def schedule(ctx, task):  # noqa: ANN001, ANN202
+            await ctx.on_submit()
+            raise AutomationError(ErrorCode.TIMEOUT, "Página não respondeu depois do clique.")
+
+        provider.schedule = schedule  # type: ignore[method-assign]
+        await SchedulerRunner(deps).run_once()
+        assert _statuses(repo, job.id)[TaskType.NFCE_EXPORT] == TaskStatus.SCHEDULED
+
     async def test_taxpayer_mismatch_fails_without_retry(self, repo: FakeRepo, provider: FakeProvider, deps) -> None:  # noqa: ANN001
         provider.select_error = TaxpayerMismatchError("11.222.333/0001-81", "11.444.777/0001-61")
         _, job = _setup(repo)

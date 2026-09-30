@@ -316,6 +316,22 @@ async def test_force_deletes_existing_request_and_schedules_again(repo: FakeRepo
     assert len(state.scheduled) == 2
 
 
+async def test_force_waits_for_a_slow_deletion(repo: FakeRepo, integration_settings: Settings) -> None:
+    """Visto no SIAT real (30/09): a linha excluída demora a sumir; conferir cedo dava falso erro."""
+    state = MockState(reject_duplicates=True, delete_delay_ms=4000)
+    ctx, job = await _context(repo, integration_settings)
+    provider = SiatAutomationProvider()
+    async with provider.open_session(ctx):
+        await _open(provider, ctx, state)
+        nfce = [t for t in await repo.list_tasks(job.id) if t.task_type == TaskType.NFCE_EXPORT][0]
+        await provider.schedule(ctx, nfce)
+        ctx.job.force_reschedule = True
+        forced = await provider.schedule(ctx, nfce)
+    assert state.deleted == ["9237950"]
+    assert forced.external_request_id == "9237951"
+    assert len(state.scheduled) == 2
+
+
 async def test_user_type_dialog_tries_options_until_the_client_opens(repo: FakeRepo, integration_settings: Settings) -> None:
     """Certificado ligado a dois cadastros: a 1ª opção abre outra empresa; a 2ª, a do cliente."""
     state = MockState(user_types=[("CONTRIBUINTE", "11.444.777/0001-61"), ("CONTRIBUINTE", "11.222.333/0001-81")])

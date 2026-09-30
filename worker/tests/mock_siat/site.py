@@ -61,6 +61,8 @@ class MockState:
     # como o SIAT real: recusa pedido com os mesmos parâmetros ("Já existe um agendamento ... busque o ID")
     reject_duplicates: bool = False
     deleted: list[str] = field(default_factory=list)
+    # o SIAT real às vezes demora a tirar da lista a linha excluída (ms)
+    delete_delay_ms: int = 0
     # Consulta de Malhas: [{source: DIEF_PGDAS|EFD_OIE, identification, periods, icms, nfe}]
     malhas: list[dict] = field(default_factory=list)
     # como no SIAT real com certificado de contador: IE e razão social vêm vazias e a IE precisa
@@ -381,6 +383,7 @@ function render() {
         $('del-no').onclick = () => { $('confirm-del').style.display = 'none'; };
         $('del-yes').onclick = async () => {
           await fetch('/siatweb/api/excluir/' + r.id, { method: 'POST' });
+          await new Promise((ok) => setTimeout(ok, __DEL_DELAY__));
           localStorage.setItem('reqs', JSON.stringify(reqs().filter(x => x.id !== r.id)));
           $('confirm-del').style.display = 'none';
           render();
@@ -486,6 +489,7 @@ def build_handler(state: MockState):
                 .replace("__IE_OVERRIDE__", json.dumps(state.rows_ie_override))
                 .replace("__NOTICE__", json.dumps(state.show_notice))
                 .replace("__REJECT_DUP__", json.dumps(state.reject_duplicates))
+                .replace("__DEL_DELAY__", str(state.delete_delay_ms))
                 .replace("__MALHAS_IE__", (state.inscricoes[0] if state.inscricoes else "") if state.malhas_prefilled else "")
                 .replace("__MALHAS_RAZAO__", state.legacy_user if state.malhas_prefilled else "")
                 .replace("__MALHAS_IE_JSON__", json.dumps(state.inscricoes[0] if state.inscricoes else ""))

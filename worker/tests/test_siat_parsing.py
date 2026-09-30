@@ -229,3 +229,66 @@ class TestRecoverRequestId:
         dt = parse_siat_datetime("09/09/2026 11:39:43")
         assert dt is not None and dt.utcoffset().total_seconds() == -3 * 3600
         assert parse_siat_datetime("") is None
+
+LIA_NFE = [  # lista de NF-e da Lia Papelaria em 30/09 (15 por página, mais novos primeiro)
+    ("9328521", "30/09/2026 14:31:58"),
+    ("9328520", "30/09/2026 14:31:34"),
+    ("9322190", "28/09/2026 20:20:59"),
+    ("9322189", "28/09/2026 20:20:48"),
+    ("9318901", "27/09/2026 10:17:47"),
+]
+
+
+def _lia_rows(ids: list[tuple[str, str]]):  # noqa: ANN202
+    from app.automation.siat.siat_legacy import LegacyRow
+
+    return [LegacyRow(i, rid, "Processado", "19662259-0", created, "", "") for i, (rid, created) in enumerate(ids)]
+
+
+def _pi(hms: str):  # noqa: ANN202
+    from datetime import datetime, timedelta, timezone
+
+    h, m, s = (int(x) for x in hms.split(":"))
+    return datetime(2026, 9, 30, h, m, s, tzinfo=timezone(timedelta(hours=-3)))
+
+
+class TestNfeRequestIds:
+    """NF-e: a mensagem não traz o ID e, depois de excluir o antigo, o "antes" da lista não serve."""
+
+    def test_new_id_by_creation_time_when_before_and_after_do_not_match(self) -> None:
+        from app.automation.siat.siat_legacy import pick_new_request_id
+
+        # 30/09: 15 IDs "novos" (a lista mudou de página) -> antes, o ID ficava sem identificar
+        emit = pick_new_request_id(set(), _lia_rows(LIA_NFE[1:]), "196622590", _pi("14:31:33"))
+        assert emit == "9328520"
+        receb = pick_new_request_id(set(), _lia_rows(LIA_NFE), "196622590", _pi("14:31:56"), {"9328520"})
+        assert receb == "9328521"
+
+    def test_never_takes_the_previous_task_id_when_the_new_row_is_not_listed_yet(self) -> None:
+        from app.automation.siat.siat_legacy import pick_new_request_id
+
+        rows = _lia_rows(LIA_NFE[1:])  # a linha nova (9328521) ainda não apareceu
+        assert pick_new_request_id(set(), rows, "196622590", _pi("14:31:56"), {"9328520"}) is None
+
+    def test_unique_new_row_still_wins(self) -> None:
+        from app.automation.siat.siat_legacy import pick_new_request_id
+
+        before = {rid for rid, _ in LIA_NFE[1:]}
+        assert pick_new_request_id(before, _lia_rows(LIA_NFE), "196622590", _pi("14:31:56")) == "9328521"
+        assert pick_new_request_id(before, _lia_rows(LIA_NFE), "999999999", _pi("14:31:56")) is None  # outra IE
+
+    def test_collector_pairs_issued_and_received_by_click_order(self) -> None:
+        from app.automation.siat.siat_legacy import recover_request_ids
+
+        pending = [("receb", _pi("14:31:59")), ("emit", _pi("14:31:36"))]
+        found = recover_request_ids(_lia_rows(LIA_NFE), "196622590", pending, set())
+        assert found == {"emit": "9328520", "receb": "9328521"}
+        # uma delas já tem ID: a outra fica com a que sobrou
+        assert recover_request_ids(_lia_rows(LIA_NFE), "196622590", pending[:1], {"9328520"}) == {"receb": "9328521"}
+
+    def test_collector_does_not_guess_a_request_that_was_never_created(self) -> None:
+        from app.automation.siat.siat_legacy import recover_request_ids
+
+        # G Ribeiro 30/09: clique das 14:44 sem pedido criado; a única linha nova (17:03) já tem dono
+        rows = _lia_rows([("9329496", "30/09/2026 17:03:45"), ("9235108", "09/09/2026 10:06:10")])
+        assert recover_request_ids(rows, "196622590", [("emit", _pi("14:44:05"))], {"9329496"}) == {}

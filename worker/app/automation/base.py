@@ -62,6 +62,9 @@ class AutomationContext:
     # chamado IMEDIATAMENTE antes do clique final de agendamento: a tarefa passa a
     # "agendada" no banco antes do clique, para uma retentativa nunca reenviar o pedido
     on_submit: Callable[[], Awaitable[None]] | None = None
+    # chamado quando o SIAT responde ao clique SEM criar pedido ("já existe" ou recusa): desfaz a
+    # marcação acima, para uma falha depois disso não deixar a tarefa "agendada" sem pedido
+    on_rejected: Callable[[], Awaitable[None]] | None = None
 
     @property
     def start_date(self) -> date:

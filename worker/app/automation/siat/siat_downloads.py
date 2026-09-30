@@ -15,7 +15,7 @@ from playwright.async_api import Error as PlaywrightError, Page, TimeoutError as
 from app.automation.base import AutomationContext
 from app.automation.siat.page_helpers import first_visible
 from app.automation.siat.selectors import SiatSelectors, get_selectors
-from app.automation.siat.siat_legacy import NFCE, NFE, SiatLegacy, family_of, ie_matches, recover_request_id
+from app.automation.siat.siat_legacy import NFCE, NFE, SiatLegacy, family_of, ie_matches, recover_request_ids
 from app.downloads.organizer import DownloadFolderUnavailable, EmptyExportError, InvalidDownloadError
 from app.jobs.errors import AutomationError, ErrorCode, TaxpayerMismatchError
 from app.jobs.models import DocumentType, DownloadedFile, ExportStatus, ExportStatusResult, Task
@@ -64,15 +64,20 @@ class SiatExportConsult:
                 continue
             await self.legacy.go_to(family)
             claimed = {t.external_request_id for t in tasks if t.external_request_id}
+            # clique enviado mas ID não anotado: recupera pela IE + data de criação, todas as tarefas
+            # da família juntas (NF-e emitidas e recebidas saem na mesma lista, segundos uma da outra)
+            missing = [(t.id, t.requested_at) for t in family_tasks if not t.external_request_id and t.requested_at]
+            recovered: dict[str, str] = {}
+            if missing:
+                rows = await self.legacy.read_all_rows()
+                recovered = recover_request_ids(rows, client_ie, missing, claimed)  # type: ignore[arg-type]
+                claimed.update(recovered.values())
             for task in family_tasks:
                 doc = task.document_type or DocumentType.NFCE
                 request_id = task.external_request_id
-                if not request_id and task.requested_at:
-                    # clique enviado mas ID não anotado: recupera pela IE + data de criação
-                    rows = await self.legacy.read_all_rows()
-                    request_id = recover_request_id(rows, client_ie, task.requested_at, claimed)
+                if not request_id and task.id in recovered:
+                    request_id = recovered[task.id]
                     if request_id:
-                        claimed.add(request_id)
                         await self.ctx.logger.info(
                             f"{task.task_type}: ID {request_id} recuperado pela IE e data de criação.",
                             step="checking_processing",
