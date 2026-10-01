@@ -463,7 +463,7 @@ def cap_painel_acesso() -> list:
                 ["Fila de processamento", "Acompanhar em tempo real o que o robô está fazendo."],
                 ["Clientes", "Cadastro das empresas."],
                 ["Certificados", "Certificado digital de cada cliente e sua validade."],
-                ["Downloads", "Notas baixadas, com o botão Abrir pasta."],
+                ["Downloads", "Notas baixadas, com a quantidade de notas e os botões Baixar e Abrir pasta."],
                 ["Histórico", "Todas as execuções, com detalhes, logs e resultado."],
                 ["Erros", "Falhas, com o motivo e o print da tela."],
                 ["Usuários", "Quem acessa o painel e com qual perfil."],
@@ -690,8 +690,18 @@ def cap_downloads() -> list:
         ),
         H2("Tela Downloads"),
         P(
-            "Lista todas as notas baixadas, com filtros por competência, cliente e tipo. O ícone de informação (i), ao lado do nome, mostra o "
-            "caminho completo e o código de conferência (SHA-256) do arquivo."
+            "Lista todas as notas baixadas, com filtros por competência, cliente e tipo. Embaixo do tipo aparece a "
+            "<b>quantidade de notas</b> do arquivo (o robô conta sozinho, alguns minutos depois do download). O ícone de "
+            "informação (i), ao lado da quantidade, mostra o nome do arquivo, o tamanho, a data do download, o caminho "
+            "completo e o código de conferência (SHA-256)."
+        ),
+        H2("Mês para conferir"),
+        P(
+            "Quando um mês vem <b>sem notas</b> ou com <b>bem menos notas</b> que a média dos 3 meses anteriores do mesmo "
+            "cliente e tipo (menos da metade e pelo menos 10 notas a menos), a quantidade aparece em amarelo, com um "
+            "triângulo. Passe o mouse para ver a comparação. No alto da lista, <b>meses para conferir</b> mostra só esses. "
+            "Pode ser normal (empresa parada, férias, queda depois do Natal); se não for, confira no SIAT se vieram todas "
+            "as notas do mês. O mês corrente, ou baixado antes de terminar, nunca gera aviso."
         ),
         H2("Trocar a conta do Google Drive"),
         *steps(

@@ -65,6 +65,8 @@ class JobRepository(Protocol):
     async def upsert_malha_check(self, **fields: Any) -> None: ...
     async def get_download(self, download_id: str) -> dict[str, Any] | None: ...
     async def list_downloads_without_drive_id(self, limit: int) -> list[dict[str, Any]]: ...
+    async def list_downloads_without_note_count(self, limit: int) -> list[dict[str, Any]]: ...
+    async def set_download_note_count(self, download_id: str, count: int) -> None: ...
     async def list_client_names(self) -> dict[str, str | None]: ...
     async def rename_download(self, old_filename: str, new_filename: str, new_filepath: str, checksum: str) -> int: ...
     async def clear_download_drive_ids(self) -> int: ...
@@ -339,6 +341,22 @@ class SupabaseJobRepository:
             .execute()
         )
         return res.data or []
+
+    @_transient
+    async def list_downloads_without_note_count(self, limit: int) -> list[dict[str, Any]]:
+        res = (
+            await self._db.table("downloads")
+            .select("id, filepath, competence, document_type, size, checksum")
+            .is_("note_count", "null")
+            .order("downloaded_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return res.data or []
+
+    @_transient
+    async def set_download_note_count(self, download_id: str, count: int) -> None:
+        await self._db.table("downloads").update({"note_count": count}).eq("id", download_id).execute()
 
     @_transient
     async def clear_download_drive_ids(self) -> int:

@@ -226,6 +226,8 @@ export interface DownloadRow {
   /** pastas no Drive: ano/mês/cliente e ano/mês ("Baixar todas") */
   drive_client_folder_id?: string | null;
   drive_month_folder_id?: string | null;
+  /** notas (XMLs) dentro do ZIP; contadas pelo robô na manutenção, null até lá */
+  note_count?: number | null;
   clients?: ClientRef | null;
 }
 

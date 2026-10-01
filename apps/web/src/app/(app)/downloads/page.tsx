@@ -3,13 +3,14 @@ import type { Metadata } from "next";
 
 import { BulkDownload } from "@/components/bulk-download";
 import { ListCard, ListToolbar } from "@/components/data-list";
-import { DownloadsTable } from "@/components/downloads-table";
+import { DownloadsTable, NotesToCheckLink } from "@/components/downloads-table";
 import { ListFilters } from "@/components/list-filters";
 import { PageHeader } from "@/components/page-header";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { requireSession } from "@/lib/auth";
 import { formatCompetence, recentCompetences } from "@/lib/competence";
 import { bulkTarget, notesInGoogleDrive } from "@/lib/downloads";
+import { type NoteCountRow, noteAlerts } from "@/lib/note-count";
 import { DOCUMENT_LABEL } from "@/lib/status";
 import { createClient } from "@/lib/supabase/server";
 import type { DocumentType, DownloadRow } from "@/lib/types";
@@ -30,12 +31,30 @@ export default async function DownloadsPage({ searchParams }: PageProps<"/downlo
   if (typeof params.client === "string") query = query.eq("client_id", params.client);
   if (typeof params.type === "string") query = query.eq("document_type", params.type);
 
-  const [{ data }, { data: clients }, drive] = await Promise.all([
+  const [{ data }, { data: clients }, drive, { data: counted }] = await Promise.all([
     query,
     supabase.from("clients").select("id, legal_name, trade_name").order("legal_name"),
     notesInGoogleDrive(supabase),
+    // meses anteriores de cada cliente e tipo, para o aviso de mês "estranho" (poucos bytes por linha)
+    supabase
+      .from("downloads")
+      .select("id, client_id, document_type, competence, note_count, downloaded_at")
+      .not("note_count", "is", null)
+      .limit(10000),
   ]);
-  const rows = (data ?? []) as DownloadRow[];
+  const all = (data ?? []) as DownloadRow[];
+  const alerts = noteAlerts(all, (counted ?? []) as NoteCountRow[]);
+  const checking = params.conferir === "1";
+  const rows = checking ? all.filter((d) => alerts[d.id]) : all;
+  const toCheck = all.filter((d) => alerts[d.id]).length;
+  const withoutCheck = new URLSearchParams(
+    Object.entries(params).filter((e): e is [string, string] => typeof e[1] === "string" && e[0] !== "conferir"),
+  );
+  const checkHref = (on: boolean) => {
+    const q = new URLSearchParams(withoutCheck);
+    if (on) q.set("conferir", "1");
+    return q.size ? `/downloads?${q}` : "/downloads";
+  };
   const competence = typeof params.competence === "string" ? params.competence : undefined;
   const clientId = typeof params.client === "string" ? params.client : undefined;
   const client = (clients ?? []).find((c) => c.id === clientId);
@@ -96,8 +115,9 @@ export default async function DownloadsPage({ searchParams }: PageProps<"/downlo
             },
           ]}
         />
+        <NotesToCheckLink count={toCheck} active={checking} href={checkHref(!checking)} />
         </ListToolbar>
-        <DownloadsTable rows={rows} drive={drive} />
+        <DownloadsTable rows={rows} drive={drive} alerts={alerts} />
       </ListCard>
     </>
   );

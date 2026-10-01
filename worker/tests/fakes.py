@@ -239,6 +239,14 @@ class FakeRepo:
     async def list_downloads_without_drive_id(self, limit: int) -> list[dict[str, Any]]:
         return [d for d in self.downloads if not d.get("drive_client_folder_id")][:limit]
 
+    async def list_downloads_without_note_count(self, limit: int) -> list[dict[str, Any]]:
+        return [d for d in self.downloads if d.get("note_count") is None][:limit]
+
+    async def set_download_note_count(self, download_id: str, count: int) -> None:
+        for d in self.downloads:
+            if d.get("id") == download_id:
+                d["note_count"] = count
+
     async def list_client_names(self) -> dict[str, str | None]:
         return {c.client_code: c.trade_name or c.legal_name for c in self.clients.values()}
 

@@ -23,6 +23,7 @@ import { requireSession } from "@/lib/auth";
 import { formatCNPJ } from "@/lib/cnpj";
 import { notesInGoogleDrive } from "@/lib/downloads";
 import { daysUntil, formatDateTime } from "@/lib/format";
+import { noteAlerts } from "@/lib/note-count";
 import { can } from "@/lib/permissions";
 import { JOB_SELECT, loadProfilesMap } from "@/lib/queries";
 import { certificateStatusFromDate, EXPORT_OPERATIONS, FINAL_JOB_STATUSES } from "@/lib/status";
@@ -218,7 +219,7 @@ export default async function ClientDetailPage({ params }: PageProps<"/clients/[
         <TabsContent value="downloads">
           <Card className="py-0">
             <CardContent className="p-0">
-              <DownloadsTable rows={downloads} showClient={false} drive={drive} />
+              <DownloadsTable rows={downloads} showClient={false} drive={drive} alerts={noteAlerts(downloads)} />
             </CardContent>
           </Card>
         </TabsContent>

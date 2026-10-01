@@ -28,6 +28,7 @@ from app import __version__
 from app.config import Settings, get_settings
 from app.downloads.drive_ids import DriveIdLookup, drivefs_databases, link_drive_ids, probe_account, update_link_state
 from app.downloads.fallback import FallbackOrganizer, notes_folder_kind, organizer_for
+from app.downloads.note_count import count_pending_notes
 from app.downloads.organizer import DownloadFolderUnavailable
 from app.utils.files import sha256_file
 from app.jobs.base_runner import RunnerDeps
@@ -59,6 +60,8 @@ class Worker:
         self.activity = deps.activity
         self.organizer = deps.organizer
         self._drive_db: Path | None = None  # banco da conta do Google Drive da pasta das notas
+        self._uncountable: set[str] = set()  # downloads cujo ZIP não deu para ler aqui
+        self._note_count_failures = 0
         self.scheduler = SchedulerRunner(deps)
         self.collector = CollectorRunner(deps)
         self.retention = RetentionService(repo, settings)
@@ -116,6 +119,7 @@ class Worker:
                         await link_drive_ids(self.repo, DriveIdLookup([self._drive_db]))
                 except Exception:
                     log.exception("Falha ao ligar as notas ao Google Drive")
+            await self._count_notes()
             now = time.monotonic()
             if self._next_retention_at is None or now >= self._next_retention_at:
                 self._next_retention_at = now + self.settings.retention_interval_hours * 3600
@@ -137,6 +141,18 @@ class Worker:
         if renamed:
             log.info("%s nota(s) renomeada(s) com o nome da empresa.", len(renamed))
         return len(renamed)
+
+    async def _count_notes(self) -> None:
+        """Quantidade de notas de cada ZIP (painel). Só lê; se falhar 3 vezes seguidas (ex.: banco
+        ainda sem a coluna), para até o próximo início do robô, sem afetar o resto."""
+        if self._note_count_failures >= 3:
+            return
+        try:
+            await count_pending_notes(self.repo, self.organizer.base_dir, skip=self._uncountable)
+            self._note_count_failures = 0
+        except Exception:
+            self._note_count_failures += 1
+            log.warning("Falha ao contar as notas dos downloads (%s/3)", self._note_count_failures, exc_info=True)
 
     async def _drive_account(self) -> Path | None:
         """Conta do Google Drive da pasta das notas (1x por início do robô); troca de conta refaz os links."""

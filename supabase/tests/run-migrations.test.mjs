@@ -630,6 +630,25 @@ await test("robô grava o código do Google Drive só nos downloads do próprio 
   );
 });
 
+await test("robô grava a quantidade de notas só nos downloads do próprio escritório", async () => {
+  const id = (await db.query("select id from public.downloads where org_id = $1 and filename = 'x.zip'", [ORG_B])).rows[0].id;
+  const byA = await as(DEVICE_A.authId, (tx) => tx.query("update public.downloads set note_count = 5 where id = $1", [id]));
+  assert.equal(byA.affectedRows, 0);
+  const byB = await as(DEVICE_B.authId, (tx) =>
+    tx.query("update public.downloads set note_count = 2308 where id = $1 returning note_count", [id]),
+  );
+  assert.equal(byB.rows[0].note_count, 2308);
+  await rejects(
+    as(DEVICE_B.authId, (tx) => tx.query("update public.downloads set note_count = -1 where id = $1", [id])),
+    /downloads_note_count_check/,
+  );
+  // o robô procura as que faltam contar
+  const pending = await as(DEVICE_B.authId, (tx) =>
+    tx.query("select count(*)::int n from public.downloads where note_count is null and id = $1", [id]),
+  );
+  assert.equal(pending.rows[0].n, 0);
+});
+
 await test("painel lista só os computadores do próprio escritório", async () => {
   const a = await as(ADMIN, (tx) => tx.query("select name from public.devices"));
   assert.deepEqual(a.rows.map((r) => r.name), ["PC-ESCRITORIO-A"]);
