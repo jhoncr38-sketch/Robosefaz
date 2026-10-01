@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from app.downloads.organizer import note_code
 from app.utils.competence import Competence
 
 log = logging.getLogger("downloads")
@@ -162,8 +163,9 @@ class DriveIdLookup:
             if len(parents) < 4:
                 continue
             titles = [title for title, _ in parents]
-            # .../2026/09/NOME DA EMPRESA/NFCE/CLI000001_2026-09_NFCE.zip (o código está no nome do arquivo)
-            if titles[0] == doc and titles[2] == month and titles[3] == year and filename.startswith(f"{code}_"):
+            # .../2026/09/NOME DA EMPRESA/NFCE/<nota> (o código está no nome do arquivo: no início no formato
+            # antigo, CLI000001_2026-09_NFCE.zip; no fim no formato com a empresa, "LIA - NFC-e - 09-2026 - CLI000001.zip")
+            if titles[0] == doc and titles[2] == month and titles[3] == year and note_code(filename) == code:
                 client_id, month_id = parents[1][1], parents[2][1]
                 if _is_cloud_id(client_id) and _is_cloud_id(month_id):
                     return DriveIds(cloud_id, client_id, month_id)

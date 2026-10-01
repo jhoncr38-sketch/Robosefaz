@@ -44,6 +44,8 @@ def _drivefs(tmp_path: Path) -> Path:
     add(8, "1AhpGHokr3QnAskk5gdXZDgGUHpzbeJKO", NAME, 1)
     add(9, "1RdAStReRY_0MAOmALg2BmeoM5JgxYx6A", "CLI000001_2026-09_NFCE.zip", 6, trashed=True)
     add(10, "local-1898", "CLI000001_2026-09_NFE_EMITIDAS.zip", 6)
+    # formato com o nome da empresa (1.2.26): o código fica no fim
+    add(11, "1NovoNomeEmpresaAbcdefghijklmnopq", "LIA PAPELARIA - NF-e recebidas - 09-2026 - CLI000001 (2).zip", 6)
     con.commit()
     con.close()
     return tmp_path
@@ -56,6 +58,9 @@ def test_finds_id_by_name_and_folders(tmp_path: Path) -> None:
     assert lookup.find(NAME, "CLI000001", "2026-08", "NFE_RECEBIDAS") is None  # outra competência
     assert lookup.find("CLI000001_2026-09_NFCE.zip", "CLI000001", "2026-09", "NFE_RECEBIDAS") is None  # lixeira
     assert lookup.find("CLI000001_2026-09_NFE_EMITIDAS.zip", "CLI000001", "2026-09", "NFE_RECEBIDAS") is None  # subindo
+    company = "LIA PAPELARIA - NF-e recebidas - 09-2026 - CLI000001 (2).zip"
+    assert lookup.find(company, "CLI000001", "2026-09", "NFE_RECEBIDAS") == DriveIds("1NovoNomeEmpresaAbcdefghijklmnopq", CLIENT, MONTH)
+    assert lookup.find(company, "CLI000002", "2026-09", "NFE_RECEBIDAS") is None  # o código no fim é de outro cliente
 
 
 def test_no_google_drive_installed(tmp_path: Path) -> None:
