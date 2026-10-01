@@ -6,8 +6,10 @@ confirmar que o contribuinte aberto no portal é o CNPJ do job.
 
 from __future__ import annotations
 
+import asyncio
 import re
 from dataclasses import dataclass
+from typing import Literal
 
 from playwright.async_api import Error as PlaywrightError, Locator, Page
 
@@ -93,6 +95,14 @@ def validate_current_taxpayer(page_documents: list[str], client: Client, *, secu
 
 
 class SiatTaxpayer:
+    # Depois de escolher o tipo de usuário, o SIAT leva alguns segundos para mostrar o contribuinte
+    # no cabeçalho. Visto em 01/10/2026: conferir logo após o clique dava "Opção 1 abriu <o próprio
+    # CNPJ do cliente>; tentando a próxima" e o trabalho parava com um falso TAXPAYER_MISMATCH.
+    USER_TYPE_SETTLE_S = 12.0
+    # outro CNPJ no cabeçalho só vale como resposta se ficar parado esse tempo (pode ser o anterior)
+    USER_TYPE_OTHER_STABLE_S = 5.0
+    USER_TYPE_POLL_S = 0.5
+
     def __init__(self, ctx: AutomationContext, selectors: SiatSelectors | None = None) -> None:
         self.ctx = ctx
         self.sel = selectors or get_selectors()
@@ -182,6 +192,30 @@ class SiatTaxpayer:
             return None
         return await self._user_type_dialog(timeout_ms=8_000)
 
+    async def _after_user_type(self, cnpj: str) -> Literal["client", "dialog", "other", "none"]:
+        """Espera o portal assentar depois do clique no tipo de usuário: o CNPJ do cliente no
+        cabeçalho, a tela de empresas aberta, outro CNPJ parado no cabeçalho ou nada (tempo esgotado)."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self.USER_TYPE_SETTLE_S
+        other_since: float | None = None
+        title = self.sel.rx("taxpayer_dialog_title")
+        while True:
+            docs = await self.current_documents()
+            if cnpj in docs:
+                return "client"
+            if await dialog_by_title(self.page, title, timeout_ms=0) is not None:
+                return "dialog"
+            now = loop.time()
+            if docs:
+                other_since = now if other_since is None else other_since
+                if now - other_since >= self.USER_TYPE_OTHER_STABLE_S:
+                    return "other"
+            else:
+                other_since = None
+            if now >= deadline:
+                return "other" if docs else "none"
+            await asyncio.sleep(self.USER_TYPE_POLL_S)
+
     async def _select_user_type(self, dialog: Locator) -> None:
         """Tenta cada opção até o portal abrir o CNPJ do cliente; nenhuma = erro (nunca opera sem confirmar)."""
         client = self.ctx.client
@@ -216,7 +250,7 @@ class SiatTaxpayer:
                     break
             await options[i].click()
             await wait_idle(self.page)
-            if cnpj in await self.current_documents():
+            if await self._after_user_type(cnpj) == "client":
                 await self.ctx.logger.info(
                     f"Opção {i + 1} de {total} abriu o contribuinte do cliente.", step="selecting_taxpayer"
                 )
@@ -233,6 +267,11 @@ class SiatTaxpayer:
                     await self.page.keyboard.press("Escape")
                     await wait_idle(self.page)
             opened = await self.current_documents()
+            if cnpj in opened:  # chegou enquanto procurava a tela de empresas
+                await self.ctx.logger.info(
+                    f"Opção {i + 1} de {total} abriu o contribuinte do cliente.", step="selecting_taxpayer"
+                )
+                return
             await self.ctx.logger.warning(
                 f"Opção {i + 1} de {total} abriu {format_cnpj(opened[0]) if opened else 'nenhum CNPJ'}; "
                 "tentando a próxima.",

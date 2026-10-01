@@ -41,6 +41,9 @@ class MockState:
     # certificado ligado a mais de um cadastro: "Selecionar Tipo Usuário" logo após o login,
     # cartões só com o rótulo; cada um abre o CNPJ indicado (como no SIAT real em 29/09/2026)
     user_types: list[tuple[str, str]] | None = None
+    # o SIAT real leva alguns segundos para mostrar o contribuinte no cabeçalho depois do clique
+    # no tipo de usuário (01/10/2026); até lá o cabeçalho fica vazio
+    user_type_delay_ms: int = 0
     # retorno do login trava para sempre
     callback_always_hangs: bool = False
     # e-AGEAT: nova aba; "Error 500" nas N primeiras; depois "Usuário não identificado" nas M seguintes
@@ -147,6 +150,7 @@ PAINEL_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><
 const taxpayers = __TAXPAYERS__;
 const forced = __FORCED__;
 const userTypes = __USER_TYPES__;
+const userTypeDelay = __UT_DELAY__;
 const $ = (id) => document.getElementById(id);
 function showUserTypes() {
   const list = $('ut-list'); list.innerHTML = '';
@@ -156,9 +160,10 @@ function showUserTypes() {
     card.innerHTML = '<span class="v-card__title">' + label + '</span><i class="v-icon">✓</i>';
     card.onclick = () => {
       const tp = taxpayers.find((t) => t[1] === cnpj);
-      setCurrent(cnpj, tp ? tp[2] : 'DESCONHECIDO');
       localStorage.setItem('utype', String(i));
       $('ut').style.display = 'none'; $('ut').classList.remove('v-dialog--active');
+      $('current').textContent = 'Contribuinte: carregando...';
+      setTimeout(() => setCurrent(cnpj, tp ? tp[2] : 'DESCONHECIDO'), userTypeDelay);
     };
     list.appendChild(card);
   });
@@ -452,6 +457,7 @@ def build_handler(state: MockState):
                 PAINEL_HTML.replace("__TAXPAYERS__", json.dumps(state.taxpayers))
                 .replace("__FORCED__", json.dumps(state.force_header_cnpj))
                 .replace("__USER_TYPES__", json.dumps(state.user_types))
+                .replace("__UT_DELAY__", str(state.user_type_delay_ms))
                 .replace("__TARGET__", 'target="_blank"' if state.module_new_tab else ""),
             )
         elif path.startswith("/carta-de-servicos"):

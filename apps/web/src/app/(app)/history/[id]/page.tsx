@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 
 import { ListHead, ListRow, PrimaryCell } from "@/components/data-list";
 import { DownloadsTable } from "@/components/downloads-table";
+import { noMovementFromTasks } from "@/lib/no-movement";
 import { JobLogs } from "@/components/job-logs";
 import { ContinueButton, JobActions } from "@/components/queue/job-actions";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,7 @@ export default async function JobDetailPage({ params }: PageProps<"/history/[id]
   const tasks = (tasksRes.data ?? []) as AutomationTask[];
   const logs = (logsRes.data ?? []) as AutomationLog[];
   const downloads = (downloadsRes.data ?? []) as DownloadRow[];
+  const noMovement = noMovementFromTasks(tasks);
 
   return (
     <>
@@ -193,13 +195,13 @@ export default async function JobDetailPage({ params }: PageProps<"/history/[id]
         </CardContent>
       </Card>
 
-      {downloads.length > 0 ? (
+      {downloads.length + noMovement.length > 0 ? (
         <Card className="mb-6 gap-0 py-0">
           <CardHeader className="border-b py-4">
             <CardTitle className="text-base">Arquivos baixados</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <DownloadsTable rows={downloads} showClient={false} drive={drive} />
+            <DownloadsTable rows={downloads} empty={noMovement} showClient={false} drive={drive} />
           </CardContent>
         </Card>
       ) : null}

@@ -695,6 +695,18 @@ def cap_downloads() -> list:
             "informação (i), ao lado da quantidade, mostra o nome do arquivo, o tamanho, a data do download, o caminho "
             "completo e o código de conferência (SHA-256)."
         ),
+        H2("Sem movimento"),
+        P(
+            "Quando o SIAT processa o pedido e não há nenhuma nota no período (\"Processado sem notas\" ou ZIP vazio), "
+            "não existe arquivo para baixar. A lista mostra a empresa assim mesmo, com <b>0 notas</b> e a etiqueta "
+            "<b>Sem movimento</b> no lugar do botão Baixar (passe o mouse para ver o número do pedido e quando o SIAT "
+            "respondeu). Assim fica claro que a empresa foi agendada e conferida."
+        ),
+        P(
+            "O filtro <b>Situação</b> mostra só <b>Com notas</b> ou só <b>Sem movimento</b>. Ao escolher uma competência, "
+            "o alto da lista resume o mês: quantas empresas, quantas vieram com notas, quantas sem movimento e quantas "
+            "ainda sem resposta (na fila, aguardando a SEFAZ ou com erro). Cada empresa conta uma vez por tipo de nota."
+        ),
         H2("Mês para conferir"),
         P(
             "Quando um mês vem <b>sem notas</b> ou com <b>bem menos notas</b> que a média dos 3 meses anteriores do mesmo "

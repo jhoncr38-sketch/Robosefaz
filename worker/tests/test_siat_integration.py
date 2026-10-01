@@ -348,6 +348,26 @@ async def test_user_type_dialog_tries_options_until_the_client_opens(repo: FakeR
     assert any("Opção 2 de 2 abriu o contribuinte do cliente" in m for m in messages)
 
 
+async def test_user_type_waits_for_the_portal_to_show_the_client(repo: FakeRepo, integration_settings: Settings) -> None:
+    """Visto no SIAT real (01/10): o cabeçalho demora a mostrar o contribuinte depois do clique.
+    Conferir cedo dava "Opção 1 abriu <o CNPJ do próprio cliente>; tentando a próxima" e o trabalho
+    parava com falso TAXPAYER_MISMATCH (METRO, ARRUMADINHO, FENIX ARTEFATOS, M L)."""
+    state = MockState(
+        user_types=[("CONTRIBUINTE", "11.222.333/0001-81"), ("CONTRIBUINTE", "11.444.777/0001-61")],
+        user_type_delay_ms=2500,
+    )
+    ctx, job = await _context(repo, integration_settings)
+    provider = SiatAutomationProvider()
+    async with provider.open_session(ctx):
+        await _open(provider, ctx, state)
+        assert "11.222.333/0001-81" in await ctx.page.locator("#current").inner_text()  # type: ignore[union-attr]
+        result = await provider.schedule(ctx, (await repo.list_tasks(job.id))[0])
+        assert result.external_request_id == "9237950"
+    messages = [entry["message"] for entry in repo.logs if entry["job_id"] == job.id]
+    assert any("Opção 1 de 2 abriu o contribuinte do cliente" in m for m in messages)
+    assert not any("tentando a próxima" in m for m in messages)
+
+
 async def test_user_type_dialog_without_the_client_blocks(repo: FakeRepo, integration_settings: Settings) -> None:
     """Nenhuma opção abre o CNPJ do cliente: nunca opera."""
     state = MockState(user_types=[("CONTRIBUINTE", "11.444.777/0001-61"), ("CONTRIBUINTE", "11.444.777/0001-61")])

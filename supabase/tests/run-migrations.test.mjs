@@ -649,6 +649,27 @@ await test("robô grava a quantidade de notas só nos downloads do próprio escr
   assert.equal(pending.rows[0].n, 0);
 });
 
+await test("sem movimento: uma linha por cliente, mês e tipo, só sem arquivo e só do próprio escritório", async () => {
+  const jobOfB = (await db.query("select id from public.automation_jobs where org_id = $1 limit 1", [ORG_B])).rows[0].id;
+  const task = (type, doc, result, finished) =>
+    db.query(
+      `insert into public.automation_tasks (job_id, client_id, task_type, status, competence, document_type, result, finished_at)
+       values ($1, $2, $3, 'completed', '2026-05', $4, $5, $6) returning id`,
+      [jobOfB, CLIENT_B1, type, doc, result, finished],
+    );
+  await task("NFCE_EXPORT", "NFCE", { no_notes: true }, "2026-06-01T10:00:00Z"); // já tem o x.zip de NFC-e de 05/2026
+  await task("NFE_ISSUED_EXPORT", "NFE_EMITIDAS", { no_notes: true }, "2026-06-01T10:00:00Z");
+  const latest = (await task("NFE_ISSUED_EXPORT", "NFE_EMITIDAS", { no_notes: true, raw_status: "ZIP vazio" }, "2026-06-02T10:00:00Z")).rows[0].id;
+  await task("NFE_RECEIVED_EXPORT", "NFE_RECEBIDAS", {}, "2026-06-01T10:00:00Z"); // concluído com arquivo, não é sem movimento
+  const b = await as(ADMIN_B, (tx) =>
+    tx.query("select id, document_type, competence from public.downloads_no_movement where client_id = $1", [CLIENT_B1]),
+  );
+  assert.deepEqual(b.rows, [{ id: latest, document_type: "NFE_EMITIDAS", competence: "2026-05" }]);
+  const a = await as(ADMIN, (tx) => tx.query("select count(*)::int n from public.downloads_no_movement"));
+  assert.equal(a.rows[0].n, 0, "outro escritório não vê");
+  await rejects(as("anon", (tx) => tx.query("select * from public.downloads_no_movement")), /permission denied/);
+});
+
 await test("painel lista só os computadores do próprio escritório", async () => {
   const a = await as(ADMIN, (tx) => tx.query("select name from public.devices"));
   assert.deepEqual(a.rows.map((r) => r.name), ["PC-ESCRITORIO-A"]);

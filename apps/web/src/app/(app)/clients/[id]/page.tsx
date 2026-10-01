@@ -23,6 +23,7 @@ import { requireSession } from "@/lib/auth";
 import { formatCNPJ } from "@/lib/cnpj";
 import { notesInGoogleDrive } from "@/lib/downloads";
 import { daysUntil, formatDateTime } from "@/lib/format";
+import { asZeroCount, type NoMovementRow } from "@/lib/no-movement";
 import { noteAlerts } from "@/lib/note-count";
 import { can } from "@/lib/permissions";
 import { JOB_SELECT, loadProfilesMap } from "@/lib/queries";
@@ -50,7 +51,7 @@ export default async function ClientDetailPage({ params }: PageProps<"/clients/[
   if (!client) notFound();
   const c = client as Client;
 
-  const [certRes, jobsRes, downloadsRes, auditRes, users, drive] = await Promise.all([
+  const [certRes, jobsRes, downloadsRes, auditRes, users, drive, emptyRes] = await Promise.all([
     supabase.from("certificates").select("*").eq("client_id", id).order("created_at", { ascending: false }),
     supabase.from("automation_jobs").select(JOB_SELECT).eq("client_id", id).order("created_at", { ascending: false }).limit(100),
     supabase.from("downloads").select("*").eq("client_id", id).order("downloaded_at", { ascending: false }),
@@ -59,6 +60,8 @@ export default async function ClientDetailPage({ params }: PageProps<"/clients/[
       : Promise.resolve({ data: [] }),
     loadProfilesMap(),
     notesInGoogleDrive(supabase),
+    // processados sem notas no período (não há arquivo)
+    supabase.from("downloads_no_movement").select("*").eq("client_id", id).order("checked_at", { ascending: false }),
   ]);
 
   const certificates = (certRes.data ?? []) as Certificate[];
@@ -66,6 +69,7 @@ export default async function ClientDetailPage({ params }: PageProps<"/clients/[
   const jobs = (jobsRes.data ?? []) as AutomationJob[];
   const running = jobs.filter((j) => !FINAL_JOB_STATUSES.includes(j.status));
   const downloads = (downloadsRes.data ?? []) as DownloadRow[];
+  const noMovement = (emptyRes.data ?? []) as NoMovementRow[];
   const audits = (auditRes.data ?? []) as AuditLog[];
   const admin = can(profile.role, "clients:write");
   const clientOption = [{ id: c.id, label: c.trade_name || c.legal_name, cnpj: c.cnpj }];
@@ -113,7 +117,7 @@ export default async function ClientDetailPage({ params }: PageProps<"/clients/[
           <TabsTrigger value="data">Dados</TabsTrigger>
           <TabsTrigger value="certificate">Certificado</TabsTrigger>
           <TabsTrigger value="automations">Automações ({running.length})</TabsTrigger>
-          <TabsTrigger value="downloads">Downloads ({downloads.length})</TabsTrigger>
+          <TabsTrigger value="downloads">Downloads ({downloads.length + noMovement.length})</TabsTrigger>
           <TabsTrigger value="history">Histórico</TabsTrigger>
           <TabsTrigger value="siat">Configurações SIAT</TabsTrigger>
         </TabsList>
@@ -219,7 +223,13 @@ export default async function ClientDetailPage({ params }: PageProps<"/clients/[
         <TabsContent value="downloads">
           <Card className="py-0">
             <CardContent className="p-0">
-              <DownloadsTable rows={downloads} showClient={false} drive={drive} alerts={noteAlerts(downloads)} />
+              <DownloadsTable
+                rows={downloads}
+                empty={noMovement}
+                showClient={false}
+                drive={drive}
+                alerts={noteAlerts([...downloads, ...noMovement.map(asZeroCount)])}
+              />
             </CardContent>
           </Card>
         </TabsContent>

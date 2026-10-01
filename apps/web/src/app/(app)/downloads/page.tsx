@@ -3,17 +3,25 @@ import type { Metadata } from "next";
 
 import { BulkDownload } from "@/components/bulk-download";
 import { ListCard, ListToolbar } from "@/components/data-list";
-import { DownloadsTable, NotesToCheckLink } from "@/components/downloads-table";
+import { DownloadsTable, MonthSummaryBar, NotesToCheckLink } from "@/components/downloads-table";
 import { ListFilters } from "@/components/list-filters";
 import { PageHeader } from "@/components/page-header";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { requireSession } from "@/lib/auth";
 import { formatCompetence, recentCompetences } from "@/lib/competence";
 import { bulkTarget, notesInGoogleDrive } from "@/lib/downloads";
+import {
+  asZeroCount,
+  monthSummary,
+  type NoMovementRow,
+  parseSituation,
+  type Situation,
+  SITUATION_LABEL,
+} from "@/lib/no-movement";
 import { type NoteCountRow, noteAlerts } from "@/lib/note-count";
 import { DOCUMENT_LABEL } from "@/lib/status";
 import { createClient } from "@/lib/supabase/server";
-import type { DocumentType, DownloadRow } from "@/lib/types";
+import type { DocumentType, DownloadRow, TaskStatus } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Downloads" };
 
@@ -30,10 +38,24 @@ export default async function DownloadsPage({ searchParams }: PageProps<"/downlo
   if (typeof params.competence === "string") query = query.eq("competence", params.competence);
   if (typeof params.client === "string") query = query.eq("client_id", params.client);
   if (typeof params.type === "string") query = query.eq("document_type", params.type);
+  const competence = typeof params.competence === "string" ? params.competence : undefined;
+  const clientId = typeof params.client === "string" ? params.client : undefined;
+  const docType = typeof params.type === "string" ? params.type : undefined;
+  const situation = parseSituation(params.situacao);
 
-  const [{ data }, { data: clients }, drive, { data: counted }] = await Promise.all([
+  // pedidos do mês (resumo "com notas / sem movimento / sem resposta"): só com a competência escolhida
+  let monthTasks = supabase
+    .from("automation_tasks")
+    .select("client_id, document_type, status, created_at")
+    .in("task_type", ["NFCE_EXPORT", "NFE_ISSUED_EXPORT", "NFE_RECEIVED_EXPORT"])
+    .eq("competence", competence ?? "")
+    .limit(5000);
+  if (clientId) monthTasks = monthTasks.eq("client_id", clientId);
+  if (docType) monthTasks = monthTasks.eq("document_type", docType);
+
+  const [{ data }, { data: clients }, drive, { data: counted }, { data: noMovement }, { data: tasks }] = await Promise.all([
     query,
-    supabase.from("clients").select("id, legal_name, trade_name").order("legal_name"),
+    supabase.from("clients").select("id, client_code, legal_name, trade_name, cnpj, active").order("legal_name"),
     notesInGoogleDrive(supabase),
     // meses anteriores de cada cliente e tipo, para o aviso de mês "estranho" (poucos bytes por linha)
     supabase
@@ -41,23 +63,42 @@ export default async function DownloadsPage({ searchParams }: PageProps<"/downlo
       .select("id, client_id, document_type, competence, note_count, downloaded_at")
       .not("note_count", "is", null)
       .limit(10000),
+    // processados sem notas (sem arquivo): uma linha por cliente, mês e tipo
+    supabase.from("downloads_no_movement").select("*").order("checked_at", { ascending: false }).limit(10000),
+    competence ? monthTasks : Promise.resolve({ data: [] }),
   ]);
+  const clientById = new Map((clients ?? []).map((c) => [c.id, c]));
   const all = (data ?? []) as DownloadRow[];
-  const alerts = noteAlerts(all, (counted ?? []) as NoteCountRow[]);
+  const allEmpty = ((noMovement ?? []) as NoMovementRow[]).map((n) => ({ ...n, clients: clientById.get(n.client_id) ?? null }));
+  const empty = allEmpty.filter(
+    (n) => (!competence || n.competence === competence) && (!clientId || n.client_id === clientId) && (!docType || n.document_type === docType),
+  );
+  // "sem movimento" conta como mês com 0 notas no aviso
+  const alerts = noteAlerts([...all, ...empty.map(asZeroCount)], [...((counted ?? []) as NoteCountRow[]), ...allEmpty.map(asZeroCount)]);
   const checking = params.conferir === "1";
   const rows = checking ? all.filter((d) => alerts[d.id]) : all;
-  const toCheck = all.filter((d) => alerts[d.id]).length;
-  const withoutCheck = new URLSearchParams(
-    Object.entries(params).filter((e): e is [string, string] => typeof e[1] === "string" && e[0] !== "conferir"),
-  );
-  const checkHref = (on: boolean) => {
-    const q = new URLSearchParams(withoutCheck);
-    if (on) q.set("conferir", "1");
+  const emptyRows = checking ? empty.filter((n) => alerts[n.id]) : empty;
+  const toCheck = all.filter((d) => alerts[d.id]).length + empty.filter((n) => alerts[n.id]).length;
+  const hrefWith = (changes: Record<string, string | null>) => {
+    const q = new URLSearchParams(
+      Object.entries(params).filter((e): e is [string, string] => typeof e[1] === "string"),
+    );
+    for (const [k, v] of Object.entries(changes)) {
+      if (v === null) q.delete(k);
+      else q.set(k, v);
+    }
     return q.size ? `/downloads?${q}` : "/downloads";
   };
-  const competence = typeof params.competence === "string" ? params.competence : undefined;
-  const clientId = typeof params.client === "string" ? params.client : undefined;
-  const client = (clients ?? []).find((c) => c.id === clientId);
+  const client = clientId ? clientById.get(clientId) : undefined;
+  const inactive = new Set((clients ?? []).filter((c) => c.active === false).map((c) => c.id));
+  const summary = competence
+    ? monthSummary(
+        all,
+        empty,
+        (tasks ?? []) as { client_id: string; document_type: DocumentType | null; status: TaskStatus; created_at: string }[],
+        inactive,
+      )
+    : null;
 
   return (
     <>
@@ -113,11 +154,19 @@ export default async function DownloadsPage({ searchParams }: PageProps<"/downlo
               placeholder: "Todos os tipos",
               options: (Object.keys(DOCUMENT_LABEL) as DocumentType[]).map((d) => ({ value: d, label: DOCUMENT_LABEL[d] })),
             },
+            {
+              name: "situacao",
+              placeholder: "Todas as situações",
+              options: (Object.keys(SITUATION_LABEL) as Situation[]).map((s) => ({ value: s, label: SITUATION_LABEL[s] })),
+            },
           ]}
         />
-        <NotesToCheckLink count={toCheck} active={checking} href={checkHref(!checking)} />
+        <NotesToCheckLink count={toCheck} active={checking} href={hrefWith({ conferir: checking ? null : "1" })} />
         </ListToolbar>
-        <DownloadsTable rows={rows} drive={drive} alerts={alerts} />
+        {competence && summary ? (
+          <MonthSummaryBar competence={competence} summary={summary} hrefFor={(s) => hrefWith({ situacao: s })} />
+        ) : null}
+        <DownloadsTable rows={rows} empty={emptyRows} situation={situation} drive={drive} alerts={alerts} />
       </ListCard>
     </>
   );
