@@ -20,7 +20,7 @@ from pathlib import Path
 
 from app.config import Settings, get_settings
 from app.downloads.fallback import organizer_for
-from app.downloads.organizer import NOTE_FILE as _NOTE_FILE
+from app.downloads.organizer import is_note_file
 from app.downloads.organizer import DownloadOrganizer
 
 _LINK = re.compile(r"^siatrobo://abrir/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/?$", re.IGNORECASE)
@@ -41,12 +41,12 @@ def resolve_file(row: dict, organizer: DownloadOrganizer) -> Path | None:
     client_code = (row.get("clients") or {}).get("client_code") or ""
     try:
         current = organizer.locate(row["filepath"], client_code, row["competence"], row["document_type"], row["filename"])
-        if _NOTE_FILE.match(current.name) and current.is_file():
+        if is_note_file(current.name) and current.is_file():
             return current
     except (ValueError, KeyError):
         pass
     stored = Path(row.get("filepath") or "")
-    return stored if _NOTE_FILE.match(stored.name) and stored.is_file() else None
+    return stored if is_note_file(stored.name) and stored.is_file() else None
 
 
 def explorer_select_command(path: Path) -> str:

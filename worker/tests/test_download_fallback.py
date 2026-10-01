@@ -32,9 +32,9 @@ def test_organizer_for_only_uses_plan_b_for_another_folder(settings: Settings, t
 def test_drive_down_saves_locally_and_sends_later(tmp_path: Path) -> None:
     org = _org(tmp_path)
     stored = org.store(_source(tmp_path), "CLI000001", "2026-08", "NFCE", "LIA PAPELARIA")
-    local = tmp_path / "local" / "2026" / "08" / "LIA PAPELARIA" / "NFCE" / "CLI000001_2026-08_NFCE.zip"
+    local = tmp_path / "local" / "2026" / "08" / "LIA PAPELARIA" / "NFCE" / "LIA PAPELARIA - NFC-e - 08-2026 - CLI000001.zip"
     assert stored.saved_locally and Path(stored.filepath) == local and local.is_file()
-    assert read_pending(tmp_path / "pend.json") == ["2026/08/LIA PAPELARIA/NFCE/CLI000001_2026-08_NFCE.zip"]
+    assert read_pending(tmp_path / "pend.json") == ["2026/08/LIA PAPELARIA/NFCE/LIA PAPELARIA - NFC-e - 08-2026 - CLI000001.zip"]
     # ainda fora do ar: nada muda
     assert org.send_pending() == 0
     assert len(read_pending(tmp_path / "pend.json")) == 1
@@ -43,7 +43,7 @@ def test_drive_down_saves_locally_and_sends_later(tmp_path: Path) -> None:
 
     org.base_dir.parent.mkdir(parents=True)  # Google Drive voltou
     assert org.send_pending() == 1
-    sent = org.base_dir / "2026" / "08" / "LIA PAPELARIA" / "NFCE" / "CLI000001_2026-08_NFCE.zip"
+    sent = org.base_dir / "2026" / "08" / "LIA PAPELARIA" / "NFCE" / "LIA PAPELARIA - NFC-e - 08-2026 - CLI000001.zip"
     assert sent.read_bytes() == ZIP
     assert local.is_file()  # a cópia local fica: o robô nunca apaga notas
     assert not (tmp_path / "pend.json").exists()

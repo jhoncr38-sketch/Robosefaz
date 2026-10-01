@@ -29,6 +29,7 @@ from app.config import Settings, get_settings
 from app.downloads.drive_ids import DriveIdLookup, drivefs_databases, link_drive_ids, probe_account, update_link_state
 from app.downloads.fallback import FallbackOrganizer, notes_folder_kind, organizer_for
 from app.downloads.organizer import DownloadFolderUnavailable
+from app.utils.files import sha256_file
 from app.jobs.base_runner import RunnerDeps
 from app.jobs.collector_runner import CollectorRunner
 from app.jobs.recovery import recover_orphaned_jobs
@@ -97,6 +98,11 @@ class Worker:
                 await asyncio.to_thread(self.organizer.reorganize)
             except Exception:
                 log.exception("Falha ao reorganizar a pasta das notas")
+            try:
+                # notas com o nome da empresa (formato da 1.2.26), aos poucos: 50 por rodada
+                await self._rename_notes()
+            except Exception:
+                log.exception("Falha ao renomear as notas com o nome da empresa")
             if isinstance(self.organizer, FallbackOrganizer):
                 try:
                     # plano B: notas salvas na pasta local enquanto a pasta das notas estava fora do ar
@@ -118,6 +124,19 @@ class Worker:
                 except Exception:
                     log.exception("Falha na limpeza automática")
             await self._sleep(300)
+
+    async def _rename_notes(self, limit: int = 50) -> int:
+        """CLI000003_2026-08_NFCE_2.zip -> "LOJA X - NFC-e - 08-2026 - CLI000003 (2).zip" (só renomeia)."""
+        if not self.organizer.base_dir.is_dir():
+            return 0  # pasta das notas fora do ar (ex.: Google Drive desconectado): fica para depois
+        names = await self.repo.list_client_names()
+        renamed = await asyncio.to_thread(self.organizer.rename_notes, names, limit=limit)
+        for old, new in renamed:
+            checksum = await asyncio.to_thread(sha256_file, new)
+            await self.repo.rename_download(old.name, new.name, str(new), checksum)
+        if renamed:
+            log.info("%s nota(s) renomeada(s) com o nome da empresa.", len(renamed))
+        return len(renamed)
 
     async def _drive_account(self) -> Path | None:
         """Conta do Google Drive da pasta das notas (1x por início do robô); troca de conta refaz os links."""

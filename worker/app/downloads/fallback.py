@@ -150,7 +150,11 @@ class FallbackOrganizer(DownloadOrganizer):
             try:
                 shutil.copy2(src, tmp)
                 # super(): sem o plano B aqui (senão a nota voltaria para a pasta local)
-                super().store(tmp, note.client_code, note.competence, note.document_type, note.client_name)
+                # mesmo nome da pasta local: o registro no painel aponta para ele (a conversão para o
+                # nome com a empresa acontece depois, já atualizando o registro)
+                super().store(
+                    tmp, note.client_code, note.competence, note.document_type, note.client_name, keep_name=src.name
+                )
             except DownloadFolderUnavailable:
                 break  # caiu de novo: tenta na próxima rodada
             except (OSError, ValueError) as exc:

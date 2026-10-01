@@ -32,7 +32,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from app.config import PROJECT_ROOT, Settings, get_settings
-from app.downloads.organizer import NOTE_FILE, parse_note_path
+from app.downloads.organizer import is_note_file, parse_note_path
 from app.tools.ui import Choice, ConsoleUI, ToolUI
 from app.utils.files import ensure_dir
 
@@ -123,7 +123,7 @@ def count_notes(src: Path) -> int:
     """Quantas notas há em `src` (para o andamento com contagem)."""
     if not src.is_dir():
         return 0
-    return sum(1 for f in src.rglob("*") if f.is_file() and NOTE_FILE.match(f.name))
+    return sum(1 for f in src.rglob("*") if f.is_file() and is_note_file(f.name))
 
 
 def copy_notes(src: Path, dst: Path, on_progress: Callable[[int], None] | None = None) -> tuple[int, int]:
@@ -132,7 +132,7 @@ def copy_notes(src: Path, dst: Path, on_progress: Callable[[int], None] | None =
     if not src.is_dir() or _same(src, dst):
         return 0, 0
     for file in sorted(src.rglob("*")):
-        if not file.is_file() or not NOTE_FILE.match(file.name):
+        if not file.is_file() or not is_note_file(file.name):
             continue
         rel = file.relative_to(src)
         note = parse_note_path(rel.parts)

@@ -642,20 +642,23 @@ def cap_downloads() -> list:
             "Os ZIPs ficam <b>no computador que fez o download</b> (ou no Google Drive, veja abaixo), "
             "organizados por mês e depois por empresa:"
         ),
-        P(code("C:\\SIAT-Robo\\storage\\downloads\\2026\\08\\NOME DA EMPRESA\\NFCE\\CLI000001_2026-08_NFCE.zip")),
+        P(code("C:\\SIAT-Robo\\storage\\downloads\\2026\\08\\NOME DA EMPRESA\\NFCE\\NOME DA EMPRESA - NFC-e - 08-2026 - CLI000001.zip")),
         *bullets(
             [
                 "Ano e mês primeiro: todas as notas de uma competência ficam numa pasta só.",
                 "Dentro do mês, uma pasta por empresa, só com o nome dela. Se o nome mudar no painel, as pastas "
                 "são renomeadas sozinhas. Se duas empresas tiverem o mesmo nome, a segunda ganha o código no fim, "
                 "por exemplo " + code("SILVA VARIEDADES (CLI000013)") + ".",
-                "O nome de cada arquivo começa pelo código do cliente (" + code("CLI000001_2026-08_NFCE.zip") + "): "
-                "é por ele que o robô e o painel sabem de quem é a nota.",
+                "O nome de cada arquivo traz a empresa, o tipo, o mês e, no fim, o código do cliente ("
+                + code("LIA PAPELARIA - NFC-e - 08-2026 - CLI000001.zip") + "). Baixada pelo painel, a nota já "
+                "chega identificada. O código é o que o robô e o painel usam para saber de quem é a nota: não o "
+                "apague do nome. Uma segunda versão diferente do mesmo mês fica ao lado, com " + code("(2)") + ".",
                 "Dentro da empresa, o tipo (" + code("NFCE") + ", " + code("NFE_EMITIDAS") + ", "
                 + code("NFE_RECEBIDAS") + ").",
                 "O robô <b>nunca apaga</b> os ZIPs. Você apaga quando quiser. Notas antigas, no formato "
-                "empresa/ano/mês (até a versão 1.2.7) ou com o código na frente do nome da empresa (até a 1.2.10), "
-                "são reorganizadas sozinhas.",
+                "empresa/ano/mês (até a versão 1.2.7), com o código na frente do nome da empresa (até a 1.2.10) "
+                "ou com nome de arquivo " + code("CLI000001_2026-08_NFCE.zip") + " (até a 1.2.25) são "
+                "reorganizadas e renomeadas sozinhas, aos poucos (só renomeia: o link do Google Drive continua o mesmo).",
             ]
         ),
         H2("Salvar as notas no Google Drive (opcional)"),

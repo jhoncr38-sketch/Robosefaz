@@ -178,7 +178,7 @@ class TestClientFolderName:
         src.write_bytes(b"PK\x03\x04a")
         stored = org.store(src, "CLI000001", "2026-06", DocumentType.NFCE, client_name="LIA PAPELARIA & VARIEDADE")
         assert Path(stored.filepath).relative_to(tmp_path).parts == (
-            "2026", "06", "LIA PAPELARIA & VARIEDADE", "NFCE", "CLI000001_2026-06_NFCE.zip"
+            "2026", "06", "LIA PAPELARIA & VARIEDADE", "NFCE", "LIA PAPELARIA & VARIEDADE - NFC-e - 06-2026 - CLI000001.zip"
         )
 
     def test_old_code_only_folder_is_renamed_with_its_files(self, tmp_path: Path) -> None:
@@ -296,7 +296,8 @@ class TestNameOnlyFolders:
             org.store(src, code, "2026-08", DocumentType.NFCE, client_name="SILVA VARIEDADES")
         month = tmp_path / "2026" / "08"
         assert sorted(d.name for d in month.iterdir()) == ["SILVA VARIEDADES", "SILVA VARIEDADES (CLI000030)"]
-        assert (month / "SILVA VARIEDADES" / "NFCE" / "CLI000013_2026-08_NFCE.zip").is_file()
+        assert (month / "SILVA VARIEDADES" / "NFCE" / "SILVA VARIEDADES - NFC-e - 08-2026 - CLI000013.zip").is_file()
+        assert (month / "SILVA VARIEDADES (CLI000030)" / "NFCE" / "SILVA VARIEDADES - NFC-e - 08-2026 - CLI000030.zip").is_file()
         # a 1ª continua achando a pasta dela, a 2ª também (pelas notas dentro)
         assert org.client_dir("CLI000030", "SILVA VARIEDADES", "2026-08").name == "SILVA VARIEDADES (CLI000030)"
         assert org.client_dir("CLI000030", None, "2026-08").name == "SILVA VARIEDADES (CLI000030)"

@@ -239,6 +239,15 @@ class FakeRepo:
     async def list_downloads_without_drive_id(self, limit: int) -> list[dict[str, Any]]:
         return [d for d in self.downloads if not d.get("drive_client_folder_id")][:limit]
 
+    async def list_client_names(self) -> dict[str, str | None]:
+        return {c.client_code: c.trade_name or c.legal_name for c in self.clients.values()}
+
+    async def rename_download(self, old_filename: str, new_filename: str, new_filepath: str, checksum: str) -> int:
+        hits = [d for d in self.downloads if d.get("filename") == old_filename and d.get("checksum") == checksum]
+        for d in hits:
+            d.update(filename=new_filename, filepath=new_filepath)
+        return len(hits)
+
     async def clear_download_drive_ids(self) -> int:
         linked = [d for d in self.downloads if d.get("drive_file_id")]
         for d in linked:

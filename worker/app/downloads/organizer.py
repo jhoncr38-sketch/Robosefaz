@@ -1,14 +1,16 @@
 """Organização dos arquivos baixados por competência e cliente.
 
 {pasta das notas}/{ano}/{mês}/{nome da empresa}/{NFCE|NFE_EMITIDAS|NFE_RECEBIDAS}/
-Nome: {client_code}_{YYYY-MM}_{TIPO}.zip  (sufixo _2, _3... para lotes múltiplos)
+Nome (desde a 1.2.26): "{EMPRESA} - {NFC-e|NF-e emitidas|NF-e recebidas} - {MM-AAAA} - {código}.zip"
+(segunda versão diferente do mesmo mês: "... - CLI000003 (2).zip"). Antes: CLI000003_2026-08_NFCE_2.zip;
+os dois formatos são reconhecidos e `rename_notes` converte os antigos aos poucos (só renomeia).
 
 Mês primeiro (desde a 1.2.8): "todas as notas de 09/2026" e "LIA 08/2026" são uma
 pasta só, que o Google Drive baixa inteira como ZIP.
 
 A pasta do cliente tem só o nome da empresa (desde a 1.2.11). Quem é o dono da
-pasta vem das notas dentro dela: o nome do arquivo sempre começa pelo código do
-cliente. Assim, se o nome mudar no painel, o robô acha a pasta antiga e renomeia;
+pasta vem das notas dentro dela: o nome do arquivo sempre traz o código do
+cliente (no início no formato antigo, no fim no formato com o nome da empresa). Assim, se o nome mudar no painel, o robô acha a pasta antiga e renomeia;
 se duas empresas tiverem o mesmo nome, a segunda fica "NOME (CLI000013)".
 Pastas antigas "CLI000001 - NOME" (até a 1.2.10) são renomeadas sozinhas.
 
@@ -41,8 +43,21 @@ _MONTH = re.compile(r"^(0[1-9]|1[0-2])$")
 _DOC_VALUES = {d.value for d in DocumentType}
 DUPLICATES_FOLDER = "_Duplicadas"
 _INVALID_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
-# arquivo de nota do robô: CLI000001_2026-08_NFCE.zip (lotes: _2, _3...)
-NOTE_FILE = re.compile(r"^[A-Z0-9]{3,20}_\d{4}-\d{2}_(NFCE|NFE_EMITIDAS|NFE_RECEBIDAS)(_\d+)?\.(zip|xml)$", re.IGNORECASE)
+# arquivo de nota do robô, formato antigo (até a 1.2.25): CLI000001_2026-08_NFCE.zip (lotes: _2, _3...)
+NOTE_FILE = re.compile(
+    r"^(?P<code>[A-Z0-9]{3,20})_(?P<year>\d{4})-(?P<month>\d{2})_(?P<doc>NFCE|NFE_EMITIDAS|NFE_RECEBIDAS)"
+    r"(?:_(?P<seq>\d+))?\.(?P<ext>zip|xml)$",
+    re.IGNORECASE,
+)
+# formato com o nome da empresa (desde a 1.2.26): "LOJA X - NFC-e - 08-2026 - CLI000003 (2).zip"
+COMPANY_NOTE_FILE = re.compile(
+    r"^(?P<name>.+?) - (?P<doc>NFC-e|NF-e emitidas|NF-e recebidas) - (?P<month>0[1-9]|1[0-2])-(?P<year>\d{4})"
+    r" - (?P<code>[A-Z0-9]{3,20})(?: \((?P<seq>\d+)\))?\.(?P<ext>zip|xml)$",
+    re.IGNORECASE,
+)
+DOC_LABEL = {"NFCE": "NFC-e", "NFE_EMITIDAS": "NF-e emitidas", "NFE_RECEBIDAS": "NF-e recebidas"}
+_LABEL_DOC = {label.lower(): doc for doc, label in DOC_LABEL.items()}
+NAME_IN_FILE_MAX = 50  # o nome da empresa já está na pasta; no arquivo, encurtado
 
 
 def safe_folder_name(name: str | None, max_len: int = 60) -> str:
@@ -74,9 +89,67 @@ class NotePath:
         return (self.year, self.month, self.client_folder, self.document_type, self.filename)
 
 
+@dataclass(frozen=True, slots=True)
+class NoteName:
+    """O que o nome do arquivo de uma nota diz (os dois formatos)."""
+
+    client_code: str
+    competence: str  # AAAA-MM
+    document_type: str  # NFCE | NFE_EMITIDAS | NFE_RECEBIDAS
+    sequence: int  # 1 = primeira versão
+    ext: str  # .zip | .xml
+    company: str | None  # nome da empresa no arquivo; None = formato antigo
+
+
+def parse_note_name(filename: str) -> NoteName | None:
+    m = NOTE_FILE.match(filename)
+    if m:
+        doc, company = m["doc"].upper(), None
+    else:
+        m = COMPANY_NOTE_FILE.match(filename)
+        if not m:
+            return None
+        doc, company = _LABEL_DOC[m["doc"].lower()], m["name"]
+    return NoteName(
+        client_code=m["code"].upper(),
+        competence=f"{m['year']}-{m['month']}",
+        document_type=doc,
+        sequence=int(m["seq"] or 1),
+        ext=f".{m['ext'].lower()}",
+        company=company,
+    )
+
+
+def is_note_file(filename: str) -> bool:
+    """Arquivo de nota do robô (formato antigo ou com o nome da empresa)."""
+    return parse_note_name(filename) is not None
+
+
 def note_code(filename: str) -> str | None:
-    """Código do cliente pelo nome do arquivo de nota (CLI000001_2026-08_NFCE.zip -> CLI000001)."""
-    return filename.split("_", 1)[0] if NOTE_FILE.match(filename) else None
+    """Código do cliente pelo nome do arquivo de nota (CLI000001_2026-08_NFCE.zip ou "... - CLI000001.zip")."""
+    note = parse_note_name(filename)
+    return note.client_code if note else None
+
+
+def note_filename(
+    client_code: str,
+    competence: str,
+    document_type: DocumentType | str,
+    *,
+    company: str | None = None,
+    sequence: int = 1,
+    ext: str = ".zip",
+) -> str:
+    """Nome do arquivo: com a empresa ("LOJA X - NFC-e - 08-2026 - CLI000003.zip") ou, sem nome, o antigo."""
+    comp = Competence.parse(competence)
+    doc = DocumentType(document_type)
+    ext = (ext if ext.startswith(".") else f".{ext}").lower()
+    name = safe_folder_name(company, NAME_IN_FILE_MAX)
+    if name:
+        suffix = "" if sequence <= 1 else f" ({sequence})"
+        return f"{name} - {DOC_LABEL[doc.value]} - {comp.month_str}-{comp.year_str} - {client_code}{suffix}{ext}"
+    suffix = "" if sequence <= 1 else f"_{sequence}"
+    return f"{client_code}_{comp.key}_{doc.value}{suffix}{ext}"
 
 
 def client_name_from_folder(folder: str, client_code: str) -> str | None:
@@ -104,6 +177,17 @@ def parse_note_path(parts: tuple[str, ...] | list[str]) -> NotePath | None:
     else:
         return None
     return NotePath(folder, code, client_name_from_folder(folder, code), year, month, parts[3], parts[4])
+
+
+def _version_name(filename: str, n: int) -> str:
+    """Outra versão de uma nota com o mesmo nome: "... - CLI000003 (2).zip" ou CLI000003_2026-08_NFCE_2.zip."""
+    note = parse_note_name(filename)
+    if note is None:
+        path = Path(filename)
+        return f"{path.stem}_{n}{path.suffix}"
+    return note_filename(
+        note.client_code, note.competence, note.document_type, company=note.company, sequence=n, ext=note.ext
+    )
 
 
 class InvalidDownloadError(ValueError):
@@ -266,7 +350,7 @@ class DownloadOrganizer:
                         return False
                 else:
                     n = 2
-                    while (alt := target.with_name(f"{target.stem}_{n}{target.suffix}")).exists():
+                    while (alt := target.with_name(_version_name(target.name, n))).exists():
                         n += 1
                     target = alt
             ensure_dir(target.parent)
@@ -336,13 +420,16 @@ class DownloadOrganizer:
         return ensure_within(self.base_dir, folder)
 
     def filename_for(
-        self, client_code: str, competence: str, document_type: DocumentType | str, *, sequence: int = 1, ext: str = ".zip"
+        self,
+        client_code: str,
+        competence: str,
+        document_type: DocumentType | str,
+        *,
+        sequence: int = 1,
+        ext: str = ".zip",
+        client_name: str | None = None,
     ) -> str:
-        comp = Competence.parse(competence)
-        doc = DocumentType(document_type)
-        ext = ext if ext.startswith(".") else f".{ext}"
-        suffix = "" if sequence <= 1 else f"_{sequence}"
-        return f"{client_code}_{comp.key}_{doc.value}{suffix}{ext.lower()}"
+        return note_filename(client_code, competence, document_type, company=client_name, sequence=sequence, ext=ext)
 
     def target_for(
         self,
@@ -356,10 +443,56 @@ class DownloadOrganizer:
         folder = self.folder_for(client_code, competence, document_type, client_name)
         seq = 1
         while True:
-            name = self.filename_for(client_code, competence, document_type, sequence=seq, ext=ext)
+            name = self.filename_for(client_code, competence, document_type, sequence=seq, ext=ext, client_name=client_name)
             if not (folder / name).exists():
                 return DownloadTarget(folder, name)
             seq += 1
+
+    def rename_notes(
+        self, names: dict[str, str | None], *, limit: int = 50, dry_run: bool = False
+    ) -> list[tuple[Path, Path]]:
+        """Notas com o nome antigo (CLI000003_2026-08_NFCE_2.zip) passam a ter o nome da empresa
+        ("LOJA X - NFC-e - 08-2026 - CLI000003 (2).zip"), na mesma pasta; e, se a empresa mudar de
+        nome no painel, os arquivos acompanham (como as pastas).
+
+        Só renomeia (no Google Drive o arquivo e o link continuam os mesmos); nunca apaga nem
+        sobrescreve: se o nome novo já existe, fica como está. Fora de _Duplicadas e de quem não
+        tem nome conhecido. `limit` por chamada: a manutenção converte aos poucos.
+        `dry_run`: só lista o que faria. -> [(antes, depois)]
+        """
+        done: list[tuple[Path, Path]] = []
+        for month in self._month_dirs():
+            try:
+                files = sorted(p for p in month.glob("*/*/*") if p.is_file() and p.parent.name in _DOC_VALUES)
+            except OSError:
+                continue
+            for file in files:
+                note = parse_note_name(file.name)
+                if note is None:
+                    continue
+                company = names.get(note.client_code)
+                if not safe_folder_name(company):
+                    continue
+                new = note_filename(
+                    note.client_code, note.competence, note.document_type,
+                    company=company, sequence=note.sequence, ext=note.ext,
+                )
+                if new == file.name:
+                    continue
+                target = file.with_name(new)
+                if target.exists():
+                    log.warning("Nota não renomeada (já existe %s): %s", target.name, file)
+                    continue
+                if not dry_run:
+                    try:
+                        file.rename(target)
+                    except OSError as exc:  # aberta por alguém / Drive desconectou: tenta depois
+                        log.warning("Não foi possível renomear %s: %s", file, exc)
+                        continue
+                done.append((file, target))
+                if len(done) >= limit:
+                    return done
+        return done
 
     def reorganize(self) -> int:
         """Move o formato antigo (cliente/ano/mês/...) para ano/mês/cliente/...
@@ -395,8 +528,14 @@ class DownloadOrganizer:
         competence: str,
         document_type: DocumentType | str,
         client_name: str | None = None,
+        *,
+        keep_name: str | None = None,
     ) -> DownloadedFile:
-        """Move o arquivo baixado para o destino definitivo, evitando duplicatas idênticas."""
+        """Move o arquivo baixado para o destino definitivo, evitando duplicatas idênticas.
+
+        `keep_name`: grava com este nome (ex.: nota do plano B, que já tem registro no painel com
+        ele); se já existir outro arquivo com o nome, vira a versão seguinte.
+        """
         if not source.exists():
             raise FileNotFoundError(source)
         kind = sniff_kind(source)
@@ -419,7 +558,7 @@ class DownloadOrganizer:
                     client_code, month
                 ):
                     client_name = None
-            return self._store(source, client_code, competence, document_type, checksum, ext, client_name)
+            return self._store(source, client_code, competence, document_type, checksum, ext, client_name, keep_name)
         except DownloadFolderUnavailable:
             raise
         except OSError as exc:
@@ -434,10 +573,13 @@ class DownloadOrganizer:
         checksum: str,
         ext: str,
         client_name: str | None = None,
+        keep_name: str | None = None,
     ) -> DownloadedFile:
         folder = ensure_dir(self.folder_for(client_code, competence, document_type, client_name))
 
-        for existing in sorted(folder.glob(f"{client_code}_*{ext}")):
+        for existing in sorted(folder.glob(f"*{ext}")):
+            if note_code(existing.name) != client_code:
+                continue
             if existing.is_file() and sha256_file(existing) == checksum:
                 source.unlink(missing_ok=True)
                 return DownloadedFile(
@@ -448,7 +590,13 @@ class DownloadOrganizer:
                     checksum=checksum,
                 )
 
-        target = self.target_for(client_code, competence, document_type, ext=ext, client_name=client_name)
+        if keep_name and Path(keep_name).name == keep_name and note_code(keep_name) == client_code:
+            path, n = folder / keep_name, 2
+            while path.exists():
+                path, n = folder / _version_name(keep_name, n), n + 1
+            target = DownloadTarget(folder, path.name)
+        else:
+            target = self.target_for(client_code, competence, document_type, ext=ext, client_name=client_name)
         final = move_atomic(source, target.path)
         return DownloadedFile(
             document_type=DocumentType(document_type),

@@ -103,8 +103,8 @@ async def test_full_flow_schedule_check_download(repo: FakeRepo, integration_set
     assert received["ini"] == "01/08/2026" and received["fim"] == "31/08/2026"
 
     path = Path(stored.filepath)
-    assert path.name == "CLI000001_2026-08_NFE_EMITIDAS.zip"
     client_folder = ctx.client.trade_name or ctx.client.legal_name  # só o nome da empresa
+    assert path.name == f"{client_folder} - NF-e emitidas - 08-2026 - CLI000001.zip"  # nome com a empresa (1.2.26)
     assert path.parent == (integration_settings.downloads_dir / "2026" / "08" / client_folder / "NFE_EMITIDAS").resolve()
     assert stored.size > 0 and len(stored.checksum) == 64
     assert state.downloads_served == 1

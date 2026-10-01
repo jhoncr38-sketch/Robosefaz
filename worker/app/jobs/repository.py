@@ -65,6 +65,8 @@ class JobRepository(Protocol):
     async def upsert_malha_check(self, **fields: Any) -> None: ...
     async def get_download(self, download_id: str) -> dict[str, Any] | None: ...
     async def list_downloads_without_drive_id(self, limit: int) -> list[dict[str, Any]]: ...
+    async def list_client_names(self) -> dict[str, str | None]: ...
+    async def rename_download(self, old_filename: str, new_filename: str, new_filepath: str, checksum: str) -> int: ...
     async def clear_download_drive_ids(self) -> int: ...
     async def set_download_drive_ids(
         self, download_id: str, file_id: str, client_folder_id: str, month_folder_id: str
@@ -345,6 +347,24 @@ class SupabaseJobRepository:
         return len(res.data or [])
 
     @_transient
+    @_transient
+    async def list_client_names(self) -> dict[str, str | None]:
+        """Código -> nome da empresa (o mesmo das pastas: nome fantasia ou razão social)."""
+        rows = (await self._db.table("clients").select("client_code, legal_name, trade_name").execute()).data or []
+        return {r["client_code"]: r.get("trade_name") or r.get("legal_name") for r in rows}
+
+    @_transient
+    async def rename_download(self, old_filename: str, new_filename: str, new_filepath: str, checksum: str) -> int:
+        """Nota renomeada na pasta: o registro do painel acompanha (mesmo arquivo = mesmo código de conferência)."""
+        res = await (
+            self._db.table("downloads")
+            .update({"filename": new_filename, "filepath": new_filepath})
+            .eq("filename", old_filename)
+            .eq("checksum", checksum)
+            .execute()
+        )
+        return len(res.data or [])
+
     async def set_download_drive_ids(
         self, download_id: str, file_id: str, client_folder_id: str, month_folder_id: str
     ) -> None:
