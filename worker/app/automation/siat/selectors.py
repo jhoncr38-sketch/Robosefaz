@@ -94,6 +94,9 @@ class SiatSelectors:
         r"error\s*500|internal\s+server\s+error|erro\s+interno|service\s+unavailable|"
         r"bad\s+gateway|gateway\s+time-?out|erro\s+50[0-4]"
     )
+    # página de erro genérica do e-AGEAT (.../eageat/jsp/util/paginaErro.jsf): visto em 02/10/2026,
+    # 7 vezes num lote de malhas; o contorno é o mesmo do Error 500 (fechar e clicar de novo)
+    server_error_url: str = r"/paginaerro\b|/erro\.jsf\b"
     eageat_menu_root: str = r"^\s*autorregulariza[çc][ãa]o\s*$"
     eageat_menu_siat: str = r"^\s*siat\s*$"
 

@@ -48,6 +48,9 @@ class SiatNavigation:
         # página de erro do próprio Chrome (sem conexão, DNS, conexão recusada...)
         if self.page.url.startswith("chrome-error://"):
             return True
+        # página de erro do próprio e-AGEAT (paginaErro.jsf), pelo endereço
+        if self.sel.rx("server_error_url").search(self.page.url.split("?", 1)[0]):
+            return True
         return await text_visible(self.page, self.sel.rx("server_error_markers"))
 
     async def _module_problem(self) -> str | None:

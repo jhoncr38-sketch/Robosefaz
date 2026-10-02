@@ -195,6 +195,23 @@ async def test_eageat_500_and_unidentified_close_and_click_again(repo: FakeRepo,
     assert any("'Usuário não identificado' (tentativa 2/7)" in m for m in logs)
 
 
+async def test_eageat_error_page_closes_and_clicks_again(repo: FakeRepo, integration_settings: Settings) -> None:
+    """Visto no SIAT real (02/10, lote de malhas): o e-AGEAT abriu em /eageat/jsp/util/paginaErro.jsf.
+    Sem reconhecer, o robô procurava o menu e perdia a tentativa (SELECTOR_NOT_FOUND)."""
+    state = MockState(module_error_page_times=1)
+    ctx, job = await _context(repo, integration_settings)
+    provider = SiatAutomationProvider()
+    async with provider.open_session(ctx):
+        await _open(provider, ctx, state)
+        result = await provider.schedule(ctx, (await repo.list_tasks(job.id))[0])
+        assert result.external_request_id == "9237950"
+    assert state.module_opens == 2
+    logs = repo.log_messages()
+    assert any("paginaErro.jsf" in m for m in logs)
+    assert any("erro do servidor (tentativa 1/7)" in m for m in logs)
+    assert not any("Menu não encontrado" in m for m in logs)
+
+
 async def test_eageat_always_failing_is_retryable(repo: FakeRepo, integration_settings: Settings) -> None:
     integration_settings.module_open_attempts = 3
     state = MockState(module_fail_times=99)

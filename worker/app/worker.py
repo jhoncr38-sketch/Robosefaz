@@ -39,7 +39,7 @@ from app.jobs.repository import JobRepository, SupabaseJobRepository
 from app.jobs.retention import RetentionService
 from app.jobs.scheduler_runner import SchedulerRunner
 from app.logs.job_logger import configure_logging
-from app.services.supabase_client import get_supabase
+from app.services.supabase_client import get_supabase, reset_supabase_client
 
 log = logging.getLogger("worker")
 
@@ -470,6 +470,35 @@ async def _sync_client_folders(settings: Settings, client) -> None:  # noqa: ANN
         log.warning("Não foi possível organizar as pastas dos clientes: %s", exc)
 
 
+def _network_errors() -> tuple[type[BaseException], ...]:
+    import httpx
+    from supabase_auth.errors import AuthRetryableError
+
+    return (httpx.TransportError, AuthRetryableError, OSError)
+
+
+async def connect_when_online(settings: Settings, sleep=asyncio.sleep):  # noqa: ANN001, ANN201
+    """Conexão com o banco; sem internet (ex.: o notebook acabou de acordar), espera e tenta de
+    novo em vez de cair. None = pediram para parar ou atualizar enquanto esperava."""
+    delay, waited = 5.0, False
+    while True:
+        try:
+            client = await get_supabase(settings)
+        except _network_errors() as exc:
+            reset_supabase_client()
+            if not waited:
+                log.warning("Sem conexão com o banco (%s). Esperando a internet voltar para começar.", exc)
+                waited = True
+            if settings.stop_flag.exists() or settings.update_flag.exists():
+                return None
+            await sleep(delay)
+            delay = min(delay * 2, 60.0)
+            continue
+        if waited:
+            log.info("Conexão de volta: o robô vai começar.")
+        return client
+
+
 async def amain(mode: str) -> None:
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_file)
@@ -490,7 +519,10 @@ async def amain(mode: str) -> None:
         else:
             log.warning("Pasta de downloads indisponível agora (%s); o collector tentará de novo mais tarde.", exc)
     _clear_stale_chrome_policy(settings)
-    client = await get_supabase(settings)
+    client = await connect_when_online(settings)
+    if client is None:
+        log.info("Pedido de parar ou atualizar enquanto esperava a internet.")
+        return
     await _sync_client_folders(settings, client)
     repo = SupabaseJobRepository(client)
     worker = Worker(repo, settings, mode=mode)
@@ -514,6 +546,10 @@ def main() -> None:
         asyncio.run(amain(args.mode))
     except KeyboardInterrupt:
         pass
+    except Exception:
+        # fica no worker.log (que não é apagado a cada início, como o worker-erros.log)
+        log.exception("O robô parou por um erro inesperado; o serviço vai religá-lo")
+        raise
 
 
 if __name__ == "__main__":

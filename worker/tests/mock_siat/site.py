@@ -50,6 +50,8 @@ class MockState:
     module_new_tab: bool = True
     module_fail_times: int = 0
     module_unidentified_times: int = 0
+    # e-AGEAT cai na página de erro genérica (/eageat/jsp/util/paginaErro.jsf) nas N primeiras
+    module_error_page_times: int = 0
     module_opens: int = 0
     # SIAT web legado
     legacy_user: str = "EMPRESA A LTDA"
@@ -113,6 +115,9 @@ if (hangs || localStorage.getItem('stale') === '1') {
 
 SERVER_ERROR_HTML = """<html><body><h2>Error 500--Internal Server Error</h2>
 <p>The server encountered an unexpected condition which prevented it from fulfilling the request.</p></body></html>"""
+
+ERROR_PAGE_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>e-Processo</title></head>
+<body><div class="container"><p>Não foi possível completar a operação.</p><a href="/eageat/jsp/login/bemVindo.jsf">Voltar</a></div></body></html>"""
 
 UNIDENTIFIED_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>e-AGEAT</title></head>
 <body><h1>Acesso proibido</h1>
@@ -462,11 +467,16 @@ def build_handler(state: MockState):
             )
         elif path.startswith("/carta-de-servicos"):
             await html(route, "<h1>CARTA DE SERVIÇOS</h1><h2>APLICAÇÕES PÚBLICAS</h2><button>ENTRAR</button>")
+        elif path.startswith("/eageat/jsp/util/paginaErro"):
+            await html(route, ERROR_PAGE_HTML)
         elif path.startswith("/eageat"):
             state.module_opens += 1
-            if state.module_opens <= state.module_fail_times:
+            if state.module_opens <= state.module_error_page_times:
+                # como no real: o e-AGEAT redireciona para a página de erro genérica
+                await html(route, "<script>location.replace('/eageat/jsp/util/paginaErro.jsf')</script>")
+            elif state.module_opens - state.module_error_page_times <= state.module_fail_times:
                 await html(route, SERVER_ERROR_HTML, status=500)
-            elif state.module_opens <= state.module_fail_times + state.module_unidentified_times:
+            elif state.module_opens - state.module_error_page_times <= state.module_fail_times + state.module_unidentified_times:
                 await html(route, UNIDENTIFIED_HTML)
             else:
                 await html(route, EAGEAT_HTML)

@@ -1,3 +1,3 @@
 """SIAT Automation - worker e API."""
 
-__version__ = "1.2.30"
+__version__ = "1.2.31"
