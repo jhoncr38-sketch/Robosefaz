@@ -175,8 +175,15 @@
   100% { box-shadow: 0 0 0 0 rgba(224, 160, 25, 0); }
 }
 .nav-badge-live { animation: nav-badge-live 2.2s ease-out infinite; }
+/* aviso flutuante (trabalho esperando computador): entra devagar, de baixo */
+@keyframes pcwait-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.pcwait-in { animation: pcwait-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 @media (prefers-reduced-motion: reduce) {
   [data-nav], [data-nav] * { animation: none !important; transition: none !important; }
+  .pcwait-in { animation: none !important; }
 }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 

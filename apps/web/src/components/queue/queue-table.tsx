@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 
 import { ListCard, ListEmptyText, ListHead, ListRow, ListToolbar, PrimaryCell, Segmented } from "@/components/data-list";
 import { ContinueButton, JobActions } from "@/components/queue/job-actions";
+import { PcWaitLine, useComputers } from "@/components/queue/pc-wait-notice";
 import { JobStatusBadge } from "@/components/status-badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useNow } from "@/hooks/use-now";
@@ -12,6 +13,7 @@ import { useRealtimeJobs } from "@/hooks/use-realtime-jobs";
 import { SEFAZ_PHASE, useWaitingSince } from "@/hooks/use-waiting-since";
 import { formatCompetence } from "@/lib/competence";
 import { formatDuration } from "@/lib/format";
+import { type Computer, pcWait } from "@/lib/pc-wait";
 import { FINAL_JOB_STATUSES, isJobRunning, JOB_STATUS_LABEL, MANUAL_JOB_STATUSES } from "@/lib/status";
 import type { AutomationJob, UserRole } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -65,7 +67,21 @@ function JobTime({ job, waitingSince, now }: { job: AutomationJob; waitingSince?
 const GRID =
   "grid grid-cols-[minmax(0,1fr)_auto_32px] gap-3 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1.1fr)_120px_130px_32px] xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_120px_130px_minmax(0,1.6fr)_32px]";
 
-export function QueueTable({ initialJobs, role }: { initialJobs: AutomationJob[]; role: UserRole }) {
+export function QueueTable({
+  initialJobs,
+  role,
+  computers: initialComputers = [],
+  serverNow,
+  liveComputers = true,
+}: {
+  initialJobs: AutomationJob[];
+  role: UserRole;
+  /** computadores do escritório e se estão ligados (para "aguardando o PC X") */
+  computers?: Computer[];
+  /** hora do servidor, para o primeiro desenho do "há 29 min" */
+  serverNow?: string;
+  liveComputers?: boolean;
+}) {
   const { jobs, connected } = useRealtimeJobs(initialJobs);
   const [tab, setTab] = useState<Tab>("active");
   const now = useNow();
@@ -73,6 +89,9 @@ export function QueueTable({ initialJobs, role }: { initialJobs: AutomationJob[]
   const waitingSince = useWaitingSince(jobs);
   const manual = jobs.filter((j) => MANUAL_JOB_STATUSES.includes(j.status));
   const count = (t: Tab) => jobs.filter((j) => matches(t, j)).length;
+  const computers = useComputers(initialComputers, liveComputers);
+  const clock = new Date(now ?? (serverNow ? Date.parse(serverNow) : 0));
+  const waits = useMemo(() => new Map(jobs.map((j) => [j.id, pcWait(j, computers)])), [jobs, computers]);
 
   return (
     <div className="space-y-4">
@@ -142,6 +161,7 @@ export function QueueTable({ initialJobs, role }: { initialJobs: AutomationJob[]
                     <span className="max-w-full truncate text-[11px] text-(--c-7a7b75)">{step}</span>
                   ) : null}
                   {job.attempts > 1 ? <span className="text-[11px] text-(--c-7a7b75)">Tentativa {job.attempts}</span> : null}
+                  {waits.get(job.id) ? <PcWaitLine job={job} wait={waits.get(job.id)!} now={clock} /> : null}
                 </div>
                 <div className="hidden items-center gap-2 md:flex">
                   <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-(--c-f0f0ec)">

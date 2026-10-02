@@ -631,6 +631,19 @@ def cap_fila() -> list:
                 "ação no Chrome aberto pelo robô e clique em continuar.",
             ]
         ),
+        H2("Trabalho parado esperando um computador"),
+        P(
+            "Quando um trabalho fica parado porque nenhum computador ligado pode fazê-lo (o único PC com o "
+            "certificado do cliente está desligado, ou nenhum robô está ligado), aparece um <b>aviso no canto "
+            "inferior direito</b>, em qualquer tela. Ele diz qual computador está faltando, há quanto tempo está "
+            "desligado e <b>o que fazer</b>, em passos. O <b>x</b> recolhe o aviso numa pílula; ele some sozinho "
+            "quando o problema se resolve (em até 30 segundos) e abre de novo se outro trabalho parar. Na fila, a "
+            "linha do trabalho mostra \"Aguardando o PC ...\". Se estiver tudo certo, o aviso não aparece."
+        ),
+        *tip(
+            "Instalou o certificado no computador que estava ligado? Cancele o trabalho na fila e clique em "
+            "Reprocessar: o computador que já tinha tentado só volta a pegar o trabalho depois disso."
+        ),
     ]
 
 

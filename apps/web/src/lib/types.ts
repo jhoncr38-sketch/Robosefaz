@@ -172,6 +172,8 @@ export interface AutomationJob {
   cancel_requested: boolean;
   locked_at: string | null;
   locked_by: string | null;
+  /** computadores sem o certificado do cliente, que repassaram o trabalho */
+  skip_hosts?: string[] | null;
   created_at: string;
   updated_at: string;
   clients?: ClientRef | null;
