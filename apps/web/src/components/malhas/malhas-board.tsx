@@ -341,8 +341,10 @@ export function MalhasBoard({
                     >
                       {on ? <Check className="size-[11px]" /> : r.lockReason ? <Lock className="size-[9px] text-(--c-9a9b94)" /> : null}
                     </button>
-                    <button type="button" onClick={() => setOpen(expanded ? null : c.id)} className="flex min-w-0 flex-col gap-px text-left">
-                      <span className="truncate text-[13px] font-medium">{c.name}</span>
+                    <button type="button" onClick={() => setOpen(expanded ? null : c.id)} className="flex w-full min-w-0 flex-col gap-px text-left">
+                      <span className="truncate text-[13px] font-medium" title={c.name}>
+                        {c.name}
+                      </span>
                       <span className="truncate text-[11.5px] text-(--c-7a7b75)">
                         <span className="font-mono">{c.client_code}</span>
                         {r.lockReason && r.lockReason !== "já na fila" ? ` · ${r.lockReason}` : ""}
