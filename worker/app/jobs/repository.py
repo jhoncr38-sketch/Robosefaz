@@ -11,12 +11,13 @@ import socket
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
-from postgrest import CountMethod, ReturnMethod
+from postgrest import APIError, CountMethod, ReturnMethod
 from supabase import AsyncClient
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 import httpx
 
+from app.downloads.folder_owner import Office
 from app.jobs.models import Certificate, Client, DocumentType, Job, LogLevel, Task, TaskStatus, TaskType
 
 
@@ -68,6 +69,7 @@ class JobRepository(Protocol):
     async def list_downloads_without_note_count(self, limit: int) -> list[dict[str, Any]]: ...
     async def set_download_note_count(self, download_id: str, count: int) -> None: ...
     async def list_client_names(self) -> dict[str, str | None]: ...
+    async def device_org(self) -> Office | None: ...
     async def rename_download(self, old_filename: str, new_filename: str, new_filepath: str, checksum: str) -> int: ...
     async def clear_download_drive_ids(self) -> int: ...
     async def set_download_drive_ids(
@@ -366,6 +368,20 @@ class SupabaseJobRepository:
 
     @_transient
     @_transient
+    @_transient
+    async def device_org(self) -> Office | None:
+        """Escritório deste computador ativado (None na instalação antiga, com a chave-mestra)."""
+        try:
+            res = await self._db.rpc("device_org", {}).execute()
+        except APIError:
+            # banco ainda sem a função (versão nova do robô antes do banco): só o código do escritório
+            oid = (await self._db.rpc("device_org_id", {}).execute()).data
+            return Office(id=str(oid), name="") if oid else None
+        rows = res.data or []
+        if not rows:
+            return None
+        return Office(id=str(rows[0]["id"]), name=str(rows[0].get("name") or ""))
+
     async def list_client_names(self) -> dict[str, str | None]:
         """Código -> nome da empresa (o mesmo das pastas: nome fantasia ou razão social)."""
         rows = (await self._db.table("clients").select("client_code, legal_name, trade_name").execute()).data or []

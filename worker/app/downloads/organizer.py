@@ -25,11 +25,13 @@ só move, nunca apaga nota.
 from __future__ import annotations
 
 import logging
+import platform
 import re
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.downloads.folder_owner import Office, OwnerUnreadable, claim_or_check
 from app.jobs.models import DocumentType, DownloadedFile
 from app.utils.competence import Competence
 from app.utils.files import ensure_dir, ensure_within, move_atomic, sha256_file, sniff_kind
@@ -244,6 +246,10 @@ def _rmdir_if_empty(folder: Path) -> None:
 class DownloadOrganizer:
     def __init__(self, base_dir: Path) -> None:
         self.base_dir = base_dir
+        # escritório deste computador (o robô define ao ligar): a pasta precisa ser dele
+        self.office: Office | None = None
+        # dono da pasta quando é OUTRO escritório (o robô não grava nela e avisa no painel)
+        self.foreign_owner: Office | None = None
 
     def check_available(self) -> None:
         """Falha cedo se a unidade da pasta (ex.: disco externo ou unidade de rede) não estiver montada."""
@@ -254,6 +260,24 @@ class DownloadOrganizer:
             ensure_dir(self.base_dir)
         except OSError as exc:
             raise DownloadFolderUnavailable(f"Não foi possível acessar {self.base_dir}: {exc}") from exc
+        self._check_owner()
+
+    def _check_owner(self) -> None:
+        """Um escritório por pasta (ver folder_owner): marca se ainda não tem dono; de outro, não usa."""
+        if self.office is None:
+            return
+        try:
+            owner = claim_or_check(self.base_dir, self.office, platform.node())
+        except OwnerUnreadable as exc:
+            raise DownloadFolderUnavailable(str(exc)) from exc
+        except OSError as exc:
+            raise DownloadFolderUnavailable(f"Não foi possível marcar a pasta {self.base_dir}: {exc}") from exc
+        self.foreign_owner = owner
+        if owner is not None:
+            raise DownloadFolderUnavailable(
+                f'a pasta {self.base_dir} é do escritório "{owner.name}", e este computador é do escritório '
+                f'"{self.office.name}"'
+            )
 
     def locate(
         self, filepath: str, client_code: str, competence: str, document_type: DocumentType | str, filename: str

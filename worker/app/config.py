@@ -207,6 +207,11 @@ class Settings(BaseSettings):
         return self.status_file.with_name("drive-link.json")
 
     @property
+    def office_file(self) -> Path:
+        """Escritório deste computador (o robô guarda ao ligar; serve sem internet e para as ferramentas)."""
+        return self.status_file.with_name("escritorio.json")
+
+    @property
     def pending_notes_file(self) -> Path:
         """Notas salvas na pasta local porque a pasta das notas estava fora do ar (plano B)."""
         return self.status_file.with_name("notas-para-enviar.json")

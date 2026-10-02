@@ -132,6 +132,12 @@ export default async function SettingsPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
+                        {typeof meta.notes_folder_owner === "string" ? (
+                          // a pasta das notas configurada é de outro escritório: o robô não grava nela
+                          <ToneBadge tone="red">
+                            Pasta das notas é do escritório {meta.notes_folder_owner}: as notas ficam neste PC
+                          </ToneBadge>
+                        ) : null}
                         {outdated ? (
                           // antes da 1.0.6 o robô não tinha atualização automática (e não informava a versão)
                           version ? (

@@ -28,6 +28,7 @@ from app import __version__
 from app.config import Settings, get_settings
 from app.downloads.drive_ids import DriveIdLookup, drivefs_databases, link_drive_ids, probe_account, update_link_state
 from app.downloads.fallback import FallbackOrganizer, notes_folder_kind, organizer_for
+from app.downloads.folder_owner import load_office, save_office
 from app.downloads.note_count import count_pending_notes
 from app.downloads.organizer import DownloadFolderUnavailable
 from app.utils.files import sha256_file
@@ -61,6 +62,7 @@ class Worker:
         self.organizer = deps.organizer
         self._drive_db: Path | None = None  # banco da conta do Google Drive da pasta das notas
         self._uncountable: set[str] = set()  # downloads cujo ZIP não deu para ler aqui
+        self._warned_foreign: str | None = None  # dono de outro escritório já avisado no log
         self._note_count_failures = 0
         self.scheduler = SchedulerRunner(deps)
         self.collector = CollectorRunner(deps)
@@ -89,8 +91,52 @@ class Worker:
                 await self._sleep(idle)
         log.info("%s finalizado", name)
 
+    async def _resolve_office(self) -> None:
+        """Escritório deste computador: a pasta das notas precisa ser dele (ver folder_owner)."""
+        if self.organizer.office is not None:
+            return
+        office = None
+        try:
+            office = await self.repo.device_org()
+        except Exception as exc:  # noqa: BLE001 - sem internet: usa o guardado da última vez
+            log.warning("Não foi possível saber o escritório deste computador agora: %s", exc)
+        if office is not None and not office.name:
+            cached = await asyncio.to_thread(load_office, self.settings.office_file)
+            if cached is not None and cached.id == office.id:
+                office = cached
+        if office is not None:
+            try:
+                await asyncio.to_thread(save_office, self.settings.office_file, office)
+            except OSError as exc:
+                log.warning("Não foi possível guardar o escritório deste computador: %s", exc)
+        else:
+            office = await asyncio.to_thread(load_office, self.settings.office_file)
+        self.organizer.office = office
+
+    def _notes_folder_ready(self) -> bool:
+        """Pasta das notas no ar e deste escritório; de outro escritório: avisa uma vez no log."""
+        try:
+            self.organizer.check_available()
+        except DownloadFolderUnavailable:
+            owner = self.organizer.foreign_owner
+            if owner is not None and self._warned_foreign != owner.id:
+                self._warned_foreign = owner.id
+                log.error(
+                    'A pasta das notas (%s) é do escritório "%s". Este computador não grava nem mexe nela: as '
+                    'notas ficam neste computador (%s). Rode "Salvar notas no Google Drive" para criar a pasta '
+                    "deste escritório.",
+                    self.organizer.base_dir,
+                    owner.name,
+                    self.settings.local_downloads_dir,
+                )
+            return False
+        self._warned_foreign = None
+        return True
+
     async def _maintenance(self) -> None:
         while not self.stop_event.is_set():
+            await self._resolve_office()
+            ready = await asyncio.to_thread(self._notes_folder_ready)
             try:
                 await self.repo.refresh_certificate_statuses()
                 await self.repo.generate_certificate_expiry_notifications()
@@ -103,7 +149,8 @@ class Worker:
                 log.exception("Falha ao reorganizar a pasta das notas")
             try:
                 # notas com o nome da empresa (formato da 1.2.26), aos poucos: 50 por rodada
-                await self._rename_notes()
+                if ready:
+                    await self._rename_notes()
             except Exception:
                 log.exception("Falha ao renomear as notas com o nome da empresa")
             if isinstance(self.organizer, FallbackOrganizer):
@@ -112,14 +159,15 @@ class Worker:
                     await asyncio.to_thread(self.organizer.send_pending)
                 except Exception:
                     log.exception("Falha ao enviar notas do plano B para a pasta das notas")
-            if notes_folder_kind(self.settings.downloads_dir) == "google_drive":
+            if ready and notes_folder_kind(self.settings.downloads_dir) == "google_drive":
                 try:
                     # botão "Baixar" do painel: código de cada nota no Google Drive (só na conta da pasta)
                     if await self._drive_account() is not None:
                         await link_drive_ids(self.repo, DriveIdLookup([self._drive_db]))
                 except Exception:
                     log.exception("Falha ao ligar as notas ao Google Drive")
-            await self._count_notes()
+            if ready:
+                await self._count_notes()
             now = time.monotonic()
             if self._next_retention_at is None or now >= self._next_retention_at:
                 self._next_retention_at = now + self.settings.retention_interval_hours * 3600
@@ -186,6 +234,8 @@ class Worker:
                         "platform": sys.platform,
                         "version": __version__,
                         "notes_folder": notes_folder_kind(self.settings.downloads_dir),
+                        # pasta das notas de OUTRO escritório (o painel avisa; as notas ficam neste PC)
+                        "notes_folder_owner": self.organizer.foreign_owner.name if self.organizer.foreign_owner else None,
                     },
                 )
             except Exception as exc:
@@ -333,6 +383,8 @@ class Worker:
             await self._sleep(0.5)
 
     async def run(self) -> None:
+        # antes de qualquer trabalho: a pasta das notas só é usada se for deste escritório
+        await self._resolve_office()
         tasks: list[asyncio.Task] = [
             asyncio.create_task(self._heartbeat(), name="heartbeat"),
             asyncio.create_task(self._maintenance(), name="maintenance"),

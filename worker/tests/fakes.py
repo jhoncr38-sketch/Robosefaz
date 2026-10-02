@@ -247,6 +247,11 @@ class FakeRepo:
             if d.get("id") == download_id:
                 d["note_count"] = count
 
+    office = None  # escritório do computador (device_org); None = instalação antiga
+
+    async def device_org(self):  # noqa: ANN201
+        return self.office
+
     async def list_client_names(self) -> dict[str, str | None]:
         return {c.client_code: c.trade_name or c.legal_name for c in self.clients.values()}
 

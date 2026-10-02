@@ -630,6 +630,17 @@ await test("robô grava o código do Google Drive só nos downloads do próprio 
   );
 });
 
+await test("computador ativado sabe o próprio escritório (para marcar a pasta das notas)", async () => {
+  const b = await as(DEVICE_B.authId, (tx) => tx.query("select id, name from public.device_org()"));
+  assert.deepEqual(b.rows, [{ id: ORG_B, name: "Escritório B" }]);
+  const a = await as(DEVICE_A.authId, (tx) => tx.query("select id from public.device_org()"));
+  assert.deepEqual(a.rows, [{ id: ORG_A }]);
+  // pessoa (não computador) não recebe nada
+  const human = await as(ADMIN_B, (tx) => tx.query("select * from public.device_org()"));
+  assert.equal(human.rows.length, 0);
+  await rejects(as("anon", (tx) => tx.query("select * from public.device_org()")), /permission denied/);
+});
+
 await test("robô grava a quantidade de notas só nos downloads do próprio escritório", async () => {
   const id = (await db.query("select id from public.downloads where org_id = $1 and filename = 'x.zip'", [ORG_B])).rows[0].id;
   const byA = await as(DEVICE_A.authId, (tx) => tx.query("update public.downloads set note_count = 5 where id = $1", [id]));

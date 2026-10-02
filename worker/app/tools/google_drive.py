@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import os
+import platform
 import shutil
 import string
 import subprocess
@@ -32,12 +33,40 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from app.config import PROJECT_ROOT, Settings, get_settings
-from app.downloads.organizer import is_note_file, parse_note_path
+from app.downloads.folder_owner import Office, OwnerUnreadable, load_office, read_owner, write_owner
+from app.downloads.organizer import is_note_file, parse_note_path, safe_folder_name
 from app.tools.ui import Choice, ConsoleUI, ToolUI
 from app.utils.files import ensure_dir
 
 ENV_FILE = PROJECT_ROOT / ".env"
 NOTES_FOLDER = "JR Sistema - Notas"
+
+
+def office_folder(root: Path, office: Office | None) -> tuple[Path, Office | None]:
+    """Pasta das notas deste escritório nesta conta do Google: "JR Sistema - Notas", se ela é deste
+    escritório (ou ainda não tem dono); se é de outro escritório da mesma conta,
+    "JR Sistema - Notas - <escritório>". Devolve (pasta, dono da pasta comum quando é outro)."""
+    plain = root / NOTES_FOLDER
+    if office is None or not plain.is_dir():
+        return plain, None
+    try:
+        owner = read_owner(plain)
+    except OwnerUnreadable:
+        return plain, None  # o robô confere de novo antes de gravar
+    if owner is None or owner.id == office.id:
+        return plain, None
+    return root / f"{NOTES_FOLDER} - {safe_folder_name(office.name) or office.id[:8]}", owner
+
+
+def _other_office(folder: Path, office: Office | None) -> Office | None:
+    """Dono da pasta, se for outro escritório (para não copiar notas de outro escritório)."""
+    if office is None:
+        return None
+    try:
+        owner = read_owner(folder)
+    except OwnerUnreadable:
+        return None
+    return owner if owner is not None and owner.id != office.id else None
 DRIVE_NAMES = ("Meu Drive", "My Drive")
 DRIVE_DOWNLOAD_URL = "https://www.google.com/drive/download/"
 TITLE = "Salvar notas no Google Drive"
@@ -266,12 +295,17 @@ def _pick_target(settings: Settings, local: bool, ui: ToolUI) -> Path | None:
     root = _choose_root(roots, ui)
     if root is None:
         return None
-    target = root / NOTES_FOLDER
+    target, other = office_folder(root, load_office(settings.office_file))
+    if other is not None:
+        ui.info(
+            f'A pasta "{NOTES_FOLDER}" desta conta é do escritório "{other.name}". As notas deste escritório '
+            f'ficam numa pasta própria: "{target.name}".'
+        )
     if target.is_dir():
         ui.ok(f"Pasta encontrada: {target}")
         return target
     if not ui.confirm(
-        f'Não encontrei a pasta "{NOTES_FOLDER}" em {root}. Criar uma pasta nova aqui?',
+        f'Não encontrei a pasta "{target.name}" em {root}. Criar uma pasta nova aqui?',
         "Se a pasta foi compartilhada com você por outro computador, cancele e faça antes: "
         "drive.google.com → Compartilhados comigo → botão direito na pasta → Organizar → "
         "Adicionar atalho → Meu Drive. Espere 1 minuto e rode esta ferramenta de novo.",
@@ -319,11 +353,32 @@ def run(
         return 1
     ui.ok("Gravação OK.")
 
+    # um escritório por pasta: marca a pasta como deste escritório (o robô de outro não grava nela)
+    office = load_office(settings.office_file)
+    other = _other_office(target, office)
+    if other is not None:
+        ui.done(
+            False,
+            f'A pasta {target} é do escritório "{other.name}"',
+            f"Cada escritório precisa da própria pasta. Nada foi mudado: o robô continua salvando em {current}",
+        )
+        return 1
+    if office is not None:
+        try:
+            if read_owner(target) is None:
+                write_owner(target, office, platform.node())
+        except OSError as exc:
+            ui.warn(f"Não consegui marcar a pasta como deste escritório ({exc}); o robô marca quando ligar.")
+
     if _same(current, target) and not _account_changed(settings, target):
         ui.done(True, "O robô já salva nesta pasta", "Está tudo certo.")
         return 0
 
     sources = [current]
+    if _other_office(current, office) is not None:
+        # a pasta antiga é de outro escritório: as notas de lá não são deste escritório
+        ui.warn(f"A pasta antiga ({current}) é de outro escritório: as notas de lá não serão copiadas.")
+        sources = []
     if not any(_same(settings.local_downloads_dir, p) for p in (current, target)):
         sources.append(settings.local_downloads_dir)  # notas do plano B e as antigas deste computador
     total = sum(count_notes(src) for src in sources)

@@ -99,6 +99,11 @@ def activate(code: str, settings: Settings, panel_url: str | None = None, client
             "SUPABASE_SERVICE_ROLE_KEY": "",  # a chave-mestra sai deste computador
         },
     )
+    if data.get("org_id"):
+        # escritório deste computador: a pasta das notas vai ser marcada como dele (ver folder_owner)
+        from app.downloads.folder_owner import Office, save_office
+
+        save_office(settings.office_file, Office(id=str(data["org_id"]), name=str(data.get("org_name") or "")))
     # robô ligado: encerra com calma e o serviço o religa (já no modo ativado)
     flag = settings.update_flag
     if settings.status_file.exists():

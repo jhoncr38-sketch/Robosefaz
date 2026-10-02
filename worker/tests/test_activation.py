@@ -42,6 +42,7 @@ def test_activate_writes_env_and_vault(settings: Settings, tmp_path: Path, monke
         "supabase_url": "https://x.supabase.co",
         "publishable_key": "sb_publishable_x",
         "org_name": "Escritório Teste",
+        "org_id": "aaaaaaaa-0000-0000-0000-000000000001",
         "device_id": "d1",
     }
     result = act.activate("abcd-efgh", settings, "https://painel", client=_client(200, body))
@@ -53,6 +54,10 @@ def test_activate_writes_env_and_vault(settings: Settings, tmp_path: Path, monke
     assert "DEVICE_EMAIL=robo-1@robos.jrsistema.com" in text and "SUPABASE_ANON_KEY=sb_publishable_x" in text
     fresh = Settings(_env_file=env, secrets_file_path=settings.secrets_file_path)
     assert fresh.auth_mode == "device"
+    # escritório guardado: a pasta das notas vai ser marcada como dele
+    from app.downloads.folder_owner import Office, load_office
+
+    assert load_office(settings.office_file) == Office("aaaaaaaa-0000-0000-0000-000000000001", "Escritório Teste")
 
 
 def test_activation_error_message_from_panel(settings: Settings) -> None:

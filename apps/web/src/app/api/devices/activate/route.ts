@@ -77,6 +77,8 @@ export async function POST(request: NextRequest) {
   return NextResponse.json(
     {
       device_id: deviceId,
+      // o robô guarda o escritório para marcar a pasta das notas como dele (um escritório por pasta)
+      org_id: orgId,
       org_name: orgName,
       email,
       password,

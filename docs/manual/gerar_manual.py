@@ -729,6 +729,19 @@ def cap_downloads() -> list:
             "Pode ser normal (empresa parada, férias, queda depois do Natal); se não for, confira no SIAT se vieram todas "
             "as notas do mês. O mês corrente, ou baixado antes de terminar, nunca gera aviso."
         ),
+        H2("Mais de um escritório na mesma conta do Google"),
+        P(
+            "Cada escritório usa a <b>própria pasta</b>. O primeiro escritório de uma conta fica com "
+            "<b>JR Sistema - Notas</b>; os outros escritórios da mesma conta ficam com "
+            "<b>JR Sistema - Notas - Nome do Escritório</b>, criada pela ferramenta <b>Salvar notas no Google Drive</b> "
+            "no computador de cada um. A pasta guarda um arquivo <b>.jr-sistema-escritorio.json</b> com o escritório "
+            "dono: não apague nem copie esse arquivo."
+        ),
+        *tip(
+            "Se um computador for apontado para a pasta de outro escritório, o robô não grava nem mexe nela: as "
+            "notas ficam no próprio computador (plano B) e a tela Configurações avisa \"Pasta das notas é do "
+            "escritório ...\". Rode Salvar notas no Google Drive nesse computador para criar a pasta certa."
+        ),
         H2("Trocar a conta do Google Drive"),
         *steps(
             [
