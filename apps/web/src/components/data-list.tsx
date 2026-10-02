@@ -156,3 +156,51 @@ export function SearchBox({
     </div>
   );
 }
+
+const NUM = new Intl.NumberFormat("pt-BR");
+
+/**
+ * Rodapé das listas longas: "Mostrando 500 de 1.234" e o botão Carregar mais (mantém os filtros e a
+ * posição da página). Quando tudo cabe, só confirma que não falta nada.
+ */
+export function LoadMore({
+  shown,
+  total,
+  step,
+  href,
+  noun,
+}: {
+  shown: number;
+  total: number;
+  step: number;
+  href: string;
+  /** singular, plural e gênero: ["item", "itens"], ["execução", "execuções", "f"] */
+  noun: [string, string, ("m" | "f")?];
+}) {
+  if (total === 0 || shown === 0) return null;
+  const word = (n: number) => (n === 1 ? noun[0] : noun[1]);
+  if (shown >= total) {
+    return (
+      <p className="border-t border-(--c-efefeb) px-4 py-2.5 text-center text-xs text-(--c-9a9b94)">
+        {total === 1
+          ? `1 ${noun[0]}.`
+          : `${noun[2] === "f" ? "Todas as" : "Todos os"} ${NUM.format(total)} ${noun[1]} estão na lista.`}
+      </p>
+    );
+  }
+  const next = Math.min(step, total - shown);
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 border-t border-(--c-efefeb) px-4 py-3 text-xs text-(--c-7a7b75)">
+      <span>
+        Mostrando {NUM.format(shown)} de {NUM.format(total)} {word(total)}
+      </span>
+      <Link
+        href={href}
+        scroll={false}
+        className="inline-flex h-7 items-center rounded-md border bg-card px-3 font-medium text-foreground hover:bg-(--c-fafaf8) hover:no-underline"
+      >
+        Carregar mais {NUM.format(next)}
+      </Link>
+    </div>
+  );
+}

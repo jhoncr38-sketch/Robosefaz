@@ -2,14 +2,14 @@ import { Download, FolderOpen } from "lucide-react";
 import type { Metadata } from "next";
 
 import { BulkDownload } from "@/components/bulk-download";
-import { ListCard, ListToolbar } from "@/components/data-list";
+import { ListCard, ListToolbar, LoadMore } from "@/components/data-list";
 import { DownloadsTable, MonthSummaryBar, NotesToCheckLink } from "@/components/downloads-table";
 import { ListFilters } from "@/components/list-filters";
 import { PageHeader } from "@/components/page-header";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { requireSession } from "@/lib/auth";
 import { formatCompetence, recentCompetences } from "@/lib/competence";
-import { bulkTarget, notesInGoogleDrive } from "@/lib/downloads";
+import { bulkTarget, EMPTY_ZIP_BYTES, notesInGoogleDrive } from "@/lib/downloads";
 import {
   asZeroCount,
   monthSummary,
@@ -19,29 +19,54 @@ import {
   SITUATION_LABEL,
 } from "@/lib/no-movement";
 import { type NoteCountRow, noteAlerts } from "@/lib/note-count";
+import { moreHref, newest, parseShown } from "@/lib/paging";
 import { DOCUMENT_LABEL } from "@/lib/status";
 import { createClient } from "@/lib/supabase/server";
 import type { DocumentType, DownloadRow, TaskStatus } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Downloads" };
 
+/** linhas por lote do "Carregar mais" */
+const PAGE = 500;
+
 export default async function DownloadsPage({ searchParams }: PageProps<"/downloads">) {
   await requireSession();
   const params = await searchParams;
   const supabase = await createClient();
 
-  let query = supabase
-    .from("downloads")
-    .select("*, clients(client_code, legal_name, trade_name, cnpj)")
-    .order("downloaded_at", { ascending: false })
-    .limit(500);
-  if (typeof params.competence === "string") query = query.eq("competence", params.competence);
-  if (typeof params.client === "string") query = query.eq("client_id", params.client);
-  if (typeof params.type === "string") query = query.eq("document_type", params.type);
   const competence = typeof params.competence === "string" ? params.competence : undefined;
   const clientId = typeof params.client === "string" ? params.client : undefined;
   const docType = typeof params.type === "string" ? params.type : undefined;
   const situation = parseSituation(params.situacao);
+  const shown = parseShown(params.mostrar, PAGE);
+
+  // arquivos e "sem movimento", cada um com os filtros e a contagem total; a lista mostra os
+  // `shown` mais recentes das duas juntas
+  let query = supabase
+    .from("downloads")
+    .select("*, clients(client_code, legal_name, trade_name, cnpj)", { count: "exact" })
+    .order("downloaded_at", { ascending: false })
+    .limit(shown);
+  let emptyQuery = supabase
+    .from("downloads_no_movement")
+    .select("*", { count: "exact" })
+    .order("checked_at", { ascending: false })
+    .limit(shown);
+  if (competence) {
+    query = query.eq("competence", competence);
+    emptyQuery = emptyQuery.eq("competence", competence);
+  }
+  if (clientId) {
+    query = query.eq("client_id", clientId);
+    emptyQuery = emptyQuery.eq("client_id", clientId);
+  }
+  if (docType) {
+    query = query.eq("document_type", docType);
+    emptyQuery = emptyQuery.eq("document_type", docType);
+  }
+  // ZIP vazio antigo ou contado com 0 notas também é "sem movimento"
+  if (situation === "com-notas") query = query.gt("size", EMPTY_ZIP_BYTES).or("note_count.is.null,note_count.gt.0");
+  if (situation === "sem-movimento") query = query.or(`size.lte.${EMPTY_ZIP_BYTES},note_count.eq.0`);
 
   // pedidos do mês (resumo "com notas / sem movimento / sem resposta"): só com a competência escolhida
   let monthTasks = supabase
@@ -53,7 +78,7 @@ export default async function DownloadsPage({ searchParams }: PageProps<"/downlo
   if (clientId) monthTasks = monthTasks.eq("client_id", clientId);
   if (docType) monthTasks = monthTasks.eq("document_type", docType);
 
-  const [{ data }, { data: clients }, drive, { data: counted }, { data: noMovement }, { data: tasks }] = await Promise.all([
+  const [files, { data: clients }, drive, { data: counted }, emptyRes, { data: emptyHistory }, { data: tasks }] = await Promise.all([
     query,
     supabase.from("clients").select("id, client_code, legal_name, trade_name, cnpj, active").order("legal_name"),
     notesInGoogleDrive(supabase),
@@ -64,17 +89,28 @@ export default async function DownloadsPage({ searchParams }: PageProps<"/downlo
       .not("note_count", "is", null)
       .limit(10000),
     // processados sem notas (sem arquivo): uma linha por cliente, mês e tipo
-    supabase.from("downloads_no_movement").select("*").order("checked_at", { ascending: false }).limit(10000),
+    situation === "com-notas" ? Promise.resolve({ data: [], count: 0 }) : emptyQuery,
+    // todos os "sem movimento" (poucos campos), para o aviso de mês "estranho"
+    supabase.from("downloads_no_movement").select("id, client_id, job_id, competence, document_type, checked_at").limit(10000),
     competence ? monthTasks : Promise.resolve({ data: [] }),
   ]);
   const clientById = new Map((clients ?? []).map((c) => [c.id, c]));
-  const all = (data ?? []) as DownloadRow[];
-  const allEmpty = ((noMovement ?? []) as NoMovementRow[]).map((n) => ({ ...n, clients: clientById.get(n.client_id) ?? null }));
-  const empty = allEmpty.filter(
-    (n) => (!competence || n.competence === competence) && (!clientId || n.client_id === clientId) && (!docType || n.document_type === docType),
+  const fetchedEmpty = ((emptyRes.data ?? []) as NoMovementRow[]).map((n) => ({ ...n, clients: clientById.get(n.client_id) ?? null }));
+  const visible = newest(
+    (files.data ?? []) as DownloadRow[],
+    fetchedEmpty,
+    (d) => d.downloaded_at,
+    (n) => n.checked_at,
+    shown,
   );
+  const all = visible.a;
+  const empty = visible.b;
+  const total = (files.count ?? 0) + (emptyRes.count ?? 0);
   // "sem movimento" conta como mês com 0 notas no aviso
-  const alerts = noteAlerts([...all, ...empty.map(asZeroCount)], [...((counted ?? []) as NoteCountRow[]), ...allEmpty.map(asZeroCount)]);
+  const alerts = noteAlerts(
+    [...all, ...empty.map(asZeroCount)],
+    [...((counted ?? []) as NoteCountRow[]), ...((emptyHistory ?? []) as NoMovementRow[]).map(asZeroCount)],
+  );
   const checking = params.conferir === "1";
   const rows = checking ? all.filter((d) => alerts[d.id]) : all;
   const emptyRows = checking ? empty.filter((n) => alerts[n.id]) : empty;
@@ -167,6 +203,13 @@ export default async function DownloadsPage({ searchParams }: PageProps<"/downlo
           <MonthSummaryBar competence={competence} summary={summary} hrefFor={(s) => hrefWith({ situacao: s })} />
         ) : null}
         <DownloadsTable rows={rows} empty={emptyRows} situation={situation} drive={drive} alerts={alerts} />
+        <LoadMore
+          shown={all.length + empty.length}
+          total={total}
+          step={PAGE}
+          href={moreHref("/downloads", params, shown, PAGE)}
+          noun={["item", "itens"]}
+        />
       </ListCard>
     </>
   );

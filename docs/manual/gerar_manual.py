@@ -706,7 +706,8 @@ def cap_downloads() -> list:
             "Lista todas as notas baixadas, com filtros por competência, cliente e tipo. Embaixo do tipo aparece a "
             "<b>quantidade de notas</b> do arquivo (o robô conta sozinho, alguns minutos depois do download). O ícone de "
             "informação (i), ao lado da quantidade, mostra o nome do arquivo, o tamanho, a data do download, o caminho "
-            "completo e o código de conferência (SHA-256)."
+            "completo e o código de conferência (SHA-256). A lista mostra os 500 itens mais recentes; no fim dela, "
+            "<b>Carregar mais</b> traz os próximos 500, mantendo os filtros."
         ),
         H2("Sem movimento"),
         P(
@@ -778,7 +779,8 @@ def cap_historico() -> list:
         H2("Histórico"),
         P(
             "Todas as execuções, com quem pediu, resultado e duração. Ao abrir uma, aparecem: período, "
-            "tarefas de cada nota com o ID do SIAT, notas baixadas, o passo a passo (logs) e os prints."
+            "tarefas de cada nota com o ID do SIAT, notas baixadas, o passo a passo (logs) e os prints. A lista "
+            "mostra as 300 execuções mais recentes; no fim dela, <b>Carregar mais</b> traz as próximas."
         ),
         P(
             "Quando a empresa não teve notas no mês, o SIAT mostra <i>“Processado sem notas”</i> e não oferece "

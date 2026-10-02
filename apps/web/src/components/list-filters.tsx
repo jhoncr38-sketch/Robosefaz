@@ -25,6 +25,7 @@ export function ListFilters({ filters }: { filters: FilterDef[] }) {
     const next = new URLSearchParams(params.toString());
     if (value === ALL) next.delete(name);
     else next.set(name, value);
+    next.delete("mostrar"); // filtro novo: volta ao primeiro lote do "Carregar mais"
     router.push(`${pathname}?${next.toString()}`);
   }
 

@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 
-import { ListCard, ListToolbar } from "@/components/data-list";
+import { ListCard, ListToolbar, LoadMore } from "@/components/data-list";
 import { JobsTable } from "@/components/jobs-table";
 import { ListFilters } from "@/components/list-filters";
 import { PageHeader } from "@/components/page-header";
 import { requireSession } from "@/lib/auth";
 import { formatCompetence, recentCompetences } from "@/lib/competence";
+import { moreHref, parseShown } from "@/lib/paging";
 import { JOB_SELECT, loadProfilesMap } from "@/lib/queries";
 import { JOB_STATUS_LABEL } from "@/lib/status";
 import { createClient } from "@/lib/supabase/server";
@@ -13,17 +14,25 @@ import type { AutomationJob, JobStatus } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Histórico" };
 
+/** execuções por lote do "Carregar mais" */
+const PAGE = 300;
+
 export default async function HistoryPage({ searchParams }: PageProps<"/history">) {
   await requireSession();
   const params = await searchParams;
   const supabase = await createClient();
 
-  let query = supabase.from("automation_jobs").select(JOB_SELECT).order("created_at", { ascending: false }).limit(300);
+  const shown = parseShown(params.mostrar, PAGE);
+  let query = supabase
+    .from("automation_jobs")
+    .select(JOB_SELECT, { count: "exact" })
+    .order("created_at", { ascending: false })
+    .limit(shown);
   if (typeof params.competence === "string") query = query.eq("competence", params.competence);
   if (typeof params.client === "string") query = query.eq("client_id", params.client);
   if (typeof params.status === "string") query = query.eq("status", params.status);
 
-  const [{ data }, users, { data: clients }] = await Promise.all([
+  const [{ data, count }, users, { data: clients }] = await Promise.all([
     query,
     loadProfilesMap(),
     supabase.from("clients").select("id, legal_name, trade_name").order("legal_name"),
@@ -56,6 +65,13 @@ export default async function HistoryPage({ searchParams }: PageProps<"/history"
         />
         </ListToolbar>
         <JobsTable jobs={(data ?? []) as AutomationJob[]} users={users} />
+        <LoadMore
+          shown={(data ?? []).length}
+          total={count ?? 0}
+          step={PAGE}
+          href={moreHref("/history", params, shown, PAGE)}
+          noun={["execução", "execuções", "f"]}
+        />
       </ListCard>
     </>
   );
