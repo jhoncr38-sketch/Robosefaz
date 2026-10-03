@@ -10,12 +10,12 @@ import { loadPlannerClients } from "@/lib/queries";
 import { createClient } from "@/lib/supabase/server";
 import type { JobStatus } from "@/lib/types";
 
-export const metadata: Metadata = { title: "Automação SIAT" };
+export const metadata: Metadata = { title: "Executar automações" };
 
 export default async function AutomationPage({ searchParams }: PageProps<"/automation">) {
   const { profile } = await requirePermission("automation:run");
   const params = await searchParams;
-  // ?competence=2026-08&select=pending vem do Dashboard ("Agendar pendentes")
+  // ?competence=2026-08 vem do Dashboard ("Agendar N pendentes"); a tela abre com os pendentes marcados
   const asked = typeof params.competence === "string" ? toCompetenceKey(params.competence) : null;
   const competence = asked && asked <= currentCompetence() ? asked : previousCompetence();
 
@@ -38,17 +38,13 @@ export default async function AutomationPage({ searchParams }: PageProps<"/autom
 
   return (
     <>
-      <PageHeader
-        title="Automação SIAT"
-        description="Agende a exportação de NFC-e e NF-e (emitidas e recebidas) de uma competência para vários clientes."
-      />
+      <PageHeader title="Executar automações" />
       <AutomationScheduler
-        key={`${competence}:${params.select ?? ""}`}
+        key={competence}
         clients={clients}
         canForce={can(profile.role, "automation:force")}
         initialCompetence={competence}
         initialStatuses={statusMapFromJobs(jobs, competence)}
-        preselectPending={params.select === "pending"}
       />
     </>
   );

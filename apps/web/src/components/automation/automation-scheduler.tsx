@@ -1,15 +1,11 @@
 "use client";
 
 import {
-  Check,
   ChevronLeft,
   ChevronRight,
   CircleCheck,
-  Info,
   ListChecks,
   Loader2,
-  Lock,
-  Minus,
   Play,
   Search,
   ShieldAlert,
@@ -24,6 +20,7 @@ import { toast } from "sonner";
 
 import { createJobs, type BatchSummary } from "@/app/actions/automation";
 import type { PlannerClient } from "@/components/automation/planner-types";
+import { CheckAll, CheckBox, LockedGroup, type LockedRow, MiniSwitch, StickyBar } from "@/components/list-extras";
 import { ToneBadge } from "@/components/status-badge";
 import {
   AlertDialog,
@@ -36,7 +33,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { formatCNPJ, normalizeCNPJ } from "@/lib/cnpj";
-import { competenceBounds, currentCompetence, formatCompetence, shiftCompetence } from "@/lib/competence";
+import { currentCompetence, formatCompetence, shiftCompetence } from "@/lib/competence";
 import {
   blocksNewRequest,
   COMPETENCE_STATUS_LABEL,
@@ -55,39 +52,40 @@ type StatusMap = CompetenceStatusMap;
 type Filter = "all" | "pending" | "requested";
 
 const ROW_GRID =
-  "grid grid-cols-[28px_minmax(0,1fr)_minmax(0,auto)] gap-3 md:grid-cols-[28px_minmax(0,2fr)_160px_110px_minmax(0,1.2fr)]";
+  "grid grid-cols-[28px_minmax(0,1fr)_minmax(0,auto)] gap-3 md:grid-cols-[28px_minmax(0,2fr)_150px_110px_minmax(0,1.1fr)]";
 
-const HOW_IT_WORKS = [
-  "O robô processa um cliente por vez, com o perfil de navegador e o certificado de cada empresa.",
-  "Após o agendamento, o navegador fecha e o Collector consulta a SEFAZ periodicamente até baixar os ZIPs.",
-  "Solicitações já existentes para a mesma competência não são repetidas.",
-];
+const OP_TAG: Record<RegularExportTaskType, string> = {
+  NFCE_EXPORT: "NFC-e",
+  NFE_ISSUED_EXPORT: "Emit.",
+  NFE_RECEIVED_EXPORT: "Receb.",
+};
+
+const FORCE_HELP =
+  "Libera clientes já solicitados: o robô exclui no SIAT o agendamento anterior desta competência e faz um novo.";
 
 function opsForClient(client: PlannerClient, ops: RegularExportTaskType[]): RegularExportTaskType[] {
   return EXPORT_OPERATIONS.filter((o) => ops.includes(o.value) && client[o.flag]).map((o) => o.value);
 }
 
-function StepLabel({ n, children }: { n: number; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-1.5 text-[11.5px] text-(--c-6b6c66)">
-      <span className="grid size-4 place-items-center rounded-full bg-primary text-[10px] font-semibold text-white">{n}</span>
-      {children}
-    </div>
-  );
-}
+/** Bloqueio de cada cliente e o atalho para resolver. */
+type LockReason = "cert" | "ops" | "requested";
+
+const LOCK_TEXT: Record<LockReason, string> = {
+  cert: "sem certificado válido",
+  ops: "operação não habilitada no cadastro",
+  requested: "já solicitado nesta competência",
+};
 
 export function AutomationScheduler({
   clients,
   canForce,
   initialCompetence,
   initialStatuses,
-  preselectPending,
 }: {
   clients: PlannerClient[];
   canForce: boolean;
   initialCompetence: string;
   initialStatuses: StatusMap;
-  preselectPending: boolean;
 }) {
   const router = useRouter();
   const active = useMemo(() => clients.filter((c) => c.active), [clients]);
@@ -97,19 +95,13 @@ export function AutomationScheduler({
   // "Canceladas": um pedido a mais de cada tipo marcado, com Status "Canceladas" (ZIP próprio)
   const [canceled, setCanceled] = useState(false);
   const [q, setQ] = useState("");
-  const [filter, setFilter] = useState<Filter>(preselectPending ? "pending" : "all");
+  // abre em "Pendentes", com os pendentes selecionados
+  const [filter, setFilter] = useState<Filter>("pending");
   const [force, setForce] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(() =>
-    preselectPending
-      ? new Set(
-          active
-            .filter((c) => !blocksNewRequest(initialStatuses[c.id] ?? "none"))
-            .filter((c) => c.certificate_status === "valid" || c.certificate_status === "expiring")
-            .map((c) => c.id),
-        )
-      : new Set(),
-  );
-  const [result, setResult] = useState<BatchSummary | null>(null);
+  // seleção escolhida pelo usuário em cada competência (sem escolha: os pendentes)
+  const [picked, setPicked] = useState<Record<string, Set<string>>>({});
+  const [processedResult, setProcessedResult] = useState<BatchSummary | null>(null);
+  const [showLocked, setShowLocked] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [reloadKey, setReloadKey] = useState(0);
@@ -154,24 +146,15 @@ export function AutomationScheduler({
         const ops = opsForClient(c, operations);
         const certOk = c.certificate_status === "valid" || c.certificate_status === "expiring";
         const blocked = blocksNewRequest(status);
-        let lockReason: string | null = null;
-        if (loading) lockReason = "carregando…";
-        else if (!certOk) lockReason = "sem certificado válido";
+        let lock: LockReason | null = null;
+        if (!certOk) lock = "cert";
         // já solicitado: com "Canceladas" ligado, pede só as canceladas (os pedidos repetidos são ignorados)
-        else if (blocked && !force && !canceled) lockReason = "será ignorado";
-        else if (ops.length === 0) lockReason = "operação não habilitada no cadastro";
-        const hint =
-          lockReason ??
-          (blocked && !force
-            ? "só as canceladas"
-            : blocked
-              ? "reagendar (duplica)"
-              : status === "failed" || status === "cancelled"
-                ? "pode reagendar"
-                : "");
-        return { client: c, status, ops, certOk, blocked, locked: lockReason !== null, hint };
+        else if (blocked && !force && !canceled) lock = "requested";
+        else if (ops.length === 0) lock = "ops";
+        const hint = blocked && !force ? "só as canceladas" : blocked ? "reagendar (duplica)" : status === "failed" || status === "cancelled" ? "pode reagendar" : "";
+        return { client: c, status, ops, certOk, blocked, lock, hint };
       }),
-    [active, statuses, operations, force, canceled, loading],
+    [active, statuses, operations, force, canceled],
   );
 
   const term = q.trim().toLowerCase();
@@ -187,16 +170,17 @@ export function AutomationScheduler({
     );
   });
 
-  const selectable = rows.filter((r) => !r.locked);
-  const chosen = selectable.filter((r) => selected.has(r.client.id));
-  const exportCount = chosen.reduce((acc, r) => acc + r.ops.length, 0);
+  const selectable = loading ? [] : rows.filter((r) => !r.lock);
   const pendingSelectable = selectable.filter((r) => !r.blocked);
-  const ignored = force ? 0 : rows.filter((r) => r.blocked).length;
-  const visibleSelectable = visible.filter((r) => !r.locked);
-  const allOn = visibleSelectable.length > 0 && visibleSelectable.every((r) => selected.has(r.client.id));
-  const someOn = visibleSelectable.some((r) => selected.has(r.client.id));
-  const canProcess = chosen.length > 0 && operations.length > 0 && !pending;
-  const bounds = competenceBounds(competence);
+  const selected = picked[competence] ?? new Set(pendingSelectable.map((r) => r.client.id));
+  const chosen = selectable.filter((r) => selected.has(r.client.id));
+  // com "Canceladas", cada tipo vira dois pedidos; quem já foi solicitado pede só as canceladas
+  const exportCount = chosen.reduce((acc, r) => acc + r.ops.length * (canceled && !(r.blocked && !force) ? 2 : 1), 0);
+  const visibleOpen = visible.filter((r) => !r.lock);
+  const visibleLocked = visible.filter((r) => r.lock);
+  const allOn = visibleOpen.length > 0 && visibleOpen.every((r) => selected.has(r.client.id));
+  const someOn = visibleOpen.some((r) => selected.has(r.client.id));
+  const canProcess = !loading && chosen.length > 0 && operations.length > 0 && !pending;
   const maxCompetence = currentCompetence();
   const nextComp = shiftCompetence(competence, 1);
   const prevComp = shiftCompetence(competence, -1);
@@ -204,27 +188,27 @@ export function AutomationScheduler({
   function changeCompetence(value: string | null) {
     if (!value || value > maxCompetence) return;
     setCompetence(value);
-    setSelected(new Set());
-    setResult(null);
+    setProcessedResult(null);
     setReloadKey(0);
   }
 
+  function setSelected(update: (prev: Set<string>) => Set<string>) {
+    setProcessedResult(null);
+    setPicked((prev) => ({ ...prev, [competence]: update(new Set(selected)) }));
+  }
+
   function toggle(id: string) {
-    setResult(null);
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+    setSelected((s) => {
+      if (s.has(id)) s.delete(id);
+      else s.add(id);
+      return s;
     });
   }
 
   function toggleAll() {
-    setResult(null);
-    setSelected((prev) => {
-      const next = new Set(prev);
-      visibleSelectable.forEach((r) => (allOn ? next.delete(r.client.id) : next.add(r.client.id)));
-      return next;
+    setSelected((s) => {
+      visibleOpen.forEach((r) => (allOn ? s.delete(r.client.id) : s.add(r.client.id)));
+      return s;
     });
   }
 
@@ -243,11 +227,27 @@ export function AutomationScheduler({
         toast.error(res.error);
         return;
       }
-      setResult(res.data ?? null);
-      setSelected(new Set());
+      const summary = res.data ?? null;
+      setProcessedResult(summary);
+      // os agendados passam a aparecer como "Na fila" (o banco confirma em seguida)
+      const queued = (summary?.results ?? []).filter((r) => r.job_id).map((r) => r.client_id);
+      setStatusCache((prev) => ({
+        ...prev,
+        [competence]: { ...prev[competence], ...Object.fromEntries(queued.map((id) => [id, "queued" as const])) },
+      }));
+      setPicked((prev) => ({ ...prev, [competence]: new Set() }));
       setForce(false);
       setReloadKey((k) => k + 1);
       router.refresh();
+    });
+  }
+
+  function scheduleMore() {
+    setProcessedResult(null);
+    setPicked((prev) => {
+      const next = { ...prev };
+      delete next[competence];
+      return next;
     });
   }
 
@@ -257,337 +257,304 @@ export function AutomationScheduler({
     ["requested", "Já solicitados", rows.filter((r) => r.blocked).length],
   ];
 
+  const lockedRows: LockedRow[] = visibleLocked.map((r) => ({
+    id: r.client.id,
+    name: r.client.trade_name || r.client.legal_name,
+    code: r.client.client_code,
+    reason: LOCK_TEXT[r.lock!],
+    danger: r.lock === "cert",
+    action:
+      r.lock === "cert"
+        ? { label: "Renovar certificado", href: `/clients/${r.client.id}` }
+        : r.lock === "ops"
+          ? { label: "Ver cadastro", href: `/clients/${r.client.id}` }
+          : undefined,
+  }));
+
   return (
-    <div className="flex flex-wrap items-start gap-5">
-      <div className="flex min-w-0 flex-[999_1_600px] flex-col gap-4">
-        {/* 1 e 2: competência e operações */}
-        <section className="flex flex-wrap items-center gap-x-7 gap-y-4 rounded-xl border bg-card shadow-card px-[18px] py-4">
-          <div className="flex flex-col gap-1.5">
-            <StepLabel n={1}>Competência</StepLabel>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                aria-label="Competência anterior"
-                onClick={() => changeCompetence(prevComp)}
-                className="grid h-8 w-[30px] place-items-center rounded-[7px] border border-input hover:bg-(--c-f2f3ef)"
-              >
-                <ChevronLeft className="size-3.5" />
-              </button>
-              <div className="flex h-8 min-w-[76px] items-center justify-center rounded-[7px] border border-input px-3 font-mono text-sm font-medium">
-                {formatCompetence(competence)}
-              </div>
-              <button
-                type="button"
-                aria-label="Próxima competência"
-                onClick={() => changeCompetence(nextComp)}
-                disabled={!nextComp || nextComp > maxCompetence}
-                className="grid h-8 w-[30px] place-items-center rounded-[7px] border border-input hover:bg-(--c-f2f3ef) disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <ChevronRight className="size-3.5" />
-              </button>
-              {bounds ? (
-                <span className="ml-2 text-xs text-(--c-6b6c66)">
-                  {bounds.start} a {bounds.end}
-                </span>
-              ) : null}
-            </div>
+    <div className="flex flex-col gap-4">
+      {/* topo numa linha: competência e operações */}
+      <section className="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-xl border bg-card px-4 py-3 shadow-card">
+        <span className="text-xs text-(--c-6b6c66)">Competência</span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            aria-label="Competência anterior"
+            onClick={() => changeCompetence(prevComp)}
+            className="grid h-[30px] w-7 place-items-center rounded-[7px] border border-input hover:bg-(--c-f2f3ef)"
+          >
+            <ChevronLeft className="size-3.5" />
+          </button>
+          <div className="flex h-[30px] min-w-[76px] items-center justify-center rounded-[7px] border border-input px-2.5 font-mono text-sm font-medium">
+            {formatCompetence(competence)}
           </div>
-          <div className="hidden w-px self-stretch bg-(--c-efefeb) sm:block" />
-          <div className="flex flex-col gap-1.5">
-            <StepLabel n={2}>Operações</StepLabel>
-            <div className="flex flex-wrap gap-1.5">
-              {EXPORT_OPERATIONS.map((op) => {
-                const on = operations.includes(op.value);
-                const Box = on ? SquareCheck : Square;
-                return (
-                  <button
-                    key={op.value}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => {
-                      setResult(null);
-                      setOperations((prev) => (on ? prev.filter((o) => o !== op.value) : [...prev, op.value]));
-                    }}
-                    className={cn(
-                      "flex h-8 items-center gap-[7px] rounded-[7px] border px-3 text-[13px]",
-                      on ? "border-(--c-9fd3b5) bg-(--c-eef7f1) text-(--c-17603b)" : "border-input bg-card text-(--c-6b6c66)",
-                    )}
-                  >
-                    <Box className="size-3.5" />
-                    {op.label}
-                  </button>
-                );
-              })}
-              <span className="mx-0.5 hidden w-px self-stretch bg-(--c-efefeb) sm:block" />
+          <button
+            type="button"
+            aria-label="Próxima competência"
+            onClick={() => changeCompetence(nextComp)}
+            disabled={!nextComp || nextComp > maxCompetence}
+            className="grid h-[30px] w-7 place-items-center rounded-[7px] border border-input hover:bg-(--c-f2f3ef) disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <ChevronRight className="size-3.5" />
+          </button>
+        </div>
+        <span className="hidden h-[22px] w-px bg-(--c-efefeb) sm:block" />
+        <span className="text-xs text-(--c-6b6c66)">Operações</span>
+        <div className="flex flex-wrap gap-1.5">
+          {EXPORT_OPERATIONS.map((op) => {
+            const on = operations.includes(op.value);
+            const Box = on ? SquareCheck : Square;
+            return (
               <button
+                key={op.value}
                 type="button"
-                aria-pressed={canceled}
-                title="Mais um pedido de cada tipo marcado, só com as notas canceladas (ZIP separado)"
+                aria-pressed={on}
                 onClick={() => {
-                  setResult(null);
-                  setCanceled((v) => !v);
+                  setProcessedResult(null);
+                  setOperations((prev) => (on ? prev.filter((o) => o !== op.value) : [...prev, op.value]));
                 }}
                 className={cn(
-                  "flex h-8 items-center gap-[7px] rounded-[7px] border px-3 text-[13px]",
-                  canceled ? "border-(--c-b42323)/30 bg-(--c-fdecec) text-(--c-b42323)" : "border-input bg-card text-(--c-6b6c66)",
+                  "flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[12.5px]",
+                  on ? "border-(--c-9fd3b5) bg-(--c-eef7f1) text-(--c-17603b)" : "border-input bg-card text-(--c-6b6c66)",
                 )}
               >
-                {canceled ? <SquareCheck className="size-3.5" /> : <Square className="size-3.5" />}
-                Canceladas
+                <Box className="size-[13px]" />
+                {op.label}
               </button>
-            </div>
-          </div>
-        </section>
-
-        {/* 3: clientes */}
-        <section className="overflow-hidden rounded-xl border bg-card shadow-card">
-          <div className="flex flex-wrap items-center gap-2.5 border-b border-(--c-efefeb) px-3.5 py-3">
-            <div className="mr-1">
-              <StepLabel n={3}>Clientes</StepLabel>
-            </div>
-            <div className="flex h-8 min-w-[200px] flex-1 items-center gap-2 rounded-[7px] border border-input px-2.5 focus-within:border-ring">
-              <Search className="size-3.5 text-(--c-6b6c66)" />
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Buscar cliente, código ou CNPJ"
-                aria-label="Buscar cliente, código ou CNPJ"
-                className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-(--c-6b6c66)"
-              />
-            </div>
-            <div className="flex gap-1 rounded-[7px] bg-(--c-f3f3f0) p-0.5" role="tablist">
-              {filters.map(([key, label, count]) => (
-                <button
-                  key={key}
-                  type="button"
-                  role="tab"
-                  aria-selected={filter === key}
-                  onClick={() => setFilter(key)}
-                  className={cn(
-                    "rounded-[5px] px-2.5 py-[5px] text-xs whitespace-nowrap",
-                    filter === key ? "bg-card text-foreground shadow-[0_1px_2px_rgba(0,0,0,.08)]" : "text-muted-foreground",
-                  )}
-                >
-                  {label} <span className="font-mono text-(--c-6b6c66)">{count}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div
+            );
+          })}
+          <button
+            type="button"
+            aria-pressed={canceled}
+            title="Mais um pedido de cada tipo marcado, só com as notas canceladas (ZIP separado)"
+            onClick={() => {
+              setProcessedResult(null);
+              setCanceled((v) => !v);
+            }}
             className={cn(
-              ROW_GRID,
-              "items-center border-b border-(--c-efefeb) bg-(--c-fafaf8) px-3.5 py-[9px] text-[11.5px] tracking-[0.04em] text-(--c-6b6c66) uppercase",
+              "flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[12.5px]",
+              canceled ? "border-(--c-b42323)/30 bg-(--c-fdecec) text-(--c-b42323)" : "border-input bg-card text-(--c-6b6c66)",
             )}
           >
+            {canceled ? <SquareCheck className="size-[13px]" /> : <Square className="size-[13px]" />}
+            Canceladas
+          </button>
+        </div>
+      </section>
+
+      {/* clientes: a lista ocupa a largura toda; o rodapé fica grudado embaixo */}
+      <section className="overflow-clip rounded-xl border bg-card shadow-card">
+        <div className="flex flex-wrap items-center gap-2.5 border-b border-(--c-efefeb) px-3.5 py-3">
+          <div className="flex h-8 min-w-[200px] flex-1 items-center gap-2 rounded-[7px] border border-input px-2.5 focus-within:border-ring">
+            <Search className="size-3.5 shrink-0 text-(--c-6b6c66)" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar cliente, código ou CNPJ"
+              aria-label="Buscar cliente, código ou CNPJ"
+              className="min-w-0 flex-1 bg-transparent text-[13px] text-ellipsis outline-none placeholder:text-(--c-6b6c66)"
+            />
+          </div>
+          <div className="flex gap-1 rounded-[7px] bg-(--c-f3f3f0) p-0.5" role="tablist">
+            {filters.map(([key, label, count]) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={filter === key}
+                onClick={() => setFilter(key)}
+                className={cn(
+                  "rounded-[5px] px-2.5 py-[5px] text-xs whitespace-nowrap",
+                  filter === key ? "bg-card text-foreground shadow-[0_1px_2px_rgba(0,0,0,.08)]" : "text-muted-foreground",
+                )}
+              >
+                {label} <span className="font-mono text-(--c-6b6c66)">{count}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div
+          className={cn(
+            ROW_GRID,
+            "items-center border-b border-(--c-efefeb) bg-(--c-fafaf8) px-3.5 py-[9px] text-[11.5px] tracking-[0.04em] text-(--c-6b6c66) uppercase",
+          )}
+        >
+          <CheckAll all={allOn} some={someOn} disabled={visibleOpen.length === 0 || loading} onToggle={toggleAll} />
+          <span>Cliente</span>
+          <span className="hidden md:block">Operações</span>
+          <span className="hidden md:block">Certificado</span>
+          <span>Situação</span>
+        </div>
+
+        {loading ? (
+          <p className="flex items-center justify-center gap-2 p-8 text-[13px] text-(--c-6b6c66)">
+            <Loader2 className="size-3.5 animate-spin" /> Carregando a situação dos clientes…
+          </p>
+        ) : visibleOpen.length === 0 && visibleLocked.length === 0 ? (
+          <p className="p-8 text-center text-[13px] text-(--c-6b6c66)">Nenhum cliente encontrado.</p>
+        ) : (
+          visibleOpen.map((r) => {
+            const on = selected.has(r.client.id);
+            const c = r.client;
+            return (
+              <div
+                key={c.id}
+                role="checkbox"
+                aria-checked={on}
+                tabIndex={0}
+                onClick={() => toggle(c.id)}
+                onKeyDown={(e) => {
+                  if (e.key === " " || e.key === "Enter") {
+                    e.preventDefault();
+                    toggle(c.id);
+                  }
+                }}
+                className={cn(
+                  ROW_GRID,
+                  "cursor-pointer items-center border-b border-(--c-f2f2ef) px-3.5 py-2.5 outline-none hover:bg-(--c-fafaf8) focus-visible:bg-(--c-f3faf6)",
+                  on && "bg-(--c-f3faf6) hover:bg-(--c-f3faf6)",
+                )}
+              >
+                <CheckBox on={on} />
+                <div className="flex min-w-0 flex-col gap-px">
+                  <span className="truncate text-[13px] font-medium">{c.trade_name || c.legal_name}</span>
+                  <span className="truncate font-mono text-[11.5px] text-(--c-6b6c66)">
+                    {c.client_code} · {formatCNPJ(c.cnpj)}
+                  </span>
+                </div>
+                <div className="hidden flex-wrap gap-1 md:flex">
+                  {EXPORT_OPERATIONS.map((op) => {
+                    const enabled = c[op.flag];
+                    const onTop = operations.includes(op.value);
+                    return (
+                      <span
+                        key={op.value}
+                        title={!enabled ? `${op.label}: não habilitada no cadastro` : !onTop ? `${op.label}: desmarcada no topo` : op.label}
+                        className={cn(
+                          "rounded px-[5px] py-px font-mono text-[10.5px] whitespace-nowrap",
+                          enabled && onTop ? "bg-(--c-f2f2ef) text-(--c-4a4b46)" : "text-(--c-c9c9c4)",
+                          !enabled && "line-through",
+                        )}
+                      >
+                        {OP_TAG[op.value]}
+                      </span>
+                    );
+                  })}
+                </div>
+                <span
+                  className={cn(
+                    "hidden items-center gap-[5px] text-xs md:flex",
+                    c.certificate_status === "expiring" ? "text-(--c-b45309)" : "text-(--c-1c7a47)",
+                  )}
+                  title={c.certificate_valid_until ? `até ${formatDate(c.certificate_valid_until)}` : undefined}
+                >
+                  {r.certOk ? (
+                    <ShieldCheck className={cn("size-[13px]", c.certificate_status === "expiring" && "text-(--c-d97706)")} />
+                  ) : (
+                    <ShieldAlert className="size-[13px]" />
+                  )}
+                  {c.certificate_status === "expiring" ? "Vencendo" : "Válido"}
+                </span>
+                <div className="flex min-w-0 flex-col items-start gap-0.5">
+                  {r.status === "none" ? (
+                    <span className="text-xs text-(--c-c9c9c4)">—</span>
+                  ) : (
+                    <ToneBadge tone={COMPETENCE_STATUS_TONE[r.status]}>{COMPETENCE_STATUS_LABEL[r.status]}</ToneBadge>
+                  )}
+                  {r.hint ? <span className="text-[11.5px] text-(--c-6b6c66)">{r.hint}</span> : null}
+                </div>
+              </div>
+            );
+          })
+        )}
+
+        {!loading ? (
+          <LockedGroup
+            title={`${lockedRows.length} ${lockedRows.length === 1 ? "não pode ser agendado agora" : "não podem ser agendados agora"}`}
+            rows={lockedRows}
+            open={showLocked}
+            onToggle={() => setShowLocked((v) => !v)}
+          />
+        ) : null}
+
+        {processedResult ? (
+          <StickyBar success>
+            <CircleCheck className="size-4 shrink-0 text-(--c-1c7a47)" />
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-[13px] text-(--c-1c5e3c)">
+              <span>
+                <b className="font-semibold">{processedResult.created} cliente(s) adicionados à fila.</b> O robô começa
+                assim que estiver livre.
+              </span>
+              {processedResult.duplicates > 0 ? (
+                <span className="text-xs text-(--c-6b6c66)">
+                  {processedResult.duplicates} já estavam agendados e foram ignorados.
+                </span>
+              ) : null}
+              {processedResult.results
+                .filter((r) => !r.job_id && !r.duplicate)
+                .map((r) => (
+                  <span key={r.client_id} className="text-xs text-(--c-b42323)">
+                    {active.find((c) => c.id === r.client_id)?.trade_name ||
+                      active.find((c) => c.id === r.client_id)?.legal_name ||
+                      r.client_id}
+                    : {r.message ?? r.error}
+                  </span>
+                ))}
+            </div>
+            <Link href="/queue" className="text-[13px] font-medium whitespace-nowrap text-primary">
+              Acompanhar na Fila →
+            </Link>
             <button
               type="button"
-              aria-label={allOn ? "Desmarcar todos" : "Selecionar todos"}
-              onClick={toggleAll}
-              disabled={visibleSelectable.length === 0}
-              className={cn(
-                "box-border grid size-4 place-items-center rounded border-[1.5px] text-white disabled:opacity-40",
-                someOn ? "border-primary bg-primary" : "border-(--c-cfcfca) bg-card",
-              )}
+              onClick={scheduleMore}
+              className="flex h-8 items-center rounded-[7px] border border-(--c-d3ebdc) bg-card px-3 text-[12.5px] text-primary hover:bg-(--c-eef7f1)"
             >
-              {allOn ? <Check className="size-[11px]" /> : someOn ? <Minus className="size-[11px]" /> : null}
+              Agendar mais
             </button>
-            <span>Cliente</span>
-            <span className="hidden md:block">CNPJ</span>
-            <span className="hidden md:block">Certificado</span>
-            <span>Status em {formatCompetence(competence)}</span>
-          </div>
-
-          <div className="max-h-[62vh] overflow-y-auto">
-            {visible.length === 0 ? (
-              <p className="p-8 text-center text-[13px] text-(--c-6b6c66)">Nenhum cliente encontrado.</p>
-            ) : (
-              visible.map((r) => {
-                const on = !r.locked && selected.has(r.client.id);
-                const c = r.client;
-                return (
-                  <div
-                    key={c.id}
-                    role="checkbox"
-                    aria-checked={on}
-                    aria-disabled={r.locked}
-                    tabIndex={r.locked ? -1 : 0}
-                    onClick={() => !r.locked && toggle(c.id)}
-                    onKeyDown={(e) => {
-                      if (!r.locked && (e.key === " " || e.key === "Enter")) {
-                        e.preventDefault();
-                        toggle(c.id);
-                      }
-                    }}
-                    className={cn(
-                      ROW_GRID,
-                      "items-center border-b border-(--c-f2f2ef) px-3.5 py-2.5 outline-none last:border-b-0 focus-visible:bg-(--c-f3faf6)",
-                      r.locked ? "cursor-not-allowed opacity-[.62]" : "cursor-pointer hover:bg-(--c-fafaf8)",
-                      on && "bg-(--c-f3faf6) hover:bg-(--c-f3faf6)",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "box-border grid size-4 place-items-center rounded border-[1.5px] text-white",
-                        on ? "border-primary bg-primary" : r.locked ? "border-(--c-cfcfca) bg-(--c-f3f3f0)" : "border-(--c-cfcfca) bg-card",
-                      )}
-                    >
-                      {on ? <Check className="size-[11px]" /> : r.locked ? <Lock className="size-[9px] text-(--c-6b6c66)" /> : null}
-                    </span>
-                    <div className="flex min-w-0 flex-col gap-px">
-                      <span className="truncate text-[13px] font-medium">{c.trade_name || c.legal_name}</span>
-                      <span className="font-mono text-[11.5px] text-(--c-6b6c66)">{c.client_code}</span>
-                    </div>
-                    <span className="hidden font-mono text-[12.5px] text-(--c-4a4b46) md:block">{formatCNPJ(c.cnpj)}</span>
-                    <div className="hidden flex-col gap-px md:flex">
-                      {r.certOk ? (
-                        <span className="flex items-center gap-[5px] text-xs text-(--c-1c7a47)">
-                          <ShieldCheck className="size-[13px]" />
-                          {c.certificate_status === "expiring" ? "Vencendo" : "Válido"}
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-[5px] text-xs text-(--c-b42323)">
-                          <ShieldAlert className="size-[13px]" />
-                          {c.certificate_status === "expired" ? "Vencido" : "Sem certificado"}
-                        </span>
-                      )}
-                      {c.certificate_valid_until ? (
-                        <span className="text-[11px] text-(--c-6b6c66)">até {formatDate(c.certificate_valid_until)}</span>
-                      ) : null}
-                    </div>
-                    <div className="flex min-w-0 flex-col items-start gap-0.5">
-                      {loading ? (
-                        <span className="text-xs text-(--c-6b6c66)">…</span>
-                      ) : r.status === "none" ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-[5px] border border-dashed border-(--c-d9d9d4) px-2 py-px text-xs whitespace-nowrap text-(--c-6b6c66)">
-                          <span className="size-1.5 rounded-full bg-(--c-c9c9c4)" />
-                          {COMPETENCE_STATUS_LABEL.none}
-                        </span>
-                      ) : (
-                        <ToneBadge tone={COMPETENCE_STATUS_TONE[r.status]}>{COMPETENCE_STATUS_LABEL[r.status]}</ToneBadge>
-                      )}
-                      {r.hint && !loading ? <span className="text-[11px] text-(--c-6b6c66)">{r.hint}</span> : null}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </section>
-      </div>
-
-      {/* resumo */}
-      <aside className="flex min-w-0 flex-[1_1_300px] flex-col gap-3 lg:sticky lg:top-20">
-        <section className="overflow-hidden rounded-xl border bg-card shadow-card">
-          <div className="flex flex-col gap-3.5 px-[18px] py-4">
-            <p className="text-[14.5px] font-semibold">Resumo do agendamento</p>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="flex flex-col gap-0.5 rounded-lg bg-(--c-fafaf8) p-2.5">
-                <span className="text-[22px] font-semibold tabular-nums">{chosen.length}</span>
-                <span className="text-[11.5px] text-(--c-6b6c66)">clientes</span>
-              </div>
-              <div className="flex flex-col gap-0.5 rounded-lg bg-(--c-fafaf8) p-2.5">
-                <span className="text-[22px] font-semibold tabular-nums">{exportCount}</span>
-                <span className="text-[11.5px] text-(--c-6b6c66)">exportações</span>
-              </div>
-            </div>
-            <dl className="flex flex-col gap-2 text-[12.5px]">
-              <div className="flex justify-between gap-3">
-                <dt className="text-(--c-6b6c66)">Competência</dt>
-                <dd className="font-mono">{formatCompetence(competence)}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-(--c-6b6c66)">Operações</dt>
-                <dd className="text-right">
-                  {operations.length
-                    ? EXPORT_OPERATIONS.filter((o) => operations.includes(o.value)).map((o) => o.label).join(", ") +
-                      (canceled ? " + canceladas" : "")
-                    : "Nenhuma"}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-(--c-6b6c66)">Tempo estimado</dt>
-                <dd className="text-right">{chosen.length ? `~${Math.ceil(chosen.length * 1.5)} min + retorno SEFAZ` : "—"}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-(--c-6b6c66)">Ignorados (já solicitados)</dt>
-                <dd>{ignored}</dd>
-              </div>
-            </dl>
+          </StickyBar>
+        ) : (
+          <StickyBar>
+            {canForce ? (
+              <label className="flex items-center gap-2" title={FORCE_HELP}>
+                <MiniSwitch
+                  on={force}
+                  label="Forçar reagendamento"
+                  onChange={(v) => {
+                    setForce(v);
+                    setProcessedResult(null);
+                  }}
+                />
+                <span className="text-[12.5px] text-(--c-3d3e3a)">Forçar reagendamento</span>
+              </label>
+            ) : null}
+            <span className="flex-1" />
             {pendingSelectable.length > 0 && !pendingSelectable.every((r) => selected.has(r.client.id)) ? (
               <button
                 type="button"
-                onClick={() => {
-                  setResult(null);
-                  setSelected(new Set(pendingSelectable.map((r) => r.client.id)));
-                }}
-                className="flex items-center gap-1.5 self-start text-[12.5px] font-medium text-primary hover:underline"
+                onClick={() => setSelected(() => new Set(pendingSelectable.map((r) => r.client.id)))}
+                className="flex items-center gap-1.5 text-[12.5px] font-medium text-primary hover:underline"
               >
                 <ListChecks className="size-3.5" /> Selecionar pendentes ({pendingSelectable.length})
               </button>
             ) : null}
+            <span className="text-[13px] whitespace-nowrap text-(--c-4a4b46)">
+              <b className="font-semibold text-foreground">{chosen.length}</b> clientes ·{" "}
+              <b className="font-semibold text-foreground">{exportCount}</b> exportações
+              {chosen.length ? ` · ~${Math.ceil(chosen.length * 1.5)} min + retorno SEFAZ` : ""}
+            </span>
             <button
               type="button"
               disabled={!canProcess}
               onClick={() => (force ? setConfirmOpen(true) : submit())}
-              className="flex h-10 items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-white hover:bg-(--c-196640) disabled:cursor-not-allowed disabled:bg-(--c-a9cdb8)"
+              className="flex h-[38px] items-center gap-2 rounded-lg bg-primary px-4 text-[13.5px] font-medium whitespace-nowrap text-white hover:bg-(--c-196640) disabled:cursor-not-allowed disabled:bg-(--c-a9cdb8)"
             >
               {pending ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
               Processar {chosen.length} cliente(s)
             </button>
-            {result ? <ResultBox result={result} clients={active} /> : null}
-          </div>
-          {canForce ? (
-            <div
-              className={cn(
-                "flex items-start gap-2.5 border-t border-(--c-efefeb) px-[18px] py-3",
-                force ? "bg-(--c-fdf6e9)" : "bg-(--c-fafaf8)",
-              )}
-            >
-              <button
-                type="button"
-                role="switch"
-                aria-checked={force}
-                aria-label="Forçar reagendamento"
-                onClick={() => {
-                  setForce((v) => !v);
-                  setResult(null);
-                }}
-                className={cn(
-                  "relative mt-px h-[18px] w-[30px] shrink-0 rounded-full transition-colors",
-                  force ? "bg-(--c-d98e0b)" : "bg-(--c-d4d4cf)",
-                )}
-              >
-                <span
-                  className={cn(
-                    "absolute top-0.5 size-3.5 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,.2)] transition-[left]",
-                    force ? "left-3.5" : "left-0.5",
-                  )}
-                />
-              </button>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[12.5px] font-medium">Forçar reagendamento</span>
-                <span className="text-[11.5px] text-(--c-6b6c66)">
-                  Libera clientes já solicitados: o robô exclui no SIAT o agendamento anterior desta competência e faz
-                  um novo.
-                </span>
-              </div>
-            </div>
-          ) : null}
-        </section>
-
-        <section className="flex flex-col gap-2.5 rounded-xl border bg-card shadow-card px-[18px] py-3.5">
-          <p className="flex items-center gap-1.5 text-[13px] font-semibold">
-            <Info className="size-3.5 text-(--c-6b6c66)" /> Como funciona
-          </p>
-          {HOW_IT_WORKS.map((t, i) => (
-            <div key={t} className="flex gap-2.5 text-xs leading-[1.45] text-(--c-4a4b46)">
-              <span className="font-mono text-(--c-6b6c66)">{String(i + 1).padStart(2, "0")}</span>
-              <span>{t}</span>
-            </div>
-          ))}
-        </section>
-      </aside>
+          </StickyBar>
+        )}
+      </section>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
@@ -613,37 +580,6 @@ export function AutomationScheduler({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
-  );
-}
-
-function ResultBox({ result, clients }: { result: BatchSummary; clients: PlannerClient[] }) {
-  const name = (id: string) => {
-    const c = clients.find((x) => x.id === id);
-    return c ? c.trade_name || c.legal_name : id;
-  };
-  const errors = result.results.filter((r) => !r.job_id && !r.duplicate);
-  return (
-    <div className="flex flex-col gap-1.5 rounded-lg bg-(--c-eef7f1) px-2.5 py-[9px] text-[12.5px] text-(--c-1c5e3c)">
-      <div className="flex items-start gap-2">
-        <CircleCheck className="mt-px size-3.5 shrink-0" />
-        <span className="flex-1">
-          {result.created} cliente(s) adicionados à fila.{" "}
-          {result.created > 0 ? (
-            <Link href="/dashboard" className="font-medium text-primary underline">
-              Acompanhar
-            </Link>
-          ) : null}
-        </span>
-      </div>
-      {result.duplicates > 0 ? (
-        <p className="pl-[22px] text-(--c-6b6c66)">{result.duplicates} já estavam agendados e foram ignorados.</p>
-      ) : null}
-      {errors.map((r) => (
-        <p key={r.client_id} className="pl-[22px] text-(--c-b42323)">
-          {name(r.client_id)}: {r.message ?? r.error}
-        </p>
-      ))}
     </div>
   );
 }

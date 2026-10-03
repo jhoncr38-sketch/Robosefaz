@@ -2,15 +2,21 @@ export function PageHeader({
   title,
   description,
   actions,
+  help,
 }: {
   title: string;
   description?: string;
   actions?: React.ReactNode;
+  /** "?" ao lado do título (ex.: <HelpTip>...</HelpTip>) */
+  help?: React.ReactNode;
 }) {
   return (
     <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
-        <h1 className="text-[22px] font-semibold tracking-[-0.01em] text-foreground">{title}</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-[22px] font-semibold tracking-[-0.01em] text-foreground">{title}</h1>
+          {help}
+        </div>
         {description ? <p className="mt-1 text-[13.5px] text-muted-foreground">{description}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
