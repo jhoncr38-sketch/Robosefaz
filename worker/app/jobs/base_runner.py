@@ -34,14 +34,18 @@ class Activity:
     def __init__(self) -> None:
         self.running = 0
         self.last_active = time.monotonic()
+        self.jobs: set[str] = set()  # ids em processamento (a recuperação não mexe neles)
 
     @contextmanager
-    def job(self) -> Iterator[None]:
+    def job(self, job_id: str | None = None) -> Iterator[None]:
         self.running += 1
+        if job_id:
+            self.jobs.add(job_id)
         try:
             yield
         finally:
             self.running -= 1
+            self.jobs.discard(job_id or "")
             self.last_active = time.monotonic()
 
     @property

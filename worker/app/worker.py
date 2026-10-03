@@ -56,7 +56,6 @@ class Worker:
         self.worker_id = worker_id or make_worker_id()
         self.stop_event = asyncio.Event()
         self.browser_slots = asyncio.Semaphore(settings.max_parallel_jobs)
-        self.current_jobs: set[str] = set()
         deps = RunnerDeps.build(repo, default_registry(), settings, self.worker_id)
         self.activity = deps.activity
         self.organizer = deps.organizer
@@ -254,7 +253,8 @@ class Worker:
                 log.exception("Falha ao renovar o acesso do computador")
 
     async def _recovery(self) -> None:
-        """A cada minuto: assume jobs de robôs que pararam de dar sinal (PC desligado etc.)."""
+        """A cada minuto: assume jobs de robôs que pararam de dar sinal (PC desligado etc.) e solta os
+        que ficaram presos neste robô (ex.: a internet caiu na hora de gravar o fim do trabalho)."""
         await self._sleep(20)  # deixa o próprio heartbeat ser gravado primeiro
         while not self.stop_event.is_set():
             try:
@@ -263,6 +263,7 @@ class Worker:
                     self.worker_id,
                     dead_after_s=self.settings.worker_dead_after_seconds,
                     stale_minutes=self.settings.stale_lock_minutes,
+                    own_active=self.activity.jobs,
                 )
             except Exception:
                 log.exception("Falha ao recuperar jobs de robôs desligados")

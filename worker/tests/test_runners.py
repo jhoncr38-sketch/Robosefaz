@@ -396,6 +396,69 @@ class TestRecovery:
         assert repo.job(job.id)["status"] == "queued"
 
 
+class TestOwnStuckJob:
+    """A internet caiu na hora de gravar o fim: o job fica com o lock deste robô sem ninguém nele."""
+
+    def _mine(self, repo: FakeRepo, locked_min_ago: float, **job_kw):  # noqa: ANN003, ANN202
+        _, job = _setup(repo, **job_kw)
+        now = datetime.now(timezone.utc)
+        repo.jobs[job.id].update(locked_by="EU-1", locked_at=now - timedelta(minutes=locked_min_ago))
+        return job
+
+    async def test_stuck_scheduling_goes_back_to_queue(self, repo: FakeRepo) -> None:
+        from app.jobs.recovery import recover_orphaned_jobs
+
+        job = self._mine(repo, 30, status="scheduling_nfe_received", task_status=TaskStatus.RUNNING)
+        assert await recover_orphaned_jobs(repo, "EU-1", own_active=set()) == [job.id]
+        j = repo.job(job.id)
+        assert j["status"] == "queued" and j["locked_by"] is None
+        assert "conexão caiu" in j["last_message"]
+        assert set(_statuses(repo, job.id).values()) == {TaskStatus.PENDING}  # exportação volta a pendente
+
+    async def test_stuck_collection_goes_back_to_waiting_sefaz(self, repo: FakeRepo) -> None:
+        from app.jobs.recovery import recover_orphaned_jobs
+
+        job = self._mine(repo, 30, status="downloading", task_status=TaskStatus.SCHEDULED)
+        await recover_orphaned_jobs(repo, "EU-1", own_active=set())
+        assert repo.job(job.id)["status"] == "waiting_sefaz"
+        assert set(_statuses(repo, job.id).values()) == {TaskStatus.SCHEDULED}  # nada reagendado
+
+    async def test_job_in_progress_is_left_alone(self, repo: FakeRepo) -> None:
+        from app.jobs.recovery import recover_orphaned_jobs
+
+        job = self._mine(repo, 30, status="scheduling_nfce", task_status=TaskStatus.RUNNING)
+        assert await recover_orphaned_jobs(repo, "EU-1", own_active={job.id}) == []
+        assert repo.job(job.id)["locked_by"] == "EU-1"
+
+    async def test_just_claimed_job_is_left_alone(self, repo: FakeRepo) -> None:
+        from app.jobs.recovery import recover_orphaned_jobs
+
+        job = self._mine(repo, 0.5, status="starting", task_status=TaskStatus.PENDING)
+        assert await recover_orphaned_jobs(repo, "EU-1", own_active=set()) == []
+
+    async def test_without_active_list_own_jobs_are_ignored(self, repo: FakeRepo) -> None:
+        from app.jobs.recovery import recover_orphaned_jobs
+
+        self._mine(repo, 30, status="scheduling_nfce", task_status=TaskStatus.RUNNING)
+        assert await recover_orphaned_jobs(repo, "EU-1") == []
+
+    async def test_runner_tracks_the_job_it_is_processing(self, repo: FakeRepo, deps) -> None:  # noqa: ANN001
+        from app.jobs.recovery import recover_orphaned_jobs
+
+        _, job = _setup(repo, status="queued")
+        seen: list[list[str]] = []
+
+        async def process(j) -> None:  # noqa: ANN001
+            repo.jobs[j.id]["locked_at"] = datetime.now(timezone.utc) - timedelta(hours=1)
+            seen.append(await recover_orphaned_jobs(repo, deps.worker_id, own_active=deps.activity.jobs))
+
+        runner = SchedulerRunner(deps)
+        runner.process = process  # type: ignore[method-assign]
+        assert await runner.run_once()
+        assert seen == [[]] and repo.job(job.id)["locked_by"] == deps.worker_id
+        assert deps.activity.jobs == set()
+
+
 class TestActivity:
     """Robô 'parado' = sem job em processamento; a consulta à fila não conta."""
 
