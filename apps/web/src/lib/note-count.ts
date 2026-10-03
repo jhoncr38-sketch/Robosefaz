@@ -24,6 +24,11 @@ export const NOTE_ALERT = { months: 3, minHistory: 2, dropRatio: 0.5, dropMin: 1
 
 const fmt = new Intl.NumberFormat("pt-BR");
 
+/** Canceladas não geram aviso: ter poucas ou nenhuma nota cancelada é o normal. */
+function isCanceled(r: { document_type: string }): boolean {
+  return r.document_type.endsWith("_CANCELADAS");
+}
+
 export function notesLabel(count: number): string {
   return count === 1 ? "1 nota" : `${fmt.format(count)} notas`;
 }
@@ -44,7 +49,7 @@ type Month = { count: number; complete: boolean };
 function monthly(rows: NoteCountRow[]): Map<string, Month> {
   const months = new Map<string, Month>();
   for (const r of rows) {
-    if (r.note_count == null || !parseCompetence(r.competence)) continue;
+    if (r.note_count == null || !parseCompetence(r.competence) || isCanceled(r)) continue;
     const end = monthEnd(r.competence);
     const complete = end != null && Date.parse(r.downloaded_at) >= end;
     const key = `${r.client_id}|${r.document_type}|${r.competence}`;
@@ -65,7 +70,7 @@ export function noteAlerts(
   const current = currentCompetence(now);
   const alerts: Record<string, NoteAlert> = {};
   for (const r of rows) {
-    if (r.note_count == null || r.competence >= current) continue;
+    if (r.note_count == null || r.competence >= current || isCanceled(r)) continue;
     const base = `${r.client_id}|${r.document_type}|`;
     const month = months.get(base + r.competence);
     if (!month?.complete) continue;

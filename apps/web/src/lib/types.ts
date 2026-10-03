@@ -28,12 +28,22 @@ export type TaskType =
   | "NFCE_EXPORT"
   | "NFE_ISSUED_EXPORT"
   | "NFE_RECEIVED_EXPORT"
+  | "NFCE_CANCELED_EXPORT"
+  | "NFE_ISSUED_CANCELED_EXPORT"
+  | "NFE_RECEIVED_CANCELED_EXPORT"
   | "CHECK_PROCESSING"
   | "DOWNLOAD"
   | "EFD_CHECK"
   | "MALHA_CHECK";
 
-export type ExportTaskType = Extract<TaskType, "NFCE_EXPORT" | "NFE_ISSUED_EXPORT" | "NFE_RECEIVED_EXPORT">;
+/** pedidos normais (só as notas ativas) */
+export type RegularExportTaskType = Extract<TaskType, "NFCE_EXPORT" | "NFE_ISSUED_EXPORT" | "NFE_RECEIVED_EXPORT">;
+/** notas canceladas: pedido separado, com Status "Canceladas" (botão "Canceladas" do agendamento) */
+export type CanceledExportTaskType = Extract<
+  TaskType,
+  "NFCE_CANCELED_EXPORT" | "NFE_ISSUED_CANCELED_EXPORT" | "NFE_RECEIVED_CANCELED_EXPORT"
+>;
+export type ExportTaskType = RegularExportTaskType | CanceledExportTaskType;
 
 export type TaskStatus =
   | "pending"
@@ -47,7 +57,13 @@ export type TaskStatus =
   | "cancelled"
   | "dry_run";
 
-export type DocumentType = "NFCE" | "NFE_EMITIDAS" | "NFE_RECEBIDAS";
+export type DocumentType =
+  | "NFCE"
+  | "NFE_EMITIDAS"
+  | "NFE_RECEBIDAS"
+  | "NFCE_CANCELADAS"
+  | "NFE_EMITIDAS_CANCELADAS"
+  | "NFE_RECEBIDAS_CANCELADAS";
 
 export type CertificateStatus = "valid" | "expiring" | "expired" | "error";
 

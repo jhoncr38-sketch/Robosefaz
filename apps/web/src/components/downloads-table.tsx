@@ -10,7 +10,8 @@ import { driveDownloadUrl, isEmptyZip } from "@/lib/downloads";
 import { formatBytes, formatDateTime } from "@/lib/format";
 import { downloadEntries, type MonthSummary, type NoMovementRow, type Situation } from "@/lib/no-movement";
 import { type NoteAlert, notesLabel } from "@/lib/note-count";
-import { DOCUMENT_LABEL } from "@/lib/status";
+import { baseDocument, DOCUMENT_LABEL, isCanceledDocument } from "@/lib/status";
+import type { DocumentType } from "@/lib/types";
 import type { DownloadRow } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -88,13 +89,27 @@ function FileDetails({ d, withName }: { d: DownloadRow; withName: boolean }) {
   );
 }
 
+// "NF-e emitidas" e, nas canceladas, uma etiqueta pequena ao lado (o tipo continua curto)
+function TypeBadge({ doc }: { doc: DocumentType }) {
+  return (
+    <span className="flex flex-wrap items-center gap-1">
+      <span className="rounded bg-(--c-f2f2ef) px-1.5 py-0.5 text-xs whitespace-nowrap text-(--c-4a4b46)">
+        {DOCUMENT_LABEL[baseDocument(doc)]}
+      </span>
+      {isCanceledDocument(doc) ? (
+        <span className="rounded bg-(--c-fdecec) px-1 py-px text-[10.5px] font-medium whitespace-nowrap text-(--c-b42323)">
+          canceladas
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 // tipo e, embaixo, a quantidade de notas (e os detalhes do arquivo, quando não há a coluna Arquivo)
 function TypeCell({ d, alert, details }: { d: DownloadRow; alert?: NoteAlert; details: boolean }) {
   return (
     <div className="hidden min-w-0 flex-col items-start gap-1 md:flex">
-      <span className="rounded bg-(--c-f2f2ef) px-1.5 py-0.5 text-xs whitespace-nowrap text-(--c-4a4b46)">
-        {DOCUMENT_LABEL[d.document_type]}
-      </span>
+      <TypeBadge doc={d.document_type} />
       <span className="flex items-center gap-1 pl-0.5 text-[11px] text-(--c-9a9b94) tabular-nums">
         <NoteCount d={d} alert={alert} />
         {details ? <FileDetails d={d} withName /> : null}
@@ -149,9 +164,7 @@ function NoMovementPill({ n }: { n: NoMovementRow }) {
 function NoMovementTypeCell({ n, alert }: { n: NoMovementRow; alert?: NoteAlert }) {
   return (
     <div className="hidden min-w-0 flex-col items-start gap-1 md:flex">
-      <span className="rounded bg-(--c-f2f2ef) px-1.5 py-0.5 text-xs whitespace-nowrap text-(--c-4a4b46)">
-        {DOCUMENT_LABEL[n.document_type]}
-      </span>
+      <TypeBadge doc={n.document_type} />
       <span className="flex items-center gap-1 pl-0.5 text-[11px] text-(--c-9a9b94) tabular-nums">
         {alert ? <AlertCount label="0 notas" alert={alert} /> : <span>0 notas</span>}
       </span>

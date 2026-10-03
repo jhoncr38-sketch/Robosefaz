@@ -35,6 +35,7 @@ import pystray
 
 from app import __version__
 from app.config import PROJECT_ROOT, WORKER_ROOT, Settings, get_settings
+from app.jobs.models import DOC_LABEL
 from app.logs.job_logger import configure_logging
 from app.tray_icons import draw
 
@@ -43,7 +44,6 @@ log = logging.getLogger("tray")
 TASK_NAME = "SIAT Automacao - Robo"
 PROBLEM_STATUSES = ["failed", "manual_action_required", "certificate_required"]
 WAITING_USER = {"manual_action_required": "aguarda você", "certificate_required": "precisa do certificado"}
-DOC_LABEL = {"NFCE": "NFC-e", "NFE_EMITIDAS": "NF-e emitidas", "NFE_RECEBIDAS": "NF-e recebidas"}
 STALE_SECONDS = 30  # sem atualizar o status há mais que isso = robô parado
 _NO_WINDOW = 0x08000000  # CREATE_NO_WINDOW
 

@@ -104,9 +104,9 @@ class Settings(BaseSettings):
     # e-AGEAT costuma abrir com "Error 500"; o contorno é fechar a aba e clicar de novo
     module_open_attempts: int = 7
     module_retry_delay: float = 5.0  # espera cresce: 5s, 10s, 15s...
-    # status das NFC-e exportadas: ativas | canceladas | todas
-    nfce_status: str = "todas"
-    # NF-e (emitidas e recebidas): status ativas|canceladas|inutilizadas|denegadas|todas
+    # NÃO SÃO MAIS USADOS (1.2.32): o pedido normal vai sempre com Status "Ativas" e as canceladas
+    # têm pedido próprio (ver siat_scheduler.export_status). Ficam aqui para .env antigos continuarem válidos.
+    nfce_status: str = "ativas"
     nfe_status: str = "ativas"
     # NF-e: tipo de nota todas|entrada|saida
     nfe_tipo_nota: str = "todas"

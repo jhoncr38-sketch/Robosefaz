@@ -990,5 +990,50 @@ await test("saúde da plataforma: só o dono vê números; robô parado, desatua
   await db.query("update public.app_settings set value = '5' where key = 'health_failures_day'");
 });
 
+await test("canceladas: pedido próprio, respeita o cadastro, duplicidade separada e Reprocessar", async () => {
+  // B não usa NFC-e: as NFC-e canceladas também ficam de fora
+  const res = await as(OPERATOR, (tx) =>
+    tx.query(
+      "select public.create_automation_jobs_batch($1, '2026-06', '{NFE_ISSUED_EXPORT,NFCE_CANCELED_EXPORT,NFE_ISSUED_CANCELED_EXPORT}') r",
+      [[CLIENT_B]],
+    ),
+  );
+  const [r] = res.rows[0].r;
+  assert.deepEqual(r.operations, ["NFE_ISSUED_EXPORT", "NFE_ISSUED_CANCELED_EXPORT"]);
+  const tasks = (
+    await db.query("select task_type, document_type, dedup_key from public.automation_tasks where job_id = $1 order by task_type", [r.job_id])
+  ).rows;
+  assert.deepEqual(
+    tasks.map((t) => [t.task_type, t.document_type]),
+    [
+      ["NFE_ISSUED_EXPORT", "NFE_EMITIDAS"],
+      ["NFE_ISSUED_CANCELED_EXPORT", "NFE_EMITIDAS_CANCELADAS"],
+    ],
+  );
+  assert.equal(tasks[1].dedup_key, `${CLIENT_B}|2026-06|NFE_EMITIDAS_CANCELADAS|EXPORT`);
+  // pedir as canceladas de novo: já agendadas; pedir só as emitidas normais: também (chaves separadas)
+  const again = await as(OPERATOR, (tx) =>
+    tx.query("select public.create_automation_job($1, '2026-06', '{NFE_ISSUED_CANCELED_EXPORT}') r", [CLIENT_B]),
+  );
+  assert.equal(again.rows[0].r.duplicate, true);
+
+  // Reprocessar refaz também o pedido de canceladas
+  await db.query("update public.automation_jobs set status = 'failed' where id = $1", [r.job_id]);
+  await db.query("update public.automation_tasks set status = 'failed' where job_id = $1", [r.job_id]);
+  await as(OPERATOR, (tx) => tx.query("select public.retry_automation_job($1)", [r.job_id]));
+  const after = (await db.query("select task_type, status from public.automation_tasks where job_id = $1 order by task_type", [r.job_id])).rows;
+  assert.deepEqual(after.map((t) => t.status), ["pending", "pending"]);
+
+  // canceladas sem nota não viram linha "sem movimento" na tela Downloads
+  await db.query(
+    "update public.automation_tasks set status = 'completed', result = '{\"no_notes\": true}', finished_at = now() where job_id = $1",
+    [r.job_id],
+  );
+  const empty = await as(ADMIN, (tx) =>
+    tx.query("select document_type from public.downloads_no_movement where client_id = $1 and competence = '2026-06'", [CLIENT_B]),
+  );
+  assert.deepEqual(empty.rows.map((x) => x.document_type), ["NFE_EMITIDAS"]);
+});
+
 console.log(`\n${passed} teste(s) de banco passaram${process.exitCode ? " (com falhas)" : ""}.`);
 await db.close();

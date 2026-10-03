@@ -13,13 +13,28 @@ class TaskType(StrEnum):
     NFCE_EXPORT = "NFCE_EXPORT"
     NFE_ISSUED_EXPORT = "NFE_ISSUED_EXPORT"
     NFE_RECEIVED_EXPORT = "NFE_RECEIVED_EXPORT"
+    # notas canceladas: pedido separado, com Status "Canceladas" (ZIP próprio; desde a 1.2.32)
+    NFCE_CANCELED_EXPORT = "NFCE_CANCELED_EXPORT"
+    NFE_ISSUED_CANCELED_EXPORT = "NFE_ISSUED_CANCELED_EXPORT"
+    NFE_RECEIVED_CANCELED_EXPORT = "NFE_RECEIVED_CANCELED_EXPORT"
     CHECK_PROCESSING = "CHECK_PROCESSING"
     DOWNLOAD = "DOWNLOAD"
     EFD_CHECK = "EFD_CHECK"  # consulta do processamento da EFD (mensagens do DT-e)
     MALHA_CHECK = "MALHA_CHECK"  # Consulta de Malhas Fiscais (SIAT web, somente leitura)
 
 
+# ordem em que o robô agenda: cada tipo e logo depois as canceladas dele
 EXPORT_TASK_TYPES: tuple[TaskType, ...] = (
+    TaskType.NFCE_EXPORT,
+    TaskType.NFCE_CANCELED_EXPORT,
+    TaskType.NFE_ISSUED_EXPORT,
+    TaskType.NFE_ISSUED_CANCELED_EXPORT,
+    TaskType.NFE_RECEIVED_EXPORT,
+    TaskType.NFE_RECEIVED_CANCELED_EXPORT,
+)
+
+# "agendar tudo" sem dizer quais: os pedidos normais (as canceladas só quando pedidas)
+DEFAULT_EXPORT_TASK_TYPES: tuple[TaskType, ...] = (
     TaskType.NFCE_EXPORT,
     TaskType.NFE_ISSUED_EXPORT,
     TaskType.NFE_RECEIVED_EXPORT,
@@ -55,13 +70,46 @@ class DocumentType(StrEnum):
     NFCE = "NFCE"
     NFE_EMITIDAS = "NFE_EMITIDAS"
     NFE_RECEBIDAS = "NFE_RECEBIDAS"
+    NFCE_CANCELADAS = "NFCE_CANCELADAS"
+    NFE_EMITIDAS_CANCELADAS = "NFE_EMITIDAS_CANCELADAS"
+    NFE_RECEBIDAS_CANCELADAS = "NFE_RECEBIDAS_CANCELADAS"
 
 
 TASK_DOCUMENT: dict[TaskType, DocumentType] = {
     TaskType.NFCE_EXPORT: DocumentType.NFCE,
     TaskType.NFE_ISSUED_EXPORT: DocumentType.NFE_EMITIDAS,
     TaskType.NFE_RECEIVED_EXPORT: DocumentType.NFE_RECEBIDAS,
+    TaskType.NFCE_CANCELED_EXPORT: DocumentType.NFCE_CANCELADAS,
+    TaskType.NFE_ISSUED_CANCELED_EXPORT: DocumentType.NFE_EMITIDAS_CANCELADAS,
+    TaskType.NFE_RECEIVED_CANCELED_EXPORT: DocumentType.NFE_RECEBIDAS_CANCELADAS,
 }
+
+# canceladas -> o tipo de nota delas (mesma tela do SIAT, mesmo emitente/destinatário)
+_CANCELED_BASE: dict[DocumentType, DocumentType] = {
+    DocumentType.NFCE_CANCELADAS: DocumentType.NFCE,
+    DocumentType.NFE_EMITIDAS_CANCELADAS: DocumentType.NFE_EMITIDAS,
+    DocumentType.NFE_RECEBIDAS_CANCELADAS: DocumentType.NFE_RECEBIDAS,
+}
+
+# nome do tipo nas mensagens e no nome do arquivo da nota
+DOC_LABEL: dict[str, str] = {
+    "NFCE": "NFC-e",
+    "NFE_EMITIDAS": "NF-e emitidas",
+    "NFE_RECEBIDAS": "NF-e recebidas",
+    "NFCE_CANCELADAS": "NFC-e canceladas",
+    "NFE_EMITIDAS_CANCELADAS": "NF-e emitidas canceladas",
+    "NFE_RECEBIDAS_CANCELADAS": "NF-e recebidas canceladas",
+}
+
+
+def base_document(document_type: DocumentType | str) -> DocumentType:
+    """NFC-e canceladas -> NFC-e (a tela e o emitente/destinatário são os mesmos)."""
+    doc = DocumentType(document_type)
+    return _CANCELED_BASE.get(doc, doc)
+
+
+def is_canceled(document_type: DocumentType | str) -> bool:
+    return DocumentType(document_type) in _CANCELED_BASE
 
 
 class LogLevel(StrEnum):

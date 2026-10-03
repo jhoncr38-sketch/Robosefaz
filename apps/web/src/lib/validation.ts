@@ -76,7 +76,14 @@ export const certificateSchema = z
 
 export type CertificateInput = z.input<typeof certificateSchema>;
 
-export const exportOperationSchema = z.enum(["NFCE_EXPORT", "NFE_ISSUED_EXPORT", "NFE_RECEIVED_EXPORT"]);
+export const exportOperationSchema = z.enum([
+  "NFCE_EXPORT",
+  "NFE_ISSUED_EXPORT",
+  "NFE_RECEIVED_EXPORT",
+  "NFCE_CANCELED_EXPORT",
+  "NFE_ISSUED_CANCELED_EXPORT",
+  "NFE_RECEIVED_CANCELED_EXPORT",
+]);
 
 export const competenceSchema = z
   .string()

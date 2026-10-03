@@ -14,7 +14,7 @@ from app.automation.siat.siat_malhas import MalhaResult, SiatMalhas
 from app.automation.siat.siat_login import SiatLogin
 from app.automation.siat.siat_navigation import SiatNavigation
 from app.automation.siat.siat_nfce import schedule_nfce_export
-from app.automation.siat.siat_nfe import schedule_nfe_issued_export, schedule_nfe_received_export
+from app.automation.siat.siat_nfe import schedule_canceled_export, schedule_nfe_issued_export, schedule_nfe_received_export
 from app.automation.siat.siat_scheduler import SiatExportScheduler
 from app.automation.siat.siat_taxpayer import SiatTaxpayer
 from app.browser.browser_factory import BrowserOptions, BrowserSession
@@ -22,15 +22,21 @@ from app.browser.screenshots import capture_error_screenshot
 from app.certificates.certificate_profile import CertificateProfile
 from app.certificates.chrome_policy import ChromeCertificatePolicyService, PolicyWriteNotAllowed
 from app.jobs.errors import AutomationError, ErrorCode, JobCancelled
-from app.jobs.models import DownloadedFile, ExportRequestResult, ExportStatusResult, Task, TaskType
+from app.jobs.models import (
+    EXPORT_TASK_TYPES,
+    TASK_DOCUMENT,
+    DownloadedFile,
+    ExportRequestResult,
+    ExportStatusResult,
+    Task,
+    TaskType,
+)
 from app.jobs.state_machine import JobStatus
 
 
 class SiatAutomationProvider(AutomationProvider):
     name = "SIAT"
-    supported_tasks = frozenset(
-        {TaskType.NFCE_EXPORT, TaskType.NFE_ISSUED_EXPORT, TaskType.NFE_RECEIVED_EXPORT}
-    )
+    supported_tasks = frozenset(EXPORT_TASK_TYPES)
 
     def __init__(self, selectors: SiatSelectors | None = None) -> None:
         self.sel = selectors or get_selectors()
@@ -124,7 +130,9 @@ class SiatAutomationProvider(AutomationProvider):
             return await schedule_nfce_export(*args)
         if task.task_type == TaskType.NFE_ISSUED_EXPORT:
             return await schedule_nfe_issued_export(*args)
-        return await schedule_nfe_received_export(*args)
+        if task.task_type == TaskType.NFE_RECEIVED_EXPORT:
+            return await schedule_nfe_received_export(*args)
+        return await schedule_canceled_export(*args, document_type=TASK_DOCUMENT[task.task_type])
 
     async def check_status(self, ctx: AutomationContext, tasks: list[Task]) -> list[ExportStatusResult]:
         await self._ensure_export_area(ctx)

@@ -1,6 +1,6 @@
 """Organização dos arquivos baixados por competência e cliente.
 
-{pasta das notas}/{ano}/{mês}/{nome da empresa}/{NFCE|NFE_EMITIDAS|NFE_RECEBIDAS}/
+{pasta das notas}/{ano}/{mês}/{nome da empresa}/{NFCE|NFE_EMITIDAS|NFE_RECEBIDAS|..._CANCELADAS}/
 Nome (desde a 1.2.26): "{EMPRESA} - {NFC-e|NF-e emitidas|NF-e recebidas} - {MM-AAAA} - {código}.zip"
 (segunda versão diferente do mesmo mês: "... - CLI000003 (2).zip"). Antes: CLI000003_2026-08_NFCE_2.zip;
 os dois formatos são reconhecidos e `rename_notes` converte os antigos aos poucos (só renomeia).
@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.downloads.folder_owner import Office, OwnerUnreadable, claim_or_check
-from app.jobs.models import DocumentType, DownloadedFile
+from app.jobs.models import DOC_LABEL, DocumentType, DownloadedFile
 from app.utils.competence import Competence
 from app.utils.files import ensure_dir, ensure_within, move_atomic, sha256_file, sniff_kind
 
@@ -47,17 +47,21 @@ DUPLICATES_FOLDER = "_Duplicadas"
 _INVALID_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
 # arquivo de nota do robô, formato antigo (até a 1.2.25): CLI000001_2026-08_NFCE.zip (lotes: _2, _3...)
 NOTE_FILE = re.compile(
-    r"^(?P<code>[A-Z0-9]{3,20})_(?P<year>\d{4})-(?P<month>\d{2})_(?P<doc>NFCE|NFE_EMITIDAS|NFE_RECEBIDAS)"
+    r"^(?P<code>[A-Z0-9]{3,20})_(?P<year>\d{4})-(?P<month>\d{2})_(?P<doc>"
+    + "|".join(sorted((d.value for d in DocumentType), key=len, reverse=True))
+    + r")"
     r"(?:_(?P<seq>\d+))?\.(?P<ext>zip|xml)$",
     re.IGNORECASE,
 )
 # formato com o nome da empresa (desde a 1.2.26): "LOJA X - NFC-e - 08-2026 - CLI000003 (2).zip"
 COMPANY_NOTE_FILE = re.compile(
-    r"^(?P<name>.+?) - (?P<doc>NFC-e|NF-e emitidas|NF-e recebidas) - (?P<month>0[1-9]|1[0-2])-(?P<year>\d{4})"
+    r"^(?P<name>.+?) - (?P<doc>"
+    # os rótulos mais longos primeiro ("NF-e emitidas canceladas" antes de "NF-e emitidas")
+    + "|".join(re.escape(label) for label in sorted(DOC_LABEL.values(), key=len, reverse=True))
+    + r") - (?P<month>0[1-9]|1[0-2])-(?P<year>\d{4})"
     r" - (?P<code>[A-Z0-9]{3,20})(?: \((?P<seq>\d+)\))?\.(?P<ext>zip|xml)$",
     re.IGNORECASE,
 )
-DOC_LABEL = {"NFCE": "NFC-e", "NFE_EMITIDAS": "NF-e emitidas", "NFE_RECEBIDAS": "NF-e recebidas"}
 _LABEL_DOC = {label.lower(): doc for doc, label in DOC_LABEL.items()}
 NAME_IN_FILE_MAX = 50  # o nome da empresa já está na pasta; no arquivo, encurtado
 

@@ -21,23 +21,29 @@ import {
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { previousCompetence } from "@/lib/competence";
-import { EXPORT_OPERATIONS } from "@/lib/status";
-import type { Client, ExportTaskType } from "@/lib/types";
+import { EXPORT_OPERATIONS, withCanceled } from "@/lib/status";
+import type { Client, RegularExportTaskType } from "@/lib/types";
 
 export function RunAutomationDialog({ client, canForce, disabled }: { client: Client; canForce: boolean; disabled?: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [competence, setCompetence] = useState(previousCompetence());
-  const [ops, setOps] = useState<ExportTaskType[]>(
+  const [ops, setOps] = useState<RegularExportTaskType[]>(
     EXPORT_OPERATIONS.filter((o) => client[o.flag]).map((o) => o.value),
   );
+  const [canceled, setCanceled] = useState(false);
   const [force, setForce] = useState(false);
   const [duplicate, setDuplicate] = useState(false);
   const [pending, startTransition] = useTransition();
 
   function run(forceRun = force) {
     startTransition(async () => {
-      const res = await createClientJob({ clientId: client.id, competence, operations: ops, force: forceRun });
+      const res = await createClientJob({
+        clientId: client.id,
+        competence,
+        operations: withCanceled(ops, canceled),
+        force: forceRun,
+      });
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -85,6 +91,11 @@ export function RunAutomationDialog({ client, canForce, disabled }: { client: Cl
                 {!client[o.flag] ? <span className="text-xs text-muted-foreground">(desabilitado no cadastro)</span> : null}
               </label>
             ))}
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={canceled} onCheckedChange={(v) => setCanceled(v === true)} />
+              Canceladas
+              <span className="text-xs text-muted-foreground">(dos tipos marcados, em ZIP separado)</span>
+            </label>
           </div>
           {canForce ? (
             <label className="flex items-center gap-2 text-xs text-muted-foreground">

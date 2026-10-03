@@ -25,6 +25,9 @@ TASK_STEP: dict[TaskType, JobStatus] = {
     TaskType.NFCE_EXPORT: JobStatus.SCHEDULING_NFCE,
     TaskType.NFE_ISSUED_EXPORT: JobStatus.SCHEDULING_NFE_ISSUED,
     TaskType.NFE_RECEIVED_EXPORT: JobStatus.SCHEDULING_NFE_RECEIVED,
+    TaskType.NFCE_CANCELED_EXPORT: JobStatus.SCHEDULING_NFCE,
+    TaskType.NFE_ISSUED_CANCELED_EXPORT: JobStatus.SCHEDULING_NFE_ISSUED,
+    TaskType.NFE_RECEIVED_CANCELED_EXPORT: JobStatus.SCHEDULING_NFE_RECEIVED,
 }
 
 # Ordem fixa das operações (NFC-e -> NF-e emitidas -> NF-e recebidas)

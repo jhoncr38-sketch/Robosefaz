@@ -32,7 +32,7 @@ from app.automation.siat.siat_legacy import (
     pick_new_request_id,
 )
 from app.jobs.errors import AutomationError, ErrorCode, TaxpayerMismatchError
-from app.jobs.models import DocumentType, ExportRequestResult
+from app.jobs.models import base_document, DocumentType, ExportRequestResult, is_canceled
 from app.utils.competence import format_br_date
 
 MessageKind = Literal["success", "duplicate", "error", "unknown"]
@@ -66,6 +66,13 @@ def extract_protocol(text: str, sel: SiatSelectors | None = None) -> str | None:
             continue
         return value
     return None
+
+
+def export_status(document_type: DocumentType | str) -> str:
+    """Status da nota no pedido: só as ativas no pedido normal; as canceladas vêm num pedido
+    separado (desde a 1.2.32; antes a NFC-e ia com "Todas", ativas e canceladas no mesmo ZIP).
+    NFCE_STATUS e NFE_STATUS do .env não são mais usados."""
+    return "canceladas" if is_canceled(document_type) else "ativas"
 
 
 class SiatExportScheduler:
@@ -113,13 +120,12 @@ class SiatExportScheduler:
         await wait_idle(self.page, 10_000)
 
     async def _fill_form(self, document_type: DocumentType, start_date: date, end_date: date) -> None:
-        role = "legacy_radio_destinatario" if document_type == DocumentType.NFE_RECEBIDAS else "legacy_radio_emitente"
+        base = base_document(document_type)
+        role = "legacy_radio_destinatario" if base == DocumentType.NFE_RECEBIDAS else "legacy_radio_emitente"
         await self._choose(self.sel.rx(role), "Tipo de consulta (Emitente/Destinatário)")
         await self.legacy.select_client_inscricao()
-        if document_type == DocumentType.NFCE:
-            tipo, status = "saida", self.ctx.settings.nfce_status
-        else:
-            tipo, status = self.ctx.settings.nfe_tipo_nota, self.ctx.settings.nfe_status
+        tipo = "saida" if base == DocumentType.NFCE else self.ctx.settings.nfe_tipo_nota
+        status = export_status(document_type)
         await self._choose_in_group(
             self.sel.rx("legacy_group_tipo_nota"), self.sel.rx(f"legacy_tipo_nota_{tipo}"), f"Tipo de nota: {tipo}"
         )
@@ -227,9 +233,9 @@ class SiatExportScheduler:
             f"Formulário preenchido: {document_type.value}, IE {self.legacy.require_ie()}, "
             f"{format_br_date(start_date)} a {format_br_date(end_date)}"
             + (
-                f", tipo saída, status {self.ctx.settings.nfce_status}"
+                f", tipo saída, status {export_status(document_type)}"
                 if family == NFCE
-                else f", tipo {self.ctx.settings.nfe_tipo_nota}, status {self.ctx.settings.nfe_status}"
+                else f", tipo {self.ctx.settings.nfe_tipo_nota}, status {export_status(document_type)}"
             ),
             step="scheduling",
             metadata={"document_type": document_type.value, "competence": competence},

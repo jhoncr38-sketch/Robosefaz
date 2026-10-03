@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.jobs.models import EXPORT_TASK_TYPES, TaskType
+from app.jobs.models import DEFAULT_EXPORT_TASK_TYPES, EXPORT_TASK_TYPES, TaskType
 from app.utils.competence import Competence
 
 
 def _default_operations() -> list[TaskType]:
-    return list(EXPORT_TASK_TYPES)
+    return list(DEFAULT_EXPORT_TASK_TYPES)
 
 
 class _AutomationBase(BaseModel):

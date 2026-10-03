@@ -13,7 +13,14 @@ export const SEFAZ_PHASE: JobStatus[] = [
   "downloading",
   "organizing_files",
 ];
-const EXPORT_TASKS = ["NFCE_EXPORT", "NFE_ISSUED_EXPORT", "NFE_RECEIVED_EXPORT"];
+const EXPORT_TASKS = [
+  "NFCE_EXPORT",
+  "NFE_ISSUED_EXPORT",
+  "NFE_RECEIVED_EXPORT",
+  "NFCE_CANCELED_EXPORT",
+  "NFE_ISSUED_CANCELED_EXPORT",
+  "NFE_RECEIVED_CANCELED_EXPORT",
+];
 
 /**
  * Quando cada job entrou na espera da SEFAZ: o último agendamento feito no SIAT

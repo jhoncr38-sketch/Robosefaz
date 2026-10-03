@@ -41,13 +41,14 @@ import {
   blocksNewRequest,
   COMPETENCE_STATUS_LABEL,
   COMPETENCE_STATUS_TONE,
+  isExportJob,
   statusMapFromJobs,
   type CompetenceStatusMap,
 } from "@/lib/competence-status";
 import { formatDate } from "@/lib/format";
-import { EXPORT_OPERATIONS } from "@/lib/status";
+import { EXPORT_OPERATIONS, withCanceled } from "@/lib/status";
 import { createClient } from "@/lib/supabase/client";
-import type { ExportTaskType } from "@/lib/types";
+import type { RegularExportTaskType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type StatusMap = CompetenceStatusMap;
@@ -62,7 +63,7 @@ const HOW_IT_WORKS = [
   "Solicitações já existentes para a mesma competência não são repetidas.",
 ];
 
-function opsForClient(client: PlannerClient, ops: ExportTaskType[]): ExportTaskType[] {
+function opsForClient(client: PlannerClient, ops: RegularExportTaskType[]): RegularExportTaskType[] {
   return EXPORT_OPERATIONS.filter((o) => ops.includes(o.value) && client[o.flag]).map((o) => o.value);
 }
 
@@ -92,7 +93,9 @@ export function AutomationScheduler({
   const active = useMemo(() => clients.filter((c) => c.active), [clients]);
   const [competence, setCompetence] = useState(initialCompetence);
   const [statusCache, setStatusCache] = useState<Record<string, StatusMap>>({ [initialCompetence]: initialStatuses });
-  const [operations, setOperations] = useState<ExportTaskType[]>(EXPORT_OPERATIONS.map((o) => o.value));
+  const [operations, setOperations] = useState<RegularExportTaskType[]>(EXPORT_OPERATIONS.map((o) => o.value));
+  // "Canceladas": um pedido a mais de cada tipo marcado, com Status "Canceladas" (ZIP próprio)
+  const [canceled, setCanceled] = useState(false);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>(preselectPending ? "pending" : "all");
   const [force, setForce] = useState(false);
@@ -120,7 +123,7 @@ export function AutomationScheduler({
     let cancelled = false;
     createClient()
       .from("automation_jobs")
-      .select("client_id, competence, status, created_at")
+      .select("client_id, competence, status, created_at, operations")
       .eq("competence", competence)
       .not("operations", "cs", "{EFD_CHECK}")
       .not("operations", "cs", "{MALHA_CHECK}")
@@ -133,7 +136,9 @@ export function AutomationScheduler({
           toast.error("Não foi possível carregar a situação dos clientes. Recarregue a página.");
           return;
         }
-        setStatusCache((prev) => ({ ...prev, [competence]: statusMapFromJobs(data ?? [], competence) }));
+        // pedido só de canceladas não conta como "mês solicitado"
+        const jobs = (data ?? []).filter(isExportJob);
+        setStatusCache((prev) => ({ ...prev, [competence]: statusMapFromJobs(jobs, competence) }));
       });
     return () => {
       cancelled = true;
@@ -152,14 +157,21 @@ export function AutomationScheduler({
         let lockReason: string | null = null;
         if (loading) lockReason = "carregando…";
         else if (!certOk) lockReason = "sem certificado válido";
-        else if (blocked && !force) lockReason = "será ignorado";
+        // já solicitado: com "Canceladas" ligado, pede só as canceladas (os pedidos repetidos são ignorados)
+        else if (blocked && !force && !canceled) lockReason = "será ignorado";
         else if (ops.length === 0) lockReason = "operação não habilitada no cadastro";
         const hint =
           lockReason ??
-          (blocked ? "reagendar (duplica)" : status === "failed" || status === "cancelled" ? "pode reagendar" : "");
+          (blocked && !force
+            ? "só as canceladas"
+            : blocked
+              ? "reagendar (duplica)"
+              : status === "failed" || status === "cancelled"
+                ? "pode reagendar"
+                : "");
         return { client: c, status, ops, certOk, blocked, locked: lockReason !== null, hint };
       }),
-    [active, statuses, operations, force, loading],
+    [active, statuses, operations, force, canceled, loading],
   );
 
   const term = q.trim().toLowerCase();
@@ -222,7 +234,7 @@ export function AutomationScheduler({
       const res = await createJobs({
         client_ids: ids,
         competence,
-        operations,
+        operations: withCanceled(operations, canceled),
         force,
         respect_client_flags: true,
       });
@@ -306,6 +318,23 @@ export function AutomationScheduler({
                   </button>
                 );
               })}
+              <span className="mx-0.5 hidden w-px self-stretch bg-(--c-efefeb) sm:block" />
+              <button
+                type="button"
+                aria-pressed={canceled}
+                title="Mais um pedido de cada tipo marcado, só com as notas canceladas (ZIP separado)"
+                onClick={() => {
+                  setResult(null);
+                  setCanceled((v) => !v);
+                }}
+                className={cn(
+                  "flex h-8 items-center gap-[7px] rounded-[7px] border px-3 text-[13px]",
+                  canceled ? "border-(--c-b42323)/30 bg-(--c-fdecec) text-(--c-b42323)" : "border-input bg-card text-(--c-7a7b75)",
+                )}
+              >
+                {canceled ? <SquareCheck className="size-3.5" /> : <Square className="size-3.5" />}
+                Canceladas
+              </button>
             </div>
           </div>
         </section>
@@ -471,7 +500,8 @@ export function AutomationScheduler({
                 <dt className="text-(--c-7a7b75)">Operações</dt>
                 <dd className="text-right">
                   {operations.length
-                    ? EXPORT_OPERATIONS.filter((o) => operations.includes(o.value)).map((o) => o.label).join(", ")
+                    ? EXPORT_OPERATIONS.filter((o) => operations.includes(o.value)).map((o) => o.label).join(", ") +
+                      (canceled ? " + canceladas" : "")
                     : "Nenhuma"}
                 </dd>
               </div>

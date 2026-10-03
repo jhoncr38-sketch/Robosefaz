@@ -1,4 +1,4 @@
-import type { CertificateStatus, DocumentType, ExportTaskType, JobStatus, TaskStatus, TaskType } from "@/lib/types";
+import type { CanceledExportTaskType, CertificateStatus, DocumentType, ExportTaskType, JobStatus, RegularExportTaskType, TaskStatus, TaskType } from "@/lib/types";
 
 export type Tone = "gray" | "blue" | "yellow" | "green" | "red" | "orange" | "purple";
 
@@ -101,23 +101,60 @@ export const TASK_TYPE_LABEL: Record<TaskType, string> = {
   NFCE_EXPORT: "NFC-e",
   NFE_ISSUED_EXPORT: "NF-e emitidas",
   NFE_RECEIVED_EXPORT: "NF-e recebidas",
+  NFCE_CANCELED_EXPORT: "NFC-e canceladas",
+  NFE_ISSUED_CANCELED_EXPORT: "NF-e emitidas canceladas",
+  NFE_RECEIVED_CANCELED_EXPORT: "NF-e recebidas canceladas",
   CHECK_PROCESSING: "Consulta de processamento",
   DOWNLOAD: "Download",
   EFD_CHECK: "Consulta EFD",
   MALHA_CHECK: "Consulta de malhas",
 };
 
-export const EXPORT_OPERATIONS: { value: ExportTaskType; label: string; flag: "uses_nfce" | "uses_nfe_issued" | "uses_nfe_received" }[] = [
+export const EXPORT_OPERATIONS: {
+  value: RegularExportTaskType;
+  label: string;
+  flag: "uses_nfce" | "uses_nfe_issued" | "uses_nfe_received";
+}[] = [
   { value: "NFCE_EXPORT", label: "NFC-e", flag: "uses_nfce" },
   { value: "NFE_ISSUED_EXPORT", label: "NF-e emitidas", flag: "uses_nfe_issued" },
   { value: "NFE_RECEIVED_EXPORT", label: "NF-e recebidas", flag: "uses_nfe_received" },
 ];
 
+/** pedido de canceladas de cada tipo (botão "Canceladas" do agendamento) */
+export const CANCELED_OPERATION: Record<RegularExportTaskType, CanceledExportTaskType> = {
+  NFCE_EXPORT: "NFCE_CANCELED_EXPORT",
+  NFE_ISSUED_EXPORT: "NFE_ISSUED_CANCELED_EXPORT",
+  NFE_RECEIVED_EXPORT: "NFE_RECEIVED_CANCELED_EXPORT",
+};
+
+/** Operações enviadas ao agendar: cada tipo marcado e, com "Canceladas", as canceladas dele. */
+export function withCanceled(ops: RegularExportTaskType[], canceled: boolean): ExportTaskType[] {
+  return canceled ? ops.flatMap((o) => [o, CANCELED_OPERATION[o]]) : ops;
+}
+
 export const DOCUMENT_LABEL: Record<DocumentType, string> = {
   NFCE: "NFC-e",
   NFE_EMITIDAS: "NF-e emitidas",
   NFE_RECEBIDAS: "NF-e recebidas",
+  NFCE_CANCELADAS: "NFC-e canceladas",
+  NFE_EMITIDAS_CANCELADAS: "NF-e emitidas canceladas",
+  NFE_RECEBIDAS_CANCELADAS: "NF-e recebidas canceladas",
 };
+
+const CANCELED_BASE: Partial<Record<DocumentType, DocumentType>> = {
+  NFCE_CANCELADAS: "NFCE",
+  NFE_EMITIDAS_CANCELADAS: "NFE_EMITIDAS",
+  NFE_RECEBIDAS_CANCELADAS: "NFE_RECEBIDAS",
+};
+
+export function isCanceledDocument(doc: DocumentType): boolean {
+  return doc in CANCELED_BASE;
+}
+
+/** NF-e emitidas canceladas -> NF-e emitidas (a etiqueta "canceladas" fica à parte). */
+export function baseDocument(doc: DocumentType): DocumentType {
+  return CANCELED_BASE[doc] ?? doc;
+}
 
 export const CERTIFICATE_STATUS_LABEL: Record<CertificateStatus, string> = {
   valid: "Válido",

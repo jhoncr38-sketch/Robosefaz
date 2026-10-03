@@ -4,7 +4,7 @@ import { AutomationScheduler } from "@/components/automation/automation-schedule
 import { PageHeader } from "@/components/page-header";
 import { requirePermission } from "@/lib/auth";
 import { currentCompetence, previousCompetence, toCompetenceKey } from "@/lib/competence";
-import { statusMapFromJobs } from "@/lib/competence-status";
+import { isExportJob, statusMapFromJobs } from "@/lib/competence-status";
 import { can } from "@/lib/permissions";
 import { loadPlannerClients } from "@/lib/queries";
 import { createClient } from "@/lib/supabase/server";
@@ -24,14 +24,17 @@ export default async function AutomationPage({ searchParams }: PageProps<"/autom
     loadPlannerClients(),
     supabase
       .from("automation_jobs")
-      .select("client_id, competence, status, created_at")
+      .select("client_id, competence, status, created_at, operations")
       .eq("competence", competence)
       .not("operations", "cs", "{EFD_CHECK}")
       .not("operations", "cs", "{MALHA_CHECK}")
       .order("created_at", { ascending: false })
       .limit(5000),
   ]);
-  const jobs = (jobsRes.data ?? []) as { client_id: string; competence: string; status: JobStatus; created_at: string }[];
+  // pedido só de canceladas não conta como "mês solicitado"
+  const jobs = ((jobsRes.data ?? []) as { client_id: string; competence: string; status: JobStatus; created_at: string; operations: string[] }[]).filter(
+    isExportJob,
+  );
 
   return (
     <>

@@ -10,7 +10,7 @@ from app.automation.base import AutomationContext
 from app.downloads.organizer import EmptyExportError
 from app.jobs.base_runner import BaseRunner, now_utc
 from app.jobs.errors import AutomationError, ErrorCode, JobCancelled
-from app.jobs.models import ExportStatus, Job, Task, TaskStatus, TaskType
+from app.jobs.models import DOC_LABEL, ExportStatus, Job, Task, TaskStatus, TaskType
 from app.jobs.reporter import JobReporter
 from app.jobs.state_machine import JobStatus
 from app.logs.job_logger import JobLogger
@@ -20,7 +20,6 @@ DOWNLOAD_SOFT_ERRORS = frozenset({ErrorCode.SELECTOR_NOT_FOUND, ErrorCode.DOWNLO
 DOWNLOAD_MAX_FAILURES = 5
 DOWNLOAD_BACKOFF_MINUTES = (5, 15, 30, 60)
 
-DOC_LABEL = {"NFCE": "NFC-e", "NFE_EMITIDAS": "NF-e emitidas", "NFE_RECEBIDAS": "NF-e recebidas"}
 
 FINAL_TASK_STATUSES = frozenset(
     {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.SKIPPED, TaskStatus.CANCELLED, TaskStatus.DRY_RUN}

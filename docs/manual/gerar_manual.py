@@ -540,7 +540,9 @@ def cap_automacao() -> list:
                 "<b>Agendar pendentes</b>).",
                 "<b>Competência:</b> use as setas ‹ › para escolher o mês. A tela abre no mês anterior, que "
                 "é o mais comum; meses futuros não aparecem.",
-                "<b>Operações:</b> ligue ou desligue NFC-e, NF-e emitidas e NF-e recebidas.",
+                "<b>Operações:</b> ligue ou desligue NFC-e, NF-e emitidas e NF-e recebidas. O botão "
+                "<b>Canceladas</b> (desligado por padrão) acrescenta, para cada tipo marcado, um pedido só com as "
+                "notas canceladas, que chegam num ZIP separado.",
                 "<b>Clientes:</b> cada cliente mostra a situação dele naquela competência (Concluído, Na fila, "
                 "Aguardando SEFAZ, Erro, Não solicitado...). Os filtros <b>Todos</b>, <b>Pendentes</b> e "
                 "<b>Já solicitados</b> ajudam a achar quem falta.",
@@ -553,12 +555,27 @@ def cap_automacao() -> list:
         table(
             [
                 ["Nota", "Configuração no SIAT"],
-                ["NFC-e", "Contribuinte como emitente; tipo saída; status <b>todas</b>."],
+                ["NFC-e", "Contribuinte como emitente; tipo saída; status <b>ativas</b>."],
                 ["NF-e emitidas", "Contribuinte como emitente; tipo de nota <b>todas</b>; status <b>ativas</b>."],
                 ["NF-e recebidas", "Contribuinte como destinatário; tipo de nota <b>todas</b>; status <b>ativas</b>."],
+                ["Canceladas", "A mesma tela de cada tipo marcado, com status <b>canceladas</b> (botão Canceladas)."],
                 ["Período", "Do primeiro ao último dia da competência."],
             ],
             [35, 135],
+        ),
+        H2("Notas canceladas"),
+        *bullets(
+            [
+                "Desde a versão 1.2.32 o pedido normal traz só as notas <b>ativas</b> (antes, a NFC-e vinha com as "
+                "canceladas misturadas). As canceladas vêm num pedido próprio, quando o botão <b>Canceladas</b> está "
+                "ligado, e são salvas num ZIP separado: <i>EMPRESA - NF-e emitidas canceladas - 09-2026 - CLI000001.zip</i>, "
+                "na pasta NFE_EMITIDAS_CANCELADAS da empresa. Assim uma nota cancelada nunca é importada como válida.",
+                "Mês já processado: com <b>Canceladas</b> ligado, a empresa pode ser marcada de novo e o robô pede "
+                "<b>só as canceladas</b> (os pedidos normais repetidos são ignorados).",
+                "Na tela <b>Downloads</b>, o arquivo de canceladas aparece com a etiqueta vermelha <b>canceladas</b> ao "
+                "lado do tipo. Mês sem nenhuma cancelada (o mais comum) não aparece na lista, só no Histórico do trabalho.",
+                "Cada pedido de canceladas leva uns 15 a 20 segundos a mais por empresa.",
+            ]
         ),
         H2("Pedidos repetidos"),
         *bullets(

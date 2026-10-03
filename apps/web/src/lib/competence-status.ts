@@ -93,8 +93,12 @@ export function blocksNewRequest(status: ClientCompetenceStatus): boolean {
 }
 
 /** Agendamento de notas (a consulta de EFD não conta na situação da competência). */
+const REGULAR_EXPORTS = ["NFCE_EXPORT", "NFE_ISSUED_EXPORT", "NFE_RECEIVED_EXPORT"];
+
+/** Trabalho de exportação das notas ativas (não EFD, malhas nem só as canceladas). */
 export function isExportJob(job: { operations?: readonly string[] | null }): boolean {
-  return !(job.operations ?? []).some((op) => op === "EFD_CHECK" || op === "MALHA_CHECK");
+  if (!job.operations) return true; // consulta sem as operações: como antes
+  return job.operations.some((op) => REGULAR_EXPORTS.includes(op));
 }
 
 /** Job mais recente de cada cliente na competência. */

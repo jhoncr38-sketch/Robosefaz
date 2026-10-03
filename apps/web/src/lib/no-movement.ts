@@ -115,6 +115,8 @@ export function monthSummary(
   inactive: Set<string> = new Set(),
 ): MonthSummary {
   const key = (r: { client_id: string; document_type: DocumentType | null }) => `${r.client_id}|${r.document_type}`;
+  // canceladas ficam fora do resumo (o resumo é das notas do mês)
+  files = files.filter((f) => !f.document_type.endsWith("_CANCELADAS"));
   const notes = new Set(files.filter(hasNotes).map(key));
   const none = new Set([...files.filter((d) => !hasNotes(d)).map(key), ...empty.map(key)].filter((k) => !notes.has(k)));
   const latest = new Map<string, (typeof tasks)[number]>();

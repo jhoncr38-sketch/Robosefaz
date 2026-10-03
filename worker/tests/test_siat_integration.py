@@ -42,11 +42,13 @@ def integration_settings(settings: Settings) -> Settings:
     return settings
 
 
-async def _context(repo: FakeRepo, settings: Settings, *, subject: str | None = None, **client_kw):  # noqa: ANN003, ANN202
+async def _context(  # noqa: ANN202
+    repo: FakeRepo, settings: Settings, *, subject: str | None = None, operations: list[TaskType] | None = None, **client_kw  # noqa: ANN003
+):
     client = make_client(**client_kw)
     cert = make_certificate(client, **({"subject_name": subject} if subject else {}))
     repo.add_client(client, cert)
-    job = repo.add_job(client)
+    job = repo.add_job(client, operations)
     logger = JobLogger(repo, job.id)
     reporter = JobReporter(repo, job, settings, logger, phase="schedule", initial=JobStatus.STARTING, poll_interval=0.1)
     ctx = AutomationContext(
@@ -92,8 +94,9 @@ async def test_full_flow_schedule_check_download(repo: FakeRepo, integration_set
 
     # parâmetros enviados ao "SIAT"
     nfce, issued, received = state.scheduled
+    # NFC-e: só as ativas (desde a 1.2.32; as canceladas têm pedido próprio)
     assert nfce == {"family": "nfce", "tipo": "emitente", "ie": "123456789", "nota": "saida",
-                    "status": "todas", "ini": "01/08/2026", "fim": "31/08/2026", "id": "9237950"}
+                    "status": "ativas", "ini": "01/08/2026", "fim": "31/08/2026", "id": "9237950"}
     assert (issued["family"], issued["tipo"], issued["ie"]) == ("nfe", "emitente", "123456789")
     # NF-e: tipo "Todas" e status "Ativas" (o mock deixa status "Todas" pré-marcado para
     # provar que o robô marca a opção dentro do grupo certo)
@@ -110,6 +113,53 @@ async def test_full_flow_schedule_check_download(repo: FakeRepo, integration_set
     assert state.downloads_served == 1
     profile_root = integration_settings.profiles_dir / ctx.client.id
     assert (profile_root / "chrome").is_dir() and not (profile_root / ".siat.lock").exists()
+
+
+async def test_canceled_notes_have_their_own_requests_and_files(repo: FakeRepo, integration_settings: Settings) -> None:
+    """Canceladas (1.2.32): um pedido a mais por tipo, com Status "Canceladas", na mesma entrada no
+    SIAT; cada um vira um ZIP próprio, nunca misturado com as ativas."""
+    ops = [
+        TaskType.NFCE_EXPORT,
+        TaskType.NFCE_CANCELED_EXPORT,
+        TaskType.NFE_ISSUED_EXPORT,
+        TaskType.NFE_ISSUED_CANCELED_EXPORT,
+        TaskType.NFE_RECEIVED_EXPORT,
+        TaskType.NFE_RECEIVED_CANCELED_EXPORT,
+    ]
+    state = MockState(reject_duplicates=True)  # como o SIAT real: recusa pedido com os mesmos parâmetros
+    ctx, job = await _context(repo, integration_settings, operations=ops)
+    provider = SiatAutomationProvider()
+    async with provider.open_session(ctx):
+        await _open(provider, ctx, state)
+        tasks = await repo.list_tasks(job.id)
+        results = [await provider.schedule(ctx, t) for t in tasks]
+        ids = [r.external_request_id for r in results]
+        assert len(set(ids)) == 6  # cada pedido com o seu ID
+        for t, r in zip(tasks, results, strict=True):
+            t.external_request_id = r.external_request_id
+            t.status = TaskStatus.SCHEDULED
+        statuses = await provider.check_status(ctx, tasks)
+        assert [s.status for s in statuses] == [ExportStatus.PROCESSED] * 6
+        canceled_issued = next(i for i, t in enumerate(tasks) if t.task_type == TaskType.NFE_ISSUED_CANCELED_EXPORT)
+        stored = await provider.download(ctx, tasks[canceled_issued], statuses[canceled_issued])
+
+    sent = [(r["family"], r["tipo"], r["status"]) for r in state.scheduled]
+    assert sent == [
+        ("nfce", "emitente", "ativas"),
+        ("nfce", "emitente", "canceladas"),
+        ("nfe", "emitente", "ativas"),
+        ("nfe", "emitente", "canceladas"),
+        ("nfe", "destinatario", "ativas"),
+        ("nfe", "destinatario", "canceladas"),
+    ]
+    assert all(r["ie"] == "123456789" and r["ini"] == "01/08/2026" for r in state.scheduled)
+    path = Path(stored.filepath)
+    name = ctx.client.trade_name or ctx.client.legal_name
+    assert path.name == f"{name} - NF-e emitidas canceladas - 08-2026 - CLI000001.zip"
+    assert path.parent.name == "NFE_EMITIDAS_CANCELADAS"
+    messages = repo.log_messages()
+    assert any("Agendando exportação NF-e recebidas canceladas" in m for m in messages)
+    assert any("Formulário preenchido: NFCE_CANCELADAS" in m and "status canceladas" in m for m in messages)
 
 
 async def test_dry_run_fills_form_but_never_schedules(repo: FakeRepo, integration_settings: Settings) -> None:

@@ -113,6 +113,9 @@ const OP_TAG: Record<ExportTaskType | "EFD_CHECK" | "MALHA_CHECK", string> = {
   NFCE_EXPORT: "NFC-e",
   NFE_ISSUED_EXPORT: "Emit.",
   NFE_RECEIVED_EXPORT: "Receb.",
+  NFCE_CANCELED_EXPORT: "NFC-e canc.",
+  NFE_ISSUED_CANCELED_EXPORT: "Emit. canc.",
+  NFE_RECEIVED_CANCELED_EXPORT: "Receb. canc.",
   EFD_CHECK: "EFD",
   MALHA_CHECK: "Malhas",
 };

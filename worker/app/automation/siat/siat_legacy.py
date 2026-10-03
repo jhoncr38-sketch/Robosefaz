@@ -20,14 +20,14 @@ from app.automation.siat.page_helpers import dialog_by_title, find_clickable, fi
 from app.automation.siat.selectors import SiatSelectors, get_selectors
 from app.browser.window import bring_tab_to_front
 from app.jobs.errors import AutomationError, ErrorCode, TaxpayerMismatchError
-from app.jobs.models import Client, DocumentType
+from app.jobs.models import base_document, Client, DocumentType
 
 NFCE = "nfce"
 NFE = "nfe"
 
 
 def family_of(document_type: DocumentType) -> str:
-    return NFCE if document_type == DocumentType.NFCE else NFE
+    return NFCE if base_document(document_type) == DocumentType.NFCE else NFE
 
 
 def only_digits(value: str | None) -> str:
