@@ -46,11 +46,14 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  /* profundidade dos cards e do menu lateral (refino "média") */
+  --shadow-card: 0 1px 2px rgba(28, 29, 27, 0.05), 0 4px 12px rgba(28, 29, 27, 0.04);
+  --shadow-sidebar: 4px 0 16px rgba(28, 29, 27, 0.03);
 }
 
 :root {
-  /* identidade do redesenho (handoff 26/09/2026): verde, claro, limpo */
-  --background: #f7f7f5;
+  /* identidade do redesenho (handoff 26/09/2026; refino 03/10/2026): verde, claro, limpo */
+  --background: #f1f1ed;
   --foreground: #1c1d1b;
   --card: #ffffff;
   --card-foreground: #1c1d1b;
@@ -65,7 +68,7 @@
   --accent: #f2f3ef;
   --accent-foreground: #1c1d1b;
   --destructive: #c53030;
-  --border: #e8e8e4;
+  --border: #e6e6e1;
   --input: #e3e3df;
   --ring: #9fd3b5;
   --chart-1: #2ea062;
@@ -146,21 +149,13 @@
   --warning: #e0a019;
 }
 
-/* ponto "ao vivo" (robô ativo, card Agora) */
-@keyframes live-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(46, 160, 98, 0.5); }
-  70% { box-shadow: 0 0 0 6px rgba(46, 160, 98, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(46, 160, 98, 0); }
+/* só o que pede a sua ação (intervenção) pulsa; o resto fica parado */
+@keyframes warn-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.55); }
+  70% { box-shadow: 0 0 0 5px rgba(249, 115, 22, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
 }
-.live-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  flex-shrink: 0;
-  border-radius: 9999px;
-  background: #2ea062;
-  animation: live-pulse 1.6s infinite;
-}
+.warn-pulse { animation: warn-pulse 1.8s infinite; }
 .no-scrollbar { scrollbar-width: none; }
 
 /* menu lateral: grupos entram deslizando; contador da fila "respira" quando há serviço */
@@ -169,12 +164,65 @@
   to { opacity: 1; transform: none; }
 }
 .nav-in { animation: nav-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-@keyframes nav-badge-live {
-  0% { box-shadow: 0 0 0 0 rgba(224, 160, 25, 0.45); }
-  70% { box-shadow: 0 0 0 5px rgba(224, 160, 25, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(224, 160, 25, 0); }
+
+/* menu lateral: claro (padrão) ou escuro, escolha de cada usuário (html[data-menu]) */
+:root {
+  --sb-bg: #ffffff;
+  --sb-strong: #1c1d1b;
+  --sb-item: #3d3e3a;
+  --sb-muted: #6b6c66;
+  --sb-line: #efefeb;
+  --sb-hover: #f2f3ef;
+  --sb-active-bg: #e6f4ec;
+  --sb-active-fg: #17603b;
+  --sb-bar: #1f7a4d;
+  --sb-brand: #1f7a4d;
+  --sb-chip: #f0f0ec;
+  --sb-badge-bg: #f0f0ec;
+  --sb-badge-fg: #6b6c66;
+  --sb-warn-bg: #fdf4e3;
+  --sb-warn-fg: #9a6205;
+  --sb-border: #e6e6e1;
+  --sb-flyout-border: #e8e8e4;
 }
-.nav-badge-live { animation: nav-badge-live 2.2s ease-out infinite; }
+.dark {
+  --sb-bg: #181917;
+  --sb-strong: #e9e9e4;
+  --sb-item: #d4d5cf;
+  --sb-muted: #9d9e98;
+  --sb-line: #2d2d2b;
+  --sb-hover: #292a27;
+  --sb-active-bg: #1c3a2a;
+  --sb-active-fg: #8fdcb2;
+  --sb-bar: #2a9560;
+  --sb-brand: #90dfb8;
+  --sb-chip: #2c2c2a;
+  --sb-badge-bg: #2c2c2a;
+  --sb-badge-fg: #9d9e98;
+  --sb-warn-bg: #372e1c;
+  --sb-warn-fg: #debf8c;
+  --sb-border: #2d2e2b;
+  --sb-flyout-border: #333332;
+}
+html[data-menu="escuro"] {
+  --sb-bg: #14241c;
+  --sb-strong: #eef2ee;
+  --sb-item: #c9d3cc;
+  --sb-muted: #93a59b;
+  --sb-line: #22362b;
+  --sb-hover: #1c3126;
+  --sb-active-bg: #234332;
+  --sb-active-fg: #ffffff;
+  --sb-bar: #4cc283;
+  --sb-brand: #4cc283;
+  --sb-chip: #22362b;
+  --sb-badge-bg: #22362b;
+  --sb-badge-fg: #c9d3cc;
+  --sb-warn-bg: #4a3a12;
+  --sb-warn-fg: #f3cf7a;
+  --sb-border: #14241c;
+  --sb-flyout-border: #22362b;
+}
 /* aviso flutuante (trabalho esperando computador): entra devagar, de baixo */
 @keyframes pcwait-in {
   from { opacity: 0; transform: translateY(10px) scale(0.98); }
@@ -183,7 +231,8 @@
 .pcwait-in { animation: pcwait-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 @media (prefers-reduced-motion: reduce) {
   [data-nav], [data-nav] * { animation: none !important; transition: none !important; }
-  .pcwait-in { animation: none !important; }
+  .pcwait-in, .warn-pulse { animation: none !important; }
+  [data-sidebar], [data-sidebar-pad] { transition: none !important; }
 }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
@@ -193,6 +242,7 @@
   --c-17603b: #17603b;
   --c-196640: #196640;
   --c-1b8f6a: #1b8f6a;
+  --c-1c1d1b: #1c1d1b;
   --c-1c5e3c: #1c5e3c;
   --c-1c7a47: #1c7a47;
   --c-1d5fb8: #1d5fb8;
@@ -203,9 +253,11 @@
   --c-2ea062: #2ea062;
   --c-3b82e0: #3b82e0;
   --c-3d3e3a: #3d3e3a;
+  --c-475569: #475569;
   --c-4a4b46: #4a4b46;
   --c-4a5b55: #4a5b55;
   --c-4a6b58: #4a6b58;
+  --c-64748b: #64748b;
   --c-6b3fb8: #6b3fb8;
   --c-6b6b66: #6b6b66;
   --c-6b6c66: #6b6c66;
@@ -218,6 +270,7 @@
   --c-a3a39e: #a3a39e;
   --c-a9cdb8: #a9cdb8;
   --c-b42323: #b42323;
+  --c-b45309: #b45309;
   --c-b4530f: #b4530f;
   --c-b7791f: #b7791f;
   --c-c9c9c4: #c9c9c4;
@@ -226,6 +279,7 @@
   --c-d3ebdc: #d3ebdc;
   --c-d4d4cf: #d4d4cf;
   --c-d9630f: #d9630f;
+  --c-d97706: #d97706;
   --c-d98e0b: #d98e0b;
   --c-d9d9d4: #d9d9d4;
   --c-dc3b3b: #dc3b3b;
@@ -234,20 +288,28 @@
   --c-e0a019: #e0a019;
   --c-e3e3df: #e3e3df;
   --c-e3efe7: #e3efe7;
+  --c-e6e6e1: #e6e6e1;
   --c-e6f4ec: #e6f4ec;
   --c-e8e8e4: #e8e8e4;
   --c-e8f1fd: #e8f1fd;
   --c-e8f6ee: #e8f6ee;
   --c-ecece8: #ecece8;
+  --c-eef1f5: #eef1f5;
   --c-eef7f1: #eef7f1;
   --c-efefeb: #efefeb;
+  --c-f0c9c9: #f0c9c9;
   --c-f0f0ec: #f0f0ec;
   --c-f1f1ef: #f1f1ef;
   --c-f2f2ef: #f2f2ef;
   --c-f2f3ef: #f2f3ef;
+  --c-f2f5f3: #f2f5f3;
+  --c-f3dfb4: #f3dfb4;
   --c-f3eefc: #f3eefc;
   --c-f3f3f0: #f3f3f0;
   --c-f3faf6: #f3faf6;
+  --c-f5f5f1: #f5f5f1;
+  --c-f5f5f2: #f5f5f2;
+  --c-f5f9ff: #f5f9ff;
   --c-f6d5bd: #f6d5bd;
   --c-f97316: #f97316;
   --c-fafaf8: #fafaf8;
@@ -258,12 +320,16 @@
   --c-fdf6e9: #fdf6e9;
   --c-febc2e: #febc2e;
   --c-ff5f57: #ff5f57;
+  --c-fff4e5: #fff4e5;
+  --c-fffbf2: #fffbf2;
 }
 .dark {
-  --c-13294b: #bed0ec;
+: #bed0ec;
+  --c-13294b
   --c-17603b: #abe7c8;
   --c-196640: #a4e5c5;
   --c-1b8f6a: #83dbbf;
+  --c-1c1d1b: #e9e9e4;
   --c-1c5e3c: #a9e5c6;
   --c-1c7a47: #93e0b6;
   --c-1d5fb8: #6291d1;
@@ -274,9 +340,11 @@
   --c-2ea062: #67d398;
   --c-3b82e0: #3b82e0;
   --c-3d3e3a: #c9cac6;
+  --c-475569: #aab6c8;
   --c-4a4b46: #bdbeb9;
   --c-4a5b55: #aabab4;
   --c-4a6b58: #9ab9a7;
+  --c-64748b: #7d8ba1;
   --c-6b3fb8: #794fc3;
   --c-6b6b66: #9e9e99;
   --c-6b6c66: #9d9e98;
@@ -284,11 +352,12 @@
   --c-7a7b75: #8e8f89;
   --c-8b5cf6: #8b5cf6;
   --c-9a6205: #debf8c;
-  --c-9a9b94: #6f7069;
+  --c-9a9b94: #a3a49d;
   --c-9fd3b5: #365c46;
-  --c-a3a39e: #575754;
+  --c-a3a39e: #8a8b85;
   --c-a9cdb8: #3b5646;
   --c-b42323: #d16060;
+  --c-b45309: #e0a874;
   --c-b4530f: #d59a70;
   --c-b7791f: #d1a361;
   --c-c9c9c4: #454540;
@@ -297,6 +366,7 @@
   --c-d3ebdc: #274b34;
   --c-d4d4cf: #3f3f3b;
   --c-d9630f: #cd8653;
+  --c-d97706: #d99a4a;
   --c-d98e0b: #cea256;
   --c-d9d9d4: #3d3d38;
   --c-dc3b3b: #dc3b3b;
@@ -305,20 +375,28 @@
   --c-e0a019: #c99f46;
   --c-e3e3df: #383836;
   --c-e3efe7: #243c2c;
+  --c-e6e6e1: #333332;
   --c-e6f4ec: #1e3a2a;
   --c-e8e8e4: #333332;
   --c-e8f1fd: #1b2634;
   --c-e8f6ee: #1d3829;
   --c-ecece8: #30302e;
+  --c-eef1f5: #202630;
   --c-eef7f1: #1b3423;
   --c-efefeb: #2d2d2b;
+  --c-f0c9c9: #4a2626;
   --c-f0f0ec: #2c2c2a;
   --c-f1f1ef: #2a2a29;
   --c-f2f2ef: #2a2a28;
   --c-f2f3ef: #292a27;
+  --c-f2f5f3: #232a26;
+  --c-f3dfb4: #4a3c22;
   --c-f3eefc: #221931;
   --c-f3f3f0: #292927;
   --c-f3faf6: #182f22;
+  --c-f5f5f1: #262624;
+  --c-f5f5f2: #252523;
+  --c-f5f9ff: #1a212b;
   --c-f6d5bd: #493629;
   --c-f97316: #f97316;
   --c-fafaf8: #1f201e;
@@ -329,4 +407,6 @@
   --c-fdf6e9: #332b1b;
   --c-febc2e: #febc2e;
   --c-ff5f57: #ff5f57;
+  --c-fff4e5: #36281a;
+  --c-fffbf2: #2b261b;
 }

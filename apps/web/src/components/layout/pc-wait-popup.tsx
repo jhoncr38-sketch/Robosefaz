@@ -97,7 +97,7 @@ export function PcWaitPopupView({
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-[13.5px] font-semibold text-foreground">{plural(items.length)}</p>
-          <p className="text-xs text-(--c-7a7b75)">
+          <p className="text-xs text-(--c-6b6c66)">
             {text.title} · {text.status}
           </p>
         </div>
@@ -105,7 +105,7 @@ export function PcWaitPopupView({
           type="button"
           onClick={onMinimize}
           aria-label="Recolher aviso"
-          className="-mt-0.5 -mr-1.5 rounded-md p-1 text-(--c-9a9b94) hover:bg-(--c-f3f3f0) hover:text-foreground"
+          className="-mt-0.5 -mr-1.5 rounded-md p-1 text-(--c-6b6c66) hover:bg-(--c-f3f3f0) hover:text-foreground"
         >
           <X className="size-4" />
         </button>
@@ -116,12 +116,12 @@ export function PcWaitPopupView({
           {shown.map((job, i) => (
             <span key={job.id}>
               {i > 0 ? ", " : null}
-              {clientName(job)} <span className="text-(--c-9a9b94)">({formatCompetence(job.competence)})</span>
+              {clientName(job)} <span className="text-(--c-6b6c66)">({formatCompetence(job.competence)})</span>
             </span>
           ))}
           {first.jobs.length > shown.length ? ` e mais ${first.jobs.length - shown.length}` : null}
         </p>
-        <p className="mt-3 text-[10.5px] font-medium tracking-[0.06em] text-(--c-9a9b94) uppercase">O que fazer</p>
+        <p className="mt-3 text-[10.5px] font-medium tracking-[0.06em] text-(--c-6b6c66) uppercase">O que fazer</p>
         <ol className="mt-1.5 space-y-1.5">
           {text.steps.map((step, i) => (
             <li key={step} className="flex gap-2">
@@ -133,7 +133,7 @@ export function PcWaitPopupView({
           ))}
         </ol>
         {others.length > 0 ? (
-          <p className="mt-2.5 text-xs text-(--c-7a7b75)">
+          <p className="mt-2.5 text-xs text-(--c-6b6c66)">
             Também:{" "}
             {others.map((g) => `${g.jobs.length} ${shortWhat(g)}`).join("; ")}
             .
@@ -141,7 +141,7 @@ export function PcWaitPopupView({
         ) : null}
       </div>
 
-      <div className="flex items-center gap-3 border-t bg-(--c-fafaf8) px-4 py-2.5 text-[11.5px] text-(--c-7a7b75)">
+      <div className="flex items-center gap-3 border-t bg-(--c-fafaf8) px-4 py-2.5 text-[11.5px] text-(--c-6b6c66)">
         <div className="flex min-w-0 flex-1 flex-wrap gap-x-3 gap-y-0.5">
           {computers.map((c) => (
             <span key={c.hostname} className="inline-flex items-center gap-1.5 whitespace-nowrap">

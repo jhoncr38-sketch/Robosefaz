@@ -43,7 +43,7 @@ export function BulkDownload({
   const label = target.kind === "client" ? "Baixar pasta do cliente" : "Baixar pasta do mês";
 
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border bg-card px-4 py-3">
+    <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border bg-card shadow-card px-4 py-3">
       <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-(--c-f3faf6) text-primary">
         <FolderDown className="size-[18px]" />
       </span>
@@ -66,7 +66,7 @@ export function BulkDownload({
           )}
           <Tooltip>
             <TooltipTrigger asChild>
-              <button type="button" className="text-(--c-9a9b94) hover:text-foreground" aria-label="Como baixar a pasta">
+              <button type="button" className="text-(--c-6b6c66) hover:text-foreground" aria-label="Como baixar a pasta">
                 <Info className="size-4" />
               </button>
             </TooltipTrigger>

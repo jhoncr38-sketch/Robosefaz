@@ -9,6 +9,7 @@ import { navLocation, type NavCounts, type NavFolderState } from "@/components/l
 import { NotificationsBell } from "@/components/layout/notifications-bell";
 import { RobotStatusPill } from "@/components/layout/robot-status-pill";
 import { Brand, SidebarNav } from "@/components/layout/sidebar";
+import { saveMenuStyle, useMenuStyle } from "@/components/layout/sidebar-state";
 import { saveTheme, useThemeChoice, type ThemeChoice } from "@/components/theme/theme";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ROLE_LABEL } from "@/lib/permissions";
+import type { MenuStyle } from "@/lib/theme-boot";
 import type { Profile } from "@/lib/types";
 
 export function Header({
@@ -37,6 +39,7 @@ export function Header({
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const theme = useThemeChoice();
+  const menuStyle = useMenuStyle();
   const where = navLocation(pathname);
   const displayName = profile.name || profile.email;
   const initials = displayName
@@ -54,8 +57,8 @@ export function Header({
             <Menu />
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-[260px] gap-0 p-0">
-          <SheetHeader className="border-b px-4 py-4">
+        <SheetContent side="left" className="w-[260px] gap-0 border-(--sb-border) bg-(--sb-bg) p-0">
+          <SheetHeader className="border-b border-(--sb-line) px-4 py-4">
             <SheetTitle asChild>
               <div>
                 <Brand />
@@ -75,14 +78,17 @@ export function Header({
       </Sheet>
 
       {where ? (
-        <div className="hidden shrink-0 items-center gap-2 text-[13px] whitespace-nowrap text-(--c-7a7b75) md:flex">
-          <span>{where.group}</span>
-          <ChevronRight className="size-3" />
-          <span className="font-medium text-foreground">{where.label}</span>
+        // sem espaço, o grupo ("SIAT ›") some inteiro (quebra para a 2ª linha, escondida); o nome da página fica
+        <div className="hidden h-5 min-w-[70px] flex-row-reverse flex-wrap items-center justify-end gap-x-2 overflow-hidden text-[13px] leading-5 whitespace-nowrap text-(--c-6b6c66) md:flex">
+          <span className="min-w-0 truncate font-medium text-foreground">{where.label}</span>
+          <span className="flex items-center gap-2">
+            {where.group}
+            <ChevronRight className="size-3" />
+          </span>
         </div>
       ) : null}
 
-      <div className="flex min-w-0 flex-1 justify-center">
+      <div className="flex min-w-[140px] flex-1 justify-center">
         <GlobalSearch />
       </div>
 
@@ -91,13 +97,16 @@ export function Header({
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button type="button" className="flex shrink-0 items-center gap-2 rounded-lg px-1 py-1 hover:bg-(--c-f2f3ef)">
+          <button
+            type="button"
+            className="flex shrink-0 items-center gap-2 rounded-lg px-1 py-1 whitespace-nowrap hover:bg-(--c-f2f3ef)"
+          >
             <span className="flex size-[30px] items-center justify-center rounded-full bg-(--c-dff1e6) text-[12.5px] font-semibold text-primary">
               {initials || <UserRound className="size-4" />}
             </span>
             <span className="hidden text-left leading-tight sm:block">
               <span className="block max-w-36 truncate text-[13px] font-medium">{displayName.split(/\s+/)[0]}</span>
-              <span className="block text-[11px] text-(--c-7a7b75)">{ROLE_LABEL[profile.role]}</span>
+              <span className="block text-[11px] text-(--c-6b6c66)">{ROLE_LABEL[profile.role]}</span>
             </span>
           </button>
         </DropdownMenuTrigger>
@@ -120,6 +129,16 @@ export function Header({
             </DropdownMenuRadioItem>
             <DropdownMenuRadioItem value="system" onSelect={(e) => e.preventDefault()}>
               <Monitor /> Automático (igual ao Windows)
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Menu lateral</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={menuStyle} onValueChange={(v) => saveMenuStyle(v as MenuStyle)}>
+            <DropdownMenuRadioItem value="branco" onSelect={(e) => e.preventDefault()}>
+              <span aria-hidden className="size-[15px] rounded-[4px] border border-(--c-d4d4cf) bg-white" /> Claro
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="escuro" onSelect={(e) => e.preventDefault()}>
+              <span aria-hidden className="size-[15px] rounded-[4px] bg-[#14241c]" /> Escuro
             </DropdownMenuRadioItem>
           </DropdownMenuRadioGroup>
           <DropdownMenuSeparator />

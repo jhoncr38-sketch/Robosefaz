@@ -81,7 +81,7 @@ export function JobsTable({
               </span>
             ) : null}
           </div>
-          <span className="hidden text-right font-mono text-[11.5px] text-(--c-7a7b75) md:block">
+          <span className="hidden text-right font-mono text-[11.5px] text-(--c-6b6c66) md:block">
             {job.started_at ? formatDuration(job.started_at, job.finished_at ?? job.updated_at) : "—"}
           </span>
         </ListRow>

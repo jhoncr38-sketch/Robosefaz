@@ -137,6 +137,9 @@ export type NavFolderState = Record<string, boolean>;
 
 export const NAV_STATE_COOKIE = "jr-nav";
 
+/** Menu lateral recolhido (mesmo cookie: "siat:1,collapsed:1"). */
+export const NAV_COLLAPSED_KEY = "collapsed";
+
 export function parseFolderState(value: string | undefined | null): NavFolderState {
   const state: NavFolderState = {};
   for (const part of (value ?? "").split(",")) {

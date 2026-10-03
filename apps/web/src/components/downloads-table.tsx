@@ -65,7 +65,7 @@ function FileDetails({ d, withName }: { d: DownloadRow; withName: boolean }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button type="button" className="shrink-0 text-(--c-9a9b94) hover:text-foreground" aria-label="Detalhes do arquivo">
+        <button type="button" className="shrink-0 text-(--c-6b6c66) hover:text-foreground" aria-label="Detalhes do arquivo">
           <Info className="size-3.5" />
         </button>
       </TooltipTrigger>
@@ -110,7 +110,7 @@ function TypeCell({ d, alert, details }: { d: DownloadRow; alert?: NoteAlert; de
   return (
     <div className="hidden min-w-0 flex-col items-start gap-1 md:flex">
       <TypeBadge doc={d.document_type} />
-      <span className="flex items-center gap-1 pl-0.5 text-[11px] text-(--c-9a9b94) tabular-nums">
+      <span className="flex items-center gap-1 pl-0.5 text-[11px] text-(--c-6b6c66) tabular-nums">
         <NoteCount d={d} alert={alert} />
         {details ? <FileDetails d={d} withName /> : null}
       </span>
@@ -126,7 +126,7 @@ function FileCell({ d, alert, className, count }: { d: DownloadRow; alert?: Note
         <span className="truncate font-mono text-xs">{d.filename}</span>
         <FileDetails d={d} withName={false} />
       </div>
-      <span className="flex items-center gap-1 text-[11px] text-(--c-9a9b94) tabular-nums">
+      <span className="flex items-center gap-1 text-[11px] text-(--c-6b6c66) tabular-nums">
         {count ? (
           <>
             <NoteCount d={d} alert={alert} /> ·
@@ -165,7 +165,7 @@ function NoMovementTypeCell({ n, alert }: { n: NoMovementRow; alert?: NoteAlert 
   return (
     <div className="hidden min-w-0 flex-col items-start gap-1 md:flex">
       <TypeBadge doc={n.document_type} />
-      <span className="flex items-center gap-1 pl-0.5 text-[11px] text-(--c-9a9b94) tabular-nums">
+      <span className="flex items-center gap-1 pl-0.5 text-[11px] text-(--c-6b6c66) tabular-nums">
         {alert ? <AlertCount label="0 notas" alert={alert} /> : <span>0 notas</span>}
       </span>
     </div>
@@ -177,7 +177,7 @@ function NoMovementFileCell({ n, alert, className }: { n: NoMovementRow; alert?:
   return (
     <div className={cn("min-w-0 flex-col gap-px", className)}>
       <span className="truncate text-xs text-(--c-6b6b66)">Sem arquivo: não houve notas no período</span>
-      <span className="flex items-center gap-1 text-[11px] text-(--c-9a9b94) tabular-nums">
+      <span className="flex items-center gap-1 text-[11px] text-(--c-6b6c66) tabular-nums">
         {alert ? (
           <>
             <AlertCount label="0 notas" alert={alert} /> ·
@@ -292,7 +292,7 @@ export function MonthSummaryBar({
           </Tooltip>
         </>
       ) : null}
-      <span className="text-(--c-9a9b94)">(cada empresa conta uma vez por tipo de nota)</span>
+      <span className="text-(--c-6b6c66)">(cada empresa conta uma vez por tipo de nota)</span>
     </div>
   );
 }

@@ -166,7 +166,7 @@ export default async function JobDetailPage({ params }: PageProps<"/history/[id]
                 title={
                   <>
                     {TASK_TYPE_LABEL[t.task_type]}
-                    {t.superseded ? <span className="ml-1 text-xs font-normal text-(--c-7a7b75)">(substituída)</span> : null}
+                    {t.superseded ? <span className="ml-1 text-xs font-normal text-(--c-6b6c66)">(substituída)</span> : null}
                   </>
                 }
                 sub={
@@ -187,7 +187,7 @@ export default async function JobDetailPage({ params }: PageProps<"/history/[id]
               <span className="hidden text-xs tabular-nums md:block">{formatDateTime(t.requested_at ?? t.started_at)}</span>
               <span className="hidden text-xs tabular-nums xl:block">{formatDateTime(t.finished_at)}</span>
               <span className="hidden text-center font-mono text-xs xl:block">{t.retry_count}</span>
-              <span className="hidden truncate text-xs text-(--c-7a7b75) xl:block" title={t.error_message ?? ""}>
+              <span className="hidden truncate text-xs text-(--c-6b6c66) xl:block" title={t.error_message ?? ""}>
                 {t.error_message ?? "—"}
               </span>
             </ListRow>

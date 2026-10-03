@@ -1,6 +1,7 @@
 import type { CanceledExportTaskType, CertificateStatus, DocumentType, ExportTaskType, JobStatus, RegularExportTaskType, TaskStatus, TaskType } from "@/lib/types";
 
-export type Tone = "gray" | "blue" | "yellow" | "green" | "red" | "orange" | "purple";
+// slate = na fila; amber = certificado vencendo (não confundir com "Aguardando SEFAZ")
+export type Tone = "gray" | "blue" | "yellow" | "green" | "red" | "orange" | "purple" | "slate" | "amber";
 
 export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
   queued: "Na fila",
@@ -27,12 +28,12 @@ export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
   certificate_required: "Certificado necessário",
 };
 
-// Roxo = na fila; Cinza = cancelado; Azul = processando; Amarelo = aguardando SEFAZ;
+// Ardósia = na fila; Cinza = cancelado; Azul = processando; Amarelo = aguardando SEFAZ;
 // Verde = concluído; Vermelho = erro; Laranja = intervenção manual.
 export function jobTone(status: JobStatus): Tone {
   switch (status) {
     case "queued":
-      return "purple";
+      return "slate";
     case "cancelled":
       return "gray";
     case "waiting_sefaz":
@@ -164,7 +165,7 @@ export const CERTIFICATE_STATUS_LABEL: Record<CertificateStatus, string> = {
 };
 
 export function certificateTone(status: CertificateStatus): Tone {
-  return status === "valid" ? "green" : status === "expiring" ? "yellow" : "red";
+  return status === "valid" ? "green" : status === "expiring" ? "amber" : "red";
 }
 
 /** Status calculado no cliente (independe do job de atualização do banco). */

@@ -101,9 +101,9 @@ export function GlobalSearch() {
   }
 
   return (
-    <div ref={boxRef} className="relative w-full max-w-[380px]">
+    <div ref={boxRef} className="relative w-full max-w-[380px] min-w-[140px]">
       <div className="flex h-[34px] w-full items-center gap-2 rounded-lg border border-input bg-(--c-fafaf8) px-2.5 text-[13px] focus-within:border-ring focus-within:bg-card">
-        <Search className="size-3.5 shrink-0 text-(--c-9a9b94)" />
+        <Search className="size-3.5 shrink-0 text-(--c-6b6c66)" />
         <input
           ref={ref}
           value={q}
@@ -138,9 +138,9 @@ export function GlobalSearch() {
               else if (term) seeAll();
             }
           }}
-          className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-(--c-9a9b94)"
+          className="min-w-0 flex-1 bg-transparent text-ellipsis outline-none placeholder:text-(--c-6b6c66)"
         />
-        {loading ? <Loader2 className="size-3.5 shrink-0 animate-spin text-(--c-9a9b94)" /> : null}
+        {loading ? <Loader2 className="size-3.5 shrink-0 animate-spin text-(--c-6b6c66)" /> : null}
       </div>
 
       {open && term ? (
@@ -149,7 +149,7 @@ export function GlobalSearch() {
           role="listbox"
           className="absolute top-[40px] left-0 z-40 w-full overflow-hidden rounded-[10px] border bg-popover shadow-[0_12px_30px_rgba(0,0,0,.12)]"
         >
-          <p className="px-3 pt-2 pb-1 text-[11px] tracking-[0.04em] text-(--c-9a9b94) uppercase">Clientes</p>
+          <p className="px-3 pt-2 pb-1 text-[11px] tracking-[0.04em] text-(--c-6b6c66) uppercase">Clientes</p>
           {clients === null ? (
             <p className="px-3 py-3 text-[12.5px] text-muted-foreground">Carregando…</p>
           ) : shown.length === 0 ? (
@@ -174,7 +174,7 @@ export function GlobalSearch() {
                     {c.trade_name || c.legal_name}
                     {!c.active ? <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">(inativo)</span> : null}
                   </span>
-                  <span className="truncate font-mono text-[11.5px] text-(--c-7a7b75)">
+                  <span className="truncate font-mono text-[11.5px] text-(--c-6b6c66)">
                     {c.client_code} · {formatCNPJ(c.cnpj)}
                   </span>
                 </span>

@@ -82,19 +82,19 @@ export default async function ErrorsPage() {
                   </div>
                   <div className="hidden min-w-0 flex-col gap-px md:flex">
                     <span className="truncate text-xs">{j.error_code ? (ERROR_CODE_LABEL[j.error_code] ?? j.error_code) : "—"}</span>
-                    {j.error_code ? <span className="truncate font-mono text-[11px] text-(--c-9a9b94)">{j.error_code}</span> : null}
+                    {j.error_code ? <span className="truncate font-mono text-[11px] text-(--c-6b6c66)">{j.error_code}</span> : null}
                   </div>
                   <div className="hidden min-w-0 flex-col gap-px xl:flex">
                     <span className="line-clamp-2 text-xs text-(--c-4a4b46)" title={j.error_message ?? ""}>
                       {j.error_message ?? "—"}
                     </span>
                     {shot ? (
-                      <span className="truncate font-mono text-[11px] text-(--c-9a9b94)" title={j.error_screenshot_path ?? ""}>
+                      <span className="truncate font-mono text-[11px] text-(--c-6b6c66)" title={j.error_screenshot_path ?? ""}>
                         {shot}
                       </span>
                     ) : null}
                   </div>
-                  <span className="hidden text-xs text-(--c-7a7b75) tabular-nums md:block">{formatDateTime(j.updated_at)}</span>
+                  <span className="hidden text-xs text-(--c-6b6c66) tabular-nums md:block">{formatDateTime(j.updated_at)}</span>
                   <JobActions job={j} role={profile.role} />
                 </ListRow>
               );
@@ -110,7 +110,7 @@ export default async function ErrorsPage() {
         ) : (
           logs.map((l) => (
             <ListRow key={l.id} grid={LOG_GRID}>
-              <span className="text-xs text-(--c-7a7b75) tabular-nums">{formatDateTime(l.created_at)}</span>
+              <span className="text-xs text-(--c-6b6c66) tabular-nums">{formatDateTime(l.created_at)}</span>
               <span className="truncate text-xs">
                 {l.job_id ? (
                   <Link href={`/history/${l.job_id}`} className="text-foreground hover:underline">

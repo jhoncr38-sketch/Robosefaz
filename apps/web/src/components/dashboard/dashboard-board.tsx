@@ -70,7 +70,7 @@ function clientName(job: AutomationJob, names: Map<string, string>): string {
 }
 
 function Card({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <section className={cn("rounded-xl border bg-card", className)}>{children}</section>;
+  return <section className={cn("rounded-xl border bg-card shadow-card", className)}>{children}</section>;
 }
 
 export function DashboardBoard({
@@ -220,7 +220,7 @@ export function DashboardBoard({
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <p className="text-[12.5px] font-medium">{a.title}</p>
-                  <p className="truncate text-[11.5px] text-(--c-7a7b75)" title={a.sub}>
+                  <p className="truncate text-[11.5px] text-(--c-6b6c66)" title={a.sub}>
                     {a.sub}
                   </p>
                 </div>
@@ -259,7 +259,7 @@ function CompetenceHero({
     <Card className="flex flex-col gap-[18px] p-5">
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex flex-[1_1_220px] flex-col gap-0.5">
-          <p className="text-xs text-(--c-7a7b75)">Competência atual</p>
+          <p className="text-xs text-(--c-6b6c66)">Competência atual</p>
           <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
             <span className="font-mono text-[26px] font-semibold tracking-[-0.02em]">{compLabel}</span>
             <span className="text-[13px] whitespace-nowrap text-muted-foreground">
@@ -313,7 +313,7 @@ function CompetenceHero({
 function HeroStat({ label, value, href, className }: { label: string; value: number; href: string; className?: string }) {
   return (
     <Link href={href} className="flex flex-col gap-0.5 text-foreground hover:no-underline">
-      <span className="text-xs text-(--c-7a7b75)">{label}</span>
+      <span className="text-xs text-(--c-6b6c66)">{label}</span>
       <span className={cn("text-xl font-semibold tabular-nums", className)}>{value}</span>
     </Link>
   );
@@ -372,7 +372,7 @@ function RecentExecutions({
       <div
         className={cn(
           EXEC_GRID,
-          "border-b border-(--c-efefeb) bg-(--c-fafaf8) px-[18px] py-[9px] text-[11.5px] tracking-[0.04em] text-(--c-7a7b75) uppercase",
+          "border-b border-(--c-efefeb) bg-(--c-fafaf8) px-[18px] py-[9px] text-[11.5px] tracking-[0.04em] text-(--c-6b6c66) uppercase",
         )}
       >
         <span>Cliente</span>
@@ -411,7 +411,7 @@ function RecentExecutions({
             <span className="min-w-0">
               <JobStatusBadge status={j.status} />
             </span>
-            <span className="text-right text-xs text-(--c-7a7b75)">
+            <span className="text-right text-xs text-(--c-6b6c66)">
               {now === null ? "" : formatShortAgo(j.created_at, new Date(now))}
             </span>
           </Link>
@@ -443,9 +443,9 @@ function NowCard({
   return (
     <Card className="flex flex-col gap-3.5 px-[18px] py-4">
       <div className="flex items-center gap-2">
-        {running ? <span className="live-dot" /> : <span className="size-2 rounded-full bg-(--c-c9c9c4)" />}
+        {running ? <span className="size-2 shrink-0 rounded-full bg-(--c-2ea062)" /> : <span className="size-2 rounded-full bg-(--c-c9c9c4)" />}
         <span className="flex-1 text-[14.5px] font-semibold">Agora</span>
-        <Link href="/queue" className="text-xs text-(--c-7a7b75)">
+        <Link href="/queue" className="text-xs text-(--c-6b6c66)">
           Fila: {queued}
         </Link>
       </div>
@@ -454,7 +454,7 @@ function NowCard({
         <>
           <div className="flex flex-col gap-0.5">
             <p className="text-[13.5px] font-semibold">{clientName(running, names)}</p>
-            <p className="text-xs text-(--c-7a7b75)">
+            <p className="text-xs text-(--c-6b6c66)">
               {formatCompetence(running.competence)} · {running.operations.map((o) => TASK_TYPE_LABEL[o]).join(", ")}
               {running.locked_by && hostnames[running.locked_by] ? ` · ${hostnames[running.locked_by]}` : ""}
             </p>
@@ -479,12 +479,12 @@ function NowCard({
                   <div
                     className={cn(
                       "flex flex-1 justify-between text-[12.5px]",
-                      done || current ? "text-foreground" : "text-(--c-9a9b94)",
+                      done || current ? "text-foreground" : "text-(--c-6b6c66)",
                       current && "font-semibold",
                     )}
                   >
                     <span>{label}</span>
-                    <span className="font-mono text-[11.5px] font-normal text-(--c-7a7b75)">
+                    <span className="font-mono text-[11.5px] font-normal text-(--c-6b6c66)">
                       {current && elapsed !== null ? formatClock(elapsed) : ""}
                     </span>
                   </div>
@@ -493,7 +493,7 @@ function NowCard({
             })}
           </ol>
           {running.last_message ? (
-            <p className="-mt-1 truncate text-[11.5px] text-(--c-7a7b75)" title={running.last_message}>
+            <p className="-mt-1 truncate text-[11.5px] text-(--c-6b6c66)" title={running.last_message}>
               {running.last_message}
             </p>
           ) : null}
@@ -510,7 +510,7 @@ function NowCard({
           <span className="min-w-0 flex-1 truncate">
             {clientName(nextSefaz, names)} aguarda SEFAZ · {formatCompetence(nextSefaz.competence)}
           </span>
-          <span className="shrink-0 font-mono text-[11.5px] text-(--c-7a7b75)">
+          <span className="shrink-0 font-mono text-[11.5px] text-(--c-6b6c66)">
             {checkIn === null ? "" : checkIn > 0 ? `consulta em ${formatClock(checkIn)}` : "consultando…"}
           </span>
         </div>
@@ -530,11 +530,11 @@ function CertificatesCard({ certs, now }: { certs: DashboardCertSummary; now: nu
         </Link>
       </div>
       <div className="grid grid-cols-3 gap-2">
-        <MiniStat value={certs.valid} label="Válidos" className="bg-(--c-f3faf6) [&>b]:text-(--c-1c5e3c) [&>span]:text-(--c-4a6b58)" />
+        <MiniStat value={certs.valid} label="Válidos" className="bg-(--c-f5f5f1) [&>b]:text-(--c-1c1d1b) [&>span]:text-(--c-6b6c66)" />
         <MiniStat
           value={certs.expiring}
           label="Vencem em 30d"
-          className={certs.expiring > 0 ? "bg-(--c-fdf4e3) [&>b]:text-(--c-9a6205)" : "bg-(--c-fafaf8)"}
+          className={certs.expiring > 0 ? "bg-(--c-fff4e5) [&>b]:text-(--c-b45309)" : "bg-(--c-fafaf8)"}
         />
         <MiniStat
           value={certs.expired}
@@ -562,7 +562,7 @@ function MiniStat({ value, label, className }: { value: number; label: string; c
   return (
     <div className={cn("flex flex-col gap-0.5 rounded-lg px-2.5 py-[9px]", className)}>
       <b className="text-lg font-semibold">{value}</b>
-      <span className="text-[11px] text-(--c-7a7b75)">{label}</span>
+      <span className="text-[11px] text-(--c-6b6c66)">{label}</span>
     </div>
   );
 }

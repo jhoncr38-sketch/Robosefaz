@@ -19,29 +19,34 @@ const TONE_CLASS: Record<Tone, string> = {
   red: "bg-(--c-fdecec) text-(--c-b42323)",
   orange: "bg-(--c-fdeee3) text-(--c-b4530f)",
   purple: "bg-(--c-f3eefc) text-(--c-6b3fb8)",
+  slate: "bg-(--c-eef1f5) text-(--c-475569)",
+  amber: "bg-(--c-fff4e5) text-(--c-b45309)",
 };
 
 const DOT_CLASS: Record<Tone, string> = {
   gray: "bg-(--c-a3a39e)",
-  blue: "bg-(--c-3b82e0) animate-pulse",
+  blue: "bg-(--c-3b82e0)",
   yellow: "bg-(--c-e0a019)",
   green: "bg-(--c-2ea062)",
   red: "bg-(--c-dc3b3b)",
-  orange: "bg-(--c-f97316) animate-pulse",
+  // só a intervenção pulsa: é o único estado que espera você
+  orange: "bg-(--c-f97316) warn-pulse",
   purple: "bg-(--c-8b5cf6)",
+  slate: "bg-(--c-64748b)",
+  amber: "bg-(--c-d97706)",
 };
 
 export function ToneBadge({ tone, children, className }: { tone: Tone; children: React.ReactNode; className?: string }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-[5px] px-2 py-0.5 text-xs font-medium whitespace-nowrap",
+        "inline-flex max-w-full items-center gap-1.5 rounded-[5px] px-2 py-0.5 text-xs font-medium whitespace-nowrap",
         TONE_CLASS[tone],
         className,
       )}
     >
-      <span className={cn("size-1.5 rounded-full", DOT_CLASS[tone])} aria-hidden />
-      {children}
+      <span className={cn("size-1.5 shrink-0 rounded-full", DOT_CLASS[tone])} aria-hidden />
+      <span className="min-w-0 truncate">{children}</span>
     </span>
   );
 }

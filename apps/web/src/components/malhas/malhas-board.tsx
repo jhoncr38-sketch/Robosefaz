@@ -49,7 +49,7 @@ const HOW_IT_WORKS = [
 function StateBadge({ state }: { state: MalhaRowState }) {
   if (state === "not_checked") {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-[5px] border border-dashed border-(--c-d9d9d4) px-2 py-px text-xs whitespace-nowrap text-(--c-7a7b75)">
+      <span className="inline-flex items-center gap-1.5 rounded-[5px] border border-dashed border-(--c-d9d9d4) px-2 py-px text-xs whitespace-nowrap text-(--c-6b6c66)">
         <span className="size-1.5 rounded-full bg-(--c-c9c9c4)" />
         {MALHA_STATE_LABEL.not_checked}
       </span>
@@ -61,7 +61,7 @@ function StateBadge({ state }: { state: MalhaRowState }) {
 function FindingsTable({ findings }: { findings: MalhaFinding[] }) {
   return (
     <div className="overflow-hidden rounded-lg border border-(--c-ecece8) bg-card">
-      <div className="grid grid-cols-[minmax(0,2fr)_80px_120px_70px] gap-3 border-b border-(--c-efefeb) bg-(--c-fafaf8) px-3 py-1.5 text-[11px] tracking-[0.04em] text-(--c-7a7b75) uppercase">
+      <div className="grid grid-cols-[minmax(0,2fr)_80px_120px_70px] gap-3 border-b border-(--c-efefeb) bg-(--c-fafaf8) px-3 py-1.5 text-[11px] tracking-[0.04em] text-(--c-6b6c66) uppercase">
         <span>Malha</span>
         <span className="text-right">Períodos</span>
         <span className="text-right">ICMS</span>
@@ -74,7 +74,7 @@ function FindingsTable({ findings }: { findings: MalhaFinding[] }) {
         >
           <span className="flex min-w-0 flex-col gap-px">
             <span className="truncate font-medium text-(--c-3d3e3a)">{f.identification}</span>
-            <span className="text-[11px] text-(--c-9a9b94)">{MALHA_SOURCE_LABEL[f.source]}</span>
+            <span className="text-[11px] text-(--c-6b6c66)">{MALHA_SOURCE_LABEL[f.source]}</span>
           </span>
           <span className="text-right tabular-nums">{f.periods ?? "—"}</span>
           <span className="text-right tabular-nums">{formatBRL(f.icms)}</span>
@@ -91,18 +91,18 @@ function CheckDetail({ check }: { check: MalhaCheck }) {
     <div className="flex flex-col gap-2.5">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-(--c-4a4b46)">
         <span>
-          <span className="text-(--c-9a9b94)">Consultado em </span>
+          <span className="text-(--c-6b6c66)">Consultado em </span>
           {formatDateTime(check.checked_at)}
         </span>
         {check.state_registration ? (
           <span>
-            <span className="text-(--c-9a9b94)">IE </span>
+            <span className="text-(--c-6b6c66)">IE </span>
             <span className="font-mono">{check.state_registration}</span>
           </span>
         ) : null}
         {check.legal_name ? (
           <span>
-            <span className="text-(--c-9a9b94)">No SIAT: </span>
+            <span className="text-(--c-6b6c66)">No SIAT: </span>
             {check.legal_name}
           </span>
         ) : null}
@@ -110,7 +110,7 @@ function CheckDetail({ check }: { check: MalhaCheck }) {
       {check.findings.length > 0 ? (
         <FindingsTable findings={check.findings} />
       ) : (
-        <p className="text-xs text-(--c-7a7b75)">Nenhuma malha em aberto nas tabelas DIEF/PGDAS e EFD/OIE.</p>
+        <p className="text-xs text-(--c-6b6c66)">Nenhuma malha em aberto nas tabelas DIEF/PGDAS e EFD/OIE.</p>
       )}
       {check.raw_text ? (
         <div>
@@ -235,7 +235,7 @@ export function MalhasBoard({
   return (
     <div className="flex flex-wrap items-start gap-5">
       <div className="flex min-w-0 flex-[999_1_600px] flex-col gap-4">
-        <section className="flex flex-wrap items-center gap-2 rounded-xl border bg-card px-[18px] py-4">
+        <section className="flex flex-wrap items-center gap-2 rounded-xl border bg-card shadow-card px-[18px] py-4">
           {(
             [
               ["Sem malha", count((s) => s === "clean"), "bg-(--c-f3faf6) text-(--c-1c5e3c)"],
@@ -252,12 +252,12 @@ export function MalhasBoard({
           {totalIcms > 0 ? (
             <div className="ml-auto flex flex-col gap-0.5 text-right">
               <span className="text-lg leading-none font-semibold tabular-nums">{formatBRL(totalIcms)}</span>
-              <span className="text-[11px] text-(--c-7a7b75)">ICMS devido/destacado nas malhas</span>
+              <span className="text-[11px] text-(--c-6b6c66)">ICMS devido/destacado nas malhas</span>
             </div>
           ) : null}
         </section>
 
-        <section className="overflow-hidden rounded-xl border bg-card">
+        <section className="overflow-hidden rounded-xl border bg-card shadow-card">
           <div className="flex flex-wrap items-center gap-2.5 border-b border-(--c-efefeb) px-3.5 py-3">
             <SearchBox value={q} onChange={setQ} placeholder="Buscar cliente, código ou CNPJ" />
             <Segmented
@@ -274,7 +274,7 @@ export function MalhasBoard({
           <div
             className={cn(
               ROW_GRID,
-              "items-center border-b border-(--c-efefeb) bg-(--c-fafaf8) px-3.5 py-[9px] text-[11.5px] tracking-[0.04em] text-(--c-7a7b75) uppercase",
+              "items-center border-b border-(--c-efefeb) bg-(--c-fafaf8) px-3.5 py-[9px] text-[11.5px] tracking-[0.04em] text-(--c-6b6c66) uppercase",
             )}
           >
             <button
@@ -339,20 +339,20 @@ export function MalhasBoard({
                         on ? "border-primary bg-primary" : r.lockReason ? "border-(--c-cfcfca) bg-(--c-f3f3f0)" : "border-(--c-cfcfca) bg-card",
                       )}
                     >
-                      {on ? <Check className="size-[11px]" /> : r.lockReason ? <Lock className="size-[9px] text-(--c-9a9b94)" /> : null}
+                      {on ? <Check className="size-[11px]" /> : r.lockReason ? <Lock className="size-[9px] text-(--c-6b6c66)" /> : null}
                     </button>
                     <button type="button" onClick={() => setOpen(expanded ? null : c.id)} className="flex w-full min-w-0 flex-col gap-px text-left">
                       <span className="truncate text-[13px] font-medium" title={c.name}>
                         {c.name}
                       </span>
-                      <span className="truncate text-[11.5px] text-(--c-7a7b75)">
+                      <span className="truncate text-[11.5px] text-(--c-6b6c66)">
                         <span className="font-mono">{c.client_code}</span>
                         {r.lockReason && r.lockReason !== "já na fila" ? ` · ${r.lockReason}` : ""}
                       </span>
                     </button>
                     <div className="flex min-w-0 flex-col items-end gap-0.5 md:items-start">
                       <StateBadge state={r.state} />
-                      {hint ? <span className="max-w-full truncate text-[11px] text-(--c-9a9b94)">{hint}</span> : null}
+                      {hint ? <span className="max-w-full truncate text-[11px] text-(--c-6b6c66)">{hint}</span> : null}
                     </div>
                     <span className="hidden text-right text-xs tabular-nums md:block">
                       {r.check && r.check.total > 0 ? formatBRL(r.check.icms_total) : "—"}
@@ -361,17 +361,17 @@ export function MalhasBoard({
                       {r.check ? (
                         <>
                           <span className="text-xs tabular-nums">{formatDateTime(r.check.checked_at)}</span>
-                          <span className="truncate text-[11px] text-(--c-9a9b94)">{formatRelative(r.check.checked_at)}</span>
+                          <span className="truncate text-[11px] text-(--c-6b6c66)">{formatRelative(r.check.checked_at)}</span>
                         </>
                       ) : (
-                        <span className="text-xs text-(--c-9a9b94)">—</span>
+                        <span className="text-xs text-(--c-6b6c66)">—</span>
                       )}
                     </div>
                     <button
                       type="button"
                       aria-label={expanded ? "Fechar detalhes" : "Ver detalhes"}
                       onClick={() => setOpen(expanded ? null : c.id)}
-                      className="hidden size-6 place-items-center rounded-md text-(--c-7a7b75) hover:bg-(--c-f2f3ef) md:grid"
+                      className="hidden size-6 place-items-center rounded-md text-(--c-6b6c66) hover:bg-(--c-f2f3ef) md:grid"
                     >
                       <ChevronDown className={cn("size-4 transition-transform", expanded && "rotate-180")} />
                     </button>
@@ -381,7 +381,7 @@ export function MalhasBoard({
                       {r.check ? (
                         <CheckDetail check={r.check} />
                       ) : (
-                        <p className="text-xs text-(--c-7a7b75)">
+                        <p className="text-xs text-(--c-6b6c66)">
                           {r.state === "checking"
                             ? "O robô vai abrir a Consulta de Malhas deste cliente em instantes."
                             : r.state === "check_failed"
@@ -399,11 +399,11 @@ export function MalhasBoard({
       </div>
 
       <aside className="flex min-w-0 flex-[1_1_300px] flex-col gap-3 lg:sticky lg:top-20">
-        <section className="flex flex-col gap-3.5 rounded-xl border bg-card px-[18px] py-4">
+        <section className="flex flex-col gap-3.5 rounded-xl border bg-card shadow-card px-[18px] py-4">
           <p className="text-[14.5px] font-semibold">Consultar no SIAT</p>
           <div className="flex items-baseline gap-2 rounded-lg bg-(--c-fafaf8) p-2.5">
             <span className="text-[22px] font-semibold tabular-nums">{chosen.length}</span>
-            <span className="text-[12px] text-(--c-7a7b75)">cliente(s) selecionado(s)</span>
+            <span className="text-[12px] text-(--c-6b6c66)">cliente(s) selecionado(s)</span>
           </div>
           {canRun && notChecked.length > 0 && !notChecked.every((r) => selected.has(r.client.id)) ? (
             <button
@@ -426,7 +426,7 @@ export function MalhasBoard({
             {pending ? <Loader2 className="size-3.5 animate-spin" /> : <ScanSearch className="size-4" />}
             Consultar malhas no SIAT
           </button>
-          {!canRun ? <p className="text-xs text-(--c-7a7b75)">Seu perfil só visualiza os resultados.</p> : null}
+          {!canRun ? <p className="text-xs text-(--c-6b6c66)">Seu perfil só visualiza os resultados.</p> : null}
           {result ? (
             <div className="flex items-start gap-2 rounded-lg bg-(--c-eef7f1) px-2.5 py-[9px] text-[12.5px] text-(--c-1c5e3c)">
               <CircleCheck className="mt-px size-3.5 shrink-0" />
@@ -438,13 +438,13 @@ export function MalhasBoard({
           ) : null}
         </section>
 
-        <section className="flex flex-col gap-2.5 rounded-xl border bg-card px-[18px] py-3.5">
+        <section className="flex flex-col gap-2.5 rounded-xl border bg-card shadow-card px-[18px] py-3.5">
           <p className="flex items-center gap-1.5 text-[13px] font-semibold">
-            <Info className="size-3.5 text-(--c-7a7b75)" /> Como funciona
+            <Info className="size-3.5 text-(--c-6b6c66)" /> Como funciona
           </p>
           {HOW_IT_WORKS.map((t, i) => (
             <div key={t} className="flex gap-2.5 text-xs leading-[1.45] text-(--c-4a4b46)">
-              <span className="font-mono text-(--c-9a9b94)">{String(i + 1).padStart(2, "0")}</span>
+              <span className="font-mono text-(--c-6b6c66)">{String(i + 1).padStart(2, "0")}</span>
               <span>{t}</span>
             </div>
           ))}

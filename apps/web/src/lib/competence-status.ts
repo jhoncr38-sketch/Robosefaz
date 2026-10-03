@@ -27,7 +27,7 @@ export const COMPETENCE_STATUS_LABEL: Record<ClientCompetenceStatus, string> = {
 
 export const COMPETENCE_STATUS_TONE: Record<Exclude<ClientCompetenceStatus, "none">, Tone> = {
   done: "green",
-  queued: "purple",
+  queued: "slate",
   running: "blue",
   sefaz: "yellow",
   attention: "orange",
@@ -38,7 +38,7 @@ export const COMPETENCE_STATUS_TONE: Record<Exclude<ClientCompetenceStatus, "non
 /** Cor da barra segmentada e da legenda (mesma ordem de exibição). */
 export const COMPETENCE_STATUS_COLOR: Record<ClientCompetenceStatus, string> = {
   done: "#2ea062",
-  queued: "#8b5cf6",
+  queued: "#64748b",
   running: "#3b82e0",
   sefaz: "#e0a019",
   attention: "#f97316",

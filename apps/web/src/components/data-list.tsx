@@ -7,7 +7,7 @@ import type { ExportTaskType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function ListCard({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <section className={cn("overflow-hidden rounded-xl border bg-card", className)}>{children}</section>;
+  return <section className={cn("overflow-hidden rounded-xl border bg-card shadow-card", className)}>{children}</section>;
 }
 
 /** Título do card (ex.: "Jobs com erro") com contador e ações opcionais. */
@@ -16,7 +16,7 @@ export function ListTitle({ title, count, children }: { title: string; count?: n
     <div className="flex flex-wrap items-center gap-3 border-b border-(--c-efefeb) px-4 py-3.5">
       <p className="flex-1 text-[14.5px] font-semibold">
         {title}
-        {count !== undefined ? <span className="ml-2 font-mono text-xs font-normal text-(--c-9a9b94)">{count}</span> : null}
+        {count !== undefined ? <span className="ml-2 font-mono text-xs font-normal text-(--c-6b6c66)">{count}</span> : null}
       </p>
       {children}
     </div>
@@ -32,7 +32,7 @@ export function ListHead({ grid, children }: { grid: string; children: React.Rea
     <div
       className={cn(
         grid,
-        "items-center border-b border-(--c-efefeb) bg-(--c-fafaf8) px-4 py-[9px] text-[11.5px] tracking-[0.04em] text-(--c-7a7b75) uppercase",
+        "items-center border-b border-(--c-efefeb) bg-(--c-fafaf8) px-4 py-[9px] text-[11.5px] tracking-[0.04em] text-(--c-6b6c66) uppercase",
       )}
     >
       {children}
@@ -69,13 +69,13 @@ export function PrimaryCell({ title, sub, className }: { title: React.ReactNode;
   return (
     <div className={cn("flex min-w-0 flex-col gap-px", className)}>
       <span className="truncate text-[13px] font-medium">{title}</span>
-      {sub ? <span className="truncate text-[11.5px] text-(--c-7a7b75)">{sub}</span> : null}
+      {sub ? <span className="truncate text-[11.5px] text-(--c-6b6c66)">{sub}</span> : null}
     </div>
   );
 }
 
 export function Muted({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <span className={cn("text-xs text-(--c-7a7b75)", className)}>{children}</span>;
+  return <span className={cn("text-xs text-(--c-6b6c66)", className)}>{children}</span>;
 }
 
 export function Segmented<T extends string>({
@@ -102,7 +102,7 @@ export function Segmented<T extends string>({
           )}
         >
           {label}
-          {count !== undefined ? <span className="ml-1 font-mono text-(--c-9a9b94)">{count}</span> : null}
+          {count !== undefined ? <span className="ml-1 font-mono text-(--c-6b6c66)">{count}</span> : null}
         </button>
       ))}
     </div>
@@ -148,13 +148,13 @@ export function SearchBox({
 }) {
   return (
     <div className="flex h-8 min-w-[200px] flex-1 items-center gap-2 rounded-[7px] border border-input px-2.5 focus-within:border-ring">
-      <Search className="size-3.5 text-(--c-9a9b94)" />
+      <Search className="size-3.5 text-(--c-6b6c66)" />
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         aria-label={placeholder}
-        className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-(--c-9a9b94)"
+        className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-(--c-6b6c66)"
       />
     </div>
   );
@@ -184,7 +184,7 @@ export function LoadMore({
   const word = (n: number) => (n === 1 ? noun[0] : noun[1]);
   if (shown >= total) {
     return (
-      <p className="border-t border-(--c-efefeb) px-4 py-2.5 text-center text-xs text-(--c-9a9b94)">
+      <p className="border-t border-(--c-efefeb) px-4 py-2.5 text-center text-xs text-(--c-6b6c66)">
         {total === 1
           ? `1 ${noun[0]}.`
           : `${noun[2] === "f" ? "Todas as" : "Todos os"} ${NUM.format(total)} ${noun[1]} estão na lista.`}
@@ -193,7 +193,7 @@ export function LoadMore({
   }
   const next = Math.min(step, total - shown);
   return (
-    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 border-t border-(--c-efefeb) px-4 py-3 text-xs text-(--c-7a7b75)">
+    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 border-t border-(--c-efefeb) px-4 py-3 text-xs text-(--c-6b6c66)">
       <span>
         Mostrando {NUM.format(shown)} de {NUM.format(total)} {word(total)}
       </span>

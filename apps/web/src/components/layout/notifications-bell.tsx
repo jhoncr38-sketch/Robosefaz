@@ -15,10 +15,10 @@ import type { NotificationRow } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const LEVEL_DOT: Record<NotificationRow["level"], string> = {
-  info: "bg-sky-500",
-  success: "bg-emerald-500",
-  warning: "bg-amber-500",
-  error: "bg-red-500",
+  info: "bg-(--c-3b82e0)",
+  success: "bg-(--c-2ea062)",
+  warning: "bg-(--c-e0a019)",
+  error: "bg-(--c-dc3b3b)",
 };
 
 export function NotificationsBell({ userId }: { userId: string }) {
@@ -77,7 +77,7 @@ export function NotificationsBell({ userId }: { userId: string }) {
         <Button variant="ghost" size="icon" className="relative" aria-label="Notificações">
           <Bell />
           {unread > 0 ? (
-            <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
+            <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-(--c-dc3b3b) px-1 text-[10px] font-semibold text-white">
               {unread > 9 ? "9+" : unread}
             </span>
           ) : null}

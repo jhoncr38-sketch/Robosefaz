@@ -158,16 +158,16 @@ export function QueueTable({
                 <div className="flex min-w-0 flex-col items-start gap-0.5">
                   <JobStatusBadge status={job.status} />
                   {step && step !== JOB_STATUS_LABEL[job.status] ? (
-                    <span className="max-w-full truncate text-[11px] text-(--c-7a7b75)">{step}</span>
+                    <span className="max-w-full truncate text-[11px] text-(--c-6b6c66)">{step}</span>
                   ) : null}
-                  {job.attempts > 1 ? <span className="text-[11px] text-(--c-7a7b75)">Tentativa {job.attempts}</span> : null}
+                  {job.attempts > 1 ? <span className="text-[11px] text-(--c-6b6c66)">Tentativa {job.attempts}</span> : null}
                   {waits.get(job.id) ? <PcWaitLine job={job} wait={waits.get(job.id)!} now={clock} /> : null}
                 </div>
                 <div className="hidden items-center gap-2 md:flex">
                   <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-(--c-f0f0ec)">
                     <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${job.progress}%` }} />
                   </div>
-                  <span className="w-8 text-right font-mono text-[11px] text-(--c-7a7b75)">{job.progress}%</span>
+                  <span className="w-8 text-right font-mono text-[11px] text-(--c-6b6c66)">{job.progress}%</span>
                 </div>
                 <div className="hidden text-xs tabular-nums md:block">
                   <JobTime job={job} waitingSince={waitingSince[job.id]} now={now} />
@@ -179,7 +179,7 @@ export function QueueTable({
                         <p
                           className={cn(
                             "line-clamp-2 cursor-default text-xs",
-                            job.status === "failed" ? "text-(--c-b42323)" : "text-(--c-7a7b75)",
+                            job.status === "failed" ? "text-(--c-b42323)" : "text-(--c-6b6c66)",
                           )}
                         >
                           {message}
@@ -188,7 +188,7 @@ export function QueueTable({
                       <TooltipContent className="max-w-sm text-xs">{message}</TooltipContent>
                     </Tooltip>
                   ) : (
-                    <span className="text-xs text-(--c-9a9b94)">—</span>
+                    <span className="text-xs text-(--c-6b6c66)">—</span>
                   )}
                 </div>
                 <JobActions job={job} role={role} />
