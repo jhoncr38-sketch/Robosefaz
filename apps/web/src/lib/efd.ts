@@ -4,6 +4,8 @@
 import type { Tone } from "@/lib/status";
 import type { EfdDeclaration, EfdSituation, JobStatus } from "@/lib/types";
 
+import { zonedParts } from "./timezone.ts";
+
 export type EfdRowState =
   | EfdSituation
   | "retif_rejected"
@@ -92,4 +94,100 @@ export function isProblem(state: EfdRowState): boolean {
     state === "retif_rejected" ||
     state === "check_failed"
   );
+}
+
+/** Abas da tela (cada situação numa só; "Consultando" fica só em Todos). */
+export type EfdTab = "all" | "not_processed" | "pending" | "missing" | "processed";
+
+export function efdTab(state: EfdRowState): Exclude<EfdTab, "all"> | null {
+  switch (state) {
+    case "not_processed":
+    case "retif_rejected":
+      return "not_processed";
+    case "pending":
+    case "alert":
+      return "pending";
+    case "not_checked":
+    case "no_message":
+    case "check_failed":
+      return "missing";
+    case "processed":
+      return "processed";
+    default:
+      return null;
+  }
+}
+
+/** Ordem das linhas: o mais grave primeiro. */
+export const EFD_SEVERITY: EfdRowState[] = [
+  "not_processed",
+  "retif_rejected",
+  "pending",
+  "alert",
+  "check_failed",
+  "no_message",
+  "not_checked",
+  "checking",
+  "processed",
+];
+
+/** Prazo para regularizar a pendência (Tipo 2): 45 dias depois do processamento. */
+export const PENDING_DAYS = 45;
+
+export interface EfdHint {
+  text: string;
+  tone: "muted" | "danger" | "warn";
+}
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+function dayMonth(iso: string): string {
+  const p = zonedParts(new Date(iso));
+  return `${pad2(p.day)}/${pad2(p.month)}`;
+}
+
+function count(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/**
+ * Linha curta embaixo da situação: resumo das inconsistências por tipo, o prazo da pendência,
+ * qual declaração continua valendo ou o erro da consulta.
+ */
+export function efdHint(
+  state: EfdRowState,
+  decls: EfdDeclaration[],
+  lastJob: Pick<EfdCheckJob, "error_message" | "last_message"> | null | undefined,
+  now = new Date(),
+): EfdHint | null {
+  if (state === "retif_rejected") {
+    const valid = stillValidAfterRejectedRetif(decls);
+    if (!valid) return null;
+    const when = valid.processed_at ? ` de ${dayMonth(valid.processed_at)}` : "";
+    return { text: `vale a ${(valid.finalidade ?? "declaração").toLowerCase()}${when}`, tone: "danger" };
+  }
+  if (state === "check_failed") {
+    const msg = lastJob?.error_message || lastJob?.last_message || "erro na consulta";
+    return { text: `${msg} · tente de novo`, tone: "danger" };
+  }
+  if (state === "checking" || state === "not_checked") return null;
+  const decl = latestDeclaration(decls);
+  const incs = decl?.inconsistencies ?? [];
+  if (decl && incs.length > 0) {
+    const by = (t: number) => incs.filter((i) => i.type === t).length;
+    const parts = [
+      by(1) ? count(by(1), "impeditiva", "impeditivas") : "",
+      by(2) ? count(by(2), "pendência", "pendências") : "",
+      by(3) ? count(by(3), "alerta", "alertas") : "",
+    ].filter(Boolean);
+    if (by(2) && decl.processed_at) {
+      const deadline = Date.parse(decl.processed_at) + PENDING_DAYS * 86_400_000;
+      const days = Math.ceil((deadline - now.getTime()) / 86_400_000);
+      const iso = new Date(deadline).toISOString();
+      parts.push(days >= 0 ? `até ${dayMonth(iso)} · ${count(days, "dia", "dias")}` : `prazo venceu em ${dayMonth(iso)}`);
+    }
+    return { text: parts.join(" · "), tone: by(1) ? "danger" : by(2) ? "warn" : "muted" };
+  }
+  const fixed = EFD_STATE_HINT[state];
+  return fixed ? { text: fixed, tone: "muted" } : null;
 }

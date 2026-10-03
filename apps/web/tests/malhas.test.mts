@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { formatBRL, malhaRowState, malhasLabel, type MalhaCheckJob } from "../src/lib/malhas.ts";
+import { compareMalhaRows, findingsSummary, formatBRL, malhaRowState, malhasLabel, type MalhaCheckJob } from "../src/lib/malhas.ts";
 import type { MalhaCheck } from "../src/lib/types.ts";
 
 const check = (total: number, checked_at = "2026-09-29T20:00:00Z"): MalhaCheck => ({
@@ -47,5 +47,25 @@ describe("situação das malhas", () => {
     assert.equal(formatBRL(null), "—");
     assert.equal(malhasLabel(1), "1 malha");
     assert.equal(malhasLabel(3), "3 malhas");
+  });
+});
+
+describe("Malhas no refino: ordem e resumo", () => {
+  it("com malha (maior ICMS primeiro), erro, não consultado, consultando, sem malha", () => {
+    const rows = [
+      { state: "clean" as const, icms: 0, name: "A" },
+      { state: "findings" as const, icms: 100, name: "B" },
+      { state: "not_checked" as const, icms: 0, name: "C" },
+      { state: "findings" as const, icms: 900, name: "D" },
+      { state: "check_failed" as const, icms: 0, name: "E" },
+      { state: "checking" as const, icms: 0, name: "F" },
+    ];
+    assert.deepEqual([...rows].sort(compareMalhaRows).map((r) => r.name), ["D", "B", "E", "C", "F", "A"]);
+  });
+
+  it("primeira malha e quantas mais", () => {
+    const f = (identification: string) => ({ source: "EFD_OIE" as const, identification, periods: null, icms: null, nfe_count: null });
+    assert.equal(findingsSummary({ total: 2, findings: [f("Omissão de entradas NF-e"), f("Outra")] }), "2 malhas · Omissão de entradas NF-e e mais 1");
+    assert.equal(findingsSummary({ total: 1, findings: [f("ICMS destacado e não escriturado")] }), "1 malha · ICMS destacado e não escriturado");
   });
 });

@@ -2,7 +2,16 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { efdRowState, isProblem, latestDeclaration, stillValidAfterRejectedRetif, type EfdCheckJob } from "../src/lib/efd.ts";
+import {
+  EFD_SEVERITY,
+  efdHint,
+  efdRowState,
+  efdTab,
+  isProblem,
+  latestDeclaration,
+  stillValidAfterRejectedRetif,
+  type EfdCheckJob,
+} from "../src/lib/efd.ts";
 import type { EfdDeclaration } from "../src/lib/types.ts";
 
 function decl(epe: string, situation: EfdDeclaration["situation"], processedAt: string, finalidade = "ORIGINAL"): EfdDeclaration {
@@ -63,5 +72,42 @@ describe("Consulta EFD", () => {
     assert.equal(isProblem("retif_rejected"), true);
     // original rejeitada sem nada processado antes continua "Não processada"
     assert.equal(efdRowState([original], []), "not_processed");
+  });
+});
+
+describe("EFD no refino: abas, gravidade e dica", () => {
+  const inc = (type: number) => ({ type, type_label: "", rule: "R", description: "d" });
+
+  it("cada situação numa aba; consultando só em Todos", () => {
+    assert.equal(efdTab("retif_rejected"), "not_processed");
+    assert.equal(efdTab("alert"), "pending");
+    assert.equal(efdTab("check_failed"), "missing");
+    assert.equal(efdTab("checking"), null);
+    assert.ok(EFD_SEVERITY.indexOf("not_processed") < EFD_SEVERITY.indexOf("processed"));
+  });
+
+  it("resumo por tipo; com impeditiva fica em vermelho", () => {
+    const d = { ...decl("1", "not_processed", "2026-09-14T20:30:00Z"), inconsistencies: [inc(1)] };
+    assert.deepEqual(efdHint("not_processed", [d], null), { text: "1 impeditiva", tone: "danger" });
+  });
+
+  it("pendência (Tipo 2) ganha o prazo de 45 dias", () => {
+    const d = { ...decl("1", "pending", "2026-09-13T11:47:00Z"), inconsistencies: [inc(2), inc(3)] };
+    const hint = efdHint("pending", [d], null, new Date("2026-10-03T12:00:00Z"));
+    assert.deepEqual(hint, { text: "1 pendência · 1 alerta · até 28/10 · 25 dias", tone: "warn" });
+    const late = efdHint("pending", [d], null, new Date("2026-11-20T12:00:00Z"));
+    assert.equal(late?.text, "1 pendência · 1 alerta · prazo venceu em 28/10");
+  });
+
+  it("retificadora rejeitada mostra qual continua valendo", () => {
+    const orig = decl("1", "processed", "2026-09-10T15:00:00Z");
+    const retif = decl("2", "not_processed", "2026-09-20T12:15:00Z", "RETIFICADORA");
+    assert.deepEqual(efdHint("retif_rejected", [orig, retif], null), { text: "vale a original de 10/09", tone: "danger" });
+  });
+
+  it("erro na consulta e sem dica para processada limpa", () => {
+    const failed = { ...job("failed", "2026-10-01T00:00:00Z"), error_message: "SIAT indisponível" };
+    assert.equal(efdHint("check_failed", [], failed)?.text, "SIAT indisponível · tente de novo");
+    assert.equal(efdHint("processed", [decl("1", "processed", "2026-09-10T15:00:00Z")], null), null);
   });
 });

@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 
+import { HelpTip } from "@/components/list-extras";
 import { MalhasBoard } from "@/components/malhas/malhas-board";
 import { PageHeader } from "@/components/page-header";
 import { requireSession } from "@/lib/auth";
-import type { MalhaCheckJob } from "@/lib/malhas";
+import { formatBRL, type MalhaCheckJob } from "@/lib/malhas";
 import { can } from "@/lib/permissions";
 import { loadPlannerClients } from "@/lib/queries";
 import { createClient } from "@/lib/supabase/server";
@@ -25,11 +26,35 @@ export default async function MalhasPage() {
       .limit(5000),
   ]);
 
+  const active = new Set(clients.filter((c) => c.active).map((c) => c.id));
+  const checks = ((checksRes.data ?? []) as MalhaCheck[]).filter((c) => active.has(c.client_id));
+  const totalIcms = checks.reduce((n, c) => n + (c.total > 0 ? Number(c.icms_total ?? 0) : 0), 0);
+
   return (
     <>
       <PageHeader
         title="Consulta de Malhas"
-        description="O robô lê no SIAT (Autoatendimento → Malhas Fiscais → Consulta de Malhas) as malhas em aberto de cada cliente: DIEF/PGDAS e EFD/OIE."
+        help={
+          <HelpTip>
+            <p>
+              O robô entra no SIAT de cada cliente, abre Autoatendimento › Malhas Fiscais › Consulta de Malhas, confere a
+              inscrição estadual e lê as tabelas DIEF/PGDAS e EFD/OIE: malha, períodos, ICMS e quantidade de NF-e. Só
+              leitura: nada é alterado. Peça de novo quando quiser atualizar.
+            </p>
+            <p>
+              Malhas intimadas pelo DT-e não aparecem nesta página do SIAT; para essas, veja o e-AGEAT › Malhas Fiscais ›
+              Manifestação do Contribuinte.
+            </p>
+          </HelpTip>
+        }
+        actions={
+          totalIcms > 0 ? (
+            <span className="text-[13px] whitespace-nowrap text-(--c-4a4b46)">
+              ICMS nas malhas em aberto:{" "}
+              <b className="font-mono text-sm font-semibold text-(--c-b42323)">{formatBRL(totalIcms)}</b>
+            </span>
+          ) : null
+        }
       />
       <MalhasBoard
         canRun={can(profile.role, "automation:run")}
@@ -43,7 +68,7 @@ export default async function MalhasPage() {
             cnpj: c.cnpj,
             certificate_ok: c.certificate_status === "valid" || c.certificate_status === "expiring",
           }))}
-        checks={(checksRes.data ?? []) as MalhaCheck[]}
+        checks={checks}
         jobs={(jobsRes.data ?? []) as MalhaCheckJob[]}
       />
     </>

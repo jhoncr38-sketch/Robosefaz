@@ -68,3 +68,28 @@ export function formatBRL(value: number | string | null | undefined): string {
 export function malhasLabel(total: number): string {
   return total === 1 ? "1 malha" : `${total} malhas`;
 }
+
+/** Abas da tela ("Consultando" fica só em Todos). */
+export type MalhaTab = "all" | "findings" | "check_failed" | "not_checked" | "clean";
+
+/** Ordem das linhas: com malha (maior ICMS primeiro), erro, não consultado, consultando, sem malha. */
+const MALHA_ORDER: MalhaRowState[] = ["findings", "check_failed", "not_checked", "checking", "clean"];
+
+export function compareMalhaRows(
+  a: { state: MalhaRowState; icms: number; name: string },
+  b: { state: MalhaRowState; icms: number; name: string },
+): number {
+  return (
+    MALHA_ORDER.indexOf(a.state) - MALHA_ORDER.indexOf(b.state) ||
+    b.icms - a.icms ||
+    a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" })
+  );
+}
+
+/** "2 malhas · Omissão de entradas NF-e e mais 1". */
+export function findingsSummary(check: Pick<MalhaCheck, "total" | "findings">): string {
+  const first = check.findings[0]?.identification;
+  if (!first) return malhasLabel(check.total);
+  const more = check.findings.length - 1;
+  return `${malhasLabel(check.total)} · ${first}${more > 0 ? ` e mais ${more}` : ""}`;
+}

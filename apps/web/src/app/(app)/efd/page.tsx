@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { EfdBoard } from "@/components/efd/efd-board";
+import { HelpTip } from "@/components/list-extras";
 import { PageHeader } from "@/components/page-header";
 import { requireSession } from "@/lib/auth";
 import { currentCompetence, previousCompetence, toCompetenceKey } from "@/lib/competence";
@@ -35,7 +36,19 @@ export default async function EfdPage({ searchParams }: PageProps<"/efd">) {
     <>
       <PageHeader
         title="Consulta EFD"
-        description="Veja no Domicílio Eletrônico do SIAT se a EFD de cada cliente foi processada, com a finalidade e as inconsistências."
+        help={
+          <HelpTip>
+            <p>
+              O robô abre o Domicílio Eletrônico (DT-e) de cada cliente e lê só as notificações <b>EPE - EFD</b> da
+              competência: finalidade, se foi processada e as inconsistências. Nenhuma outra mensagem é aberta e nada é
+              excluído. O SIAT mantém essas mensagens por cerca de 60 dias.
+            </p>
+            <p>
+              <b>Tipo 1 · Impeditiva:</b> EFD não processada, sem validade para a SEFAZ-PI. <b>Tipo 2 · Pendência:</b>{" "}
+              processada; regularizar em até 45 dias. <b>Tipo 3 · Alerta:</b> processada; pode ir para malha.
+            </p>
+          </HelpTip>
+        }
       />
       <EfdBoard
         key={competence}
