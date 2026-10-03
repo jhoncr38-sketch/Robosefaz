@@ -1,5 +1,4 @@
-import { Download, FileArchive, FolderOpen, Info, TriangleAlert, X } from "lucide-react";
-import Link from "next/link";
+import { Download, FileArchive, FolderOpen, Info, TriangleAlert } from "lucide-react";
 
 import { ListEmptyText, ListHead, ListRow, PrimaryCell } from "@/components/data-list";
 import { EmptyState } from "@/components/page-header";
@@ -8,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { formatCompetence } from "@/lib/competence";
 import { driveDownloadUrl, isEmptyZip } from "@/lib/downloads";
 import { formatBytes, formatDateTime } from "@/lib/format";
-import { downloadEntries, type MonthSummary, type NoMovementRow, type Situation } from "@/lib/no-movement";
+import { downloadEntries, type NoMovementRow, type Situation } from "@/lib/no-movement";
 import { type NoteAlert, notesLabel } from "@/lib/note-count";
 import { baseDocument, DOCUMENT_LABEL, isCanceledDocument } from "@/lib/status";
 import type { DocumentType } from "@/lib/types";
@@ -246,77 +245,6 @@ function RowActions({ d, drive }: { d: DownloadRow; drive: boolean }) {
         </TooltipContent>
       </Tooltip>
     </>
-  );
-}
-
-/**
- * Resumo da competência escolhida: quantas empresas e tipos vieram com notas, sem movimento ou
- * ainda sem resposta. "Com notas" e "Sem movimento" filtram a lista.
- */
-export function MonthSummaryBar({
-  competence,
-  summary,
-  hrefFor,
-}: {
-  competence: string;
-  summary: MonthSummary;
-  hrefFor: (situation: Situation) => string;
-}) {
-  if (summary.clients === 0) return null;
-  const link = "font-medium text-foreground underline-offset-2 hover:underline";
-  return (
-    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-b border-(--c-efefeb) px-3.5 py-2 text-xs text-(--c-6b6b66)">
-      <span>
-        <strong className="font-medium text-foreground">{formatCompetence(competence)}</strong> ·{" "}
-        {summary.clients === 1 ? "1 empresa" : `${summary.clients} empresas`}:
-      </span>
-      <Link href={hrefFor("com-notas")} className={link}>
-        {summary.withNotes} com notas
-      </Link>
-      <span>·</span>
-      <Link href={hrefFor("sem-movimento")} className={link}>
-        {summary.noMovement} sem movimento
-      </Link>
-      {summary.waiting > 0 ? (
-        <>
-          <span>·</span>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span tabIndex={0} className="cursor-default">
-                {summary.waiting} ainda sem resposta
-              </span>
-            </TooltipTrigger>
-            <TooltipContent className="max-w-64 text-xs">
-              Pedidos na fila, aguardando a SEFAZ ou com erro. Acompanhe na Fila de processamento e no Histórico.
-            </TooltipContent>
-          </Tooltip>
-        </>
-      ) : null}
-      <span className="text-(--c-6b6c66)">(cada empresa conta uma vez por tipo de nota)</span>
-    </div>
-  );
-}
-
-/** "3 meses para conferir": liga e desliga o filtro (só aparece quando há aviso). */
-export function NotesToCheckLink({ count, active, href }: { count: number; active: boolean; href: string }) {
-  if (count === 0 && !active) return null;
-  return (
-    <Link
-      href={href}
-      className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-(--c-fdf4e3) px-2.5 py-1.5 text-xs font-medium text-(--c-9a6205) hover:no-underline"
-      title="Meses sem notas ou com bem menos notas que os meses anteriores do mesmo cliente e tipo"
-    >
-      <TriangleAlert className="size-3.5" />
-      {active ? (
-        <>
-          Mostrando só os para conferir <X className="size-3.5" />
-        </>
-      ) : count === 1 ? (
-        "1 mês para conferir"
-      ) : (
-        `${count} meses para conferir`
-      )}
-    </Link>
   );
 }
 
