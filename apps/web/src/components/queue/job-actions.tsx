@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, Eye, Loader2, MoreHorizontal, PlayCircle, RotateCcw } from "lucide-react";
+import { Ban, CirclePlay, Eye, Loader2, MoreHorizontal, PlayCircle, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
@@ -19,7 +19,7 @@ import { can } from "@/lib/permissions";
 import { FINAL_JOB_STATUSES, MANUAL_JOB_STATUSES, RETRYABLE_JOB_STATUSES } from "@/lib/status";
 import type { AutomationJob, UserRole } from "@/lib/types";
 
-export function ContinueButton({ job, role }: { job: AutomationJob; role: UserRole }) {
+export function ContinueButton({ job, role, compact = false }: { job: AutomationJob; role: UserRole; compact?: boolean }) {
   const [pending, start] = useTransition();
   const router = useRouter();
   if (!MANUAL_JOB_STATUSES.includes(job.status) || !can(role, "automation:run")) return null;
@@ -27,19 +27,33 @@ export function ContinueButton({ job, role }: { job: AutomationJob; role: UserRo
     job.manual_action_confirmed_at &&
     job.manual_action_requested_at &&
     job.manual_action_confirmed_at >= job.manual_action_requested_at;
+  const confirm = () =>
+    start(async () => {
+      const res = await confirmManualAction(job.id);
+      if (res.ok) toast.success(res.message);
+      else toast.error(res.error);
+      router.refresh();
+    });
+  if (compact) {
+    // linha da fila: botão laranja curto (a única coisa na tela que pede a sua ação)
+    return (
+      <button
+        type="button"
+        disabled={pending || Boolean(confirmedAfterRequest)}
+        onClick={confirm}
+        className="flex h-7 items-center gap-[5px] rounded-md bg-(--c-f97316) px-2.5 text-xs font-medium whitespace-nowrap text-white hover:bg-[#ea580c] disabled:opacity-60"
+      >
+        {pending ? <Loader2 className="size-[13px] animate-spin" /> : <CirclePlay className="size-[13px]" />}
+        {confirmedAfterRequest ? "Confirmado" : "Continuar"}
+      </button>
+    );
+  }
   return (
     <Button
       size="sm"
       className="bg-orange-500 text-white hover:bg-orange-600"
       disabled={pending || Boolean(confirmedAfterRequest)}
-      onClick={() =>
-        start(async () => {
-          const res = await confirmManualAction(job.id);
-          if (res.ok) toast.success(res.message);
-          else toast.error(res.error);
-          router.refresh();
-        })
-      }
+      onClick={confirm}
     >
       {pending ? <Loader2 className="animate-spin" /> : <PlayCircle />}
       {confirmedAfterRequest ? "Confirmado" : "Continuar automação"}
