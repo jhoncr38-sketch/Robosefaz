@@ -324,8 +324,7 @@ html[data-menu="escuro"] {
   --c-fffbf2: #fffbf2;
 }
 .dark {
-: #bed0ec;
-  --c-13294b
+  --c-13294b: #bed0ec;
   --c-17603b: #abe7c8;
   --c-196640: #a4e5c5;
   --c-1b8f6a: #83dbbf;

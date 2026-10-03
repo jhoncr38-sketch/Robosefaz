@@ -29,7 +29,7 @@ type Filter = "all" | "active" | "inactive";
 
 // sem rolagem lateral: colunas agrupadas e, no celular, só cliente e última automação
 const ROW_GRID =
-  "grid grid-cols-[minmax(0,1fr)_auto] gap-3 md:grid-cols-[minmax(0,2fr)_170px_150px_minmax(0,1.3fr)]";
+  "grid grid-cols-[minmax(0,1fr)_minmax(0,auto)] gap-3 md:grid-cols-[minmax(150px,1.6fr)_150px_112px_minmax(150px,1fr)]";
 
 const CERT_LABEL: Record<CertificateStatus, string> = {
   valid: "Válido",
@@ -168,11 +168,11 @@ export function ClientsTable({ rows, initialQuery = "" }: { rows: ClientRow[]; i
               <div className="hidden md:block">
                 <CertificateCell status={r.certificate_status} validUntil={r.certificate_valid_until} />
               </div>
-              <div className="flex min-w-0 flex-col items-end gap-0.5 md:items-start">
+              <div className="flex min-w-0 flex-col items-end gap-0.5 overflow-hidden md:items-start">
                 {r.last_job ? (
                   <>
                     <JobStatusBadge status={r.last_job.status as JobStatus} />
-                    <span className="text-[11px] whitespace-nowrap text-(--c-6b6c66)">
+                    <span className="max-w-full truncate text-[11px] whitespace-nowrap text-(--c-6b6c66)">
                       {formatCompetence(r.last_job.competence)} · {formatRelative(r.last_job.created_at)}
                     </span>
                   </>
