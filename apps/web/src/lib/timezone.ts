@@ -47,3 +47,26 @@ export function zonedDayKey(date: Date): string {
   const p = zonedParts(date);
   return `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
 }
+
+/** "Bom dia" / "Boa tarde" / "Boa noite" no horário do Piauí. */
+export function greeting(date: Date): string {
+  const h = zonedParts(date).hour;
+  if (h >= 5 && h < 12) return "Bom dia";
+  if (h >= 12 && h < 18) return "Boa tarde";
+  return "Boa noite";
+}
+
+const dayFormatter = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: APP_TIME_ZONE,
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+});
+
+/** "Sexta, 3 de outubro" (dia de hoje no topo do Dashboard). */
+export function longDayLabel(date: Date): string {
+  const p: Record<string, string> = {};
+  for (const part of dayFormatter.formatToParts(date)) p[part.type] = part.value;
+  const weekday = (p.weekday ?? "").replace(/-feira$/, "");
+  return `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)}, ${p.day} de ${p.month}`;
+}

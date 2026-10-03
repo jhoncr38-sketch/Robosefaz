@@ -5,12 +5,14 @@ import { describe, it } from "node:test";
 import { currentCompetence, shiftCompetence } from "../src/lib/competence.ts";
 import {
   blocksNewRequest,
+  competenceGroups,
   competenceStatusOf,
   countByStatus,
   statusMapFromJobs,
 } from "../src/lib/competence-status.ts";
 import { formatClock, formatShortAgo } from "../src/lib/format.ts";
 import { jobStepIndex } from "../src/lib/job-steps.ts";
+import { greeting, longDayLabel } from "../src/lib/timezone.ts";
 
 describe("situação na competência", () => {
   it("agrupa os status do job", () => {
@@ -73,5 +75,53 @@ describe("formatações curtas", () => {
     assert.equal(jobStepIndex("waiting_sefaz"), 3);
     assert.equal(jobStepIndex("organizing_files"), 4);
     assert.equal(jobStepIndex("completed"), -1);
+  });
+});
+
+describe("barra da competência (4 grupos)", () => {
+  it("junta fila, robô e SEFAZ; erro e intervenção; sem pedido e cancelado", () => {
+    const counts = countByStatus([
+      ...Array(52).fill("done"),
+      ...Array(4).fill("queued"),
+      "running",
+      ...Array(9).fill("sefaz"),
+      ...Array(3).fill("failed"),
+      ...Array(2).fill("attention"),
+      ...Array(12).fill("none"),
+      "cancelled",
+    ]);
+    const g = competenceGroups(counts);
+    assert.deepEqual(
+      g.map((x) => [x.label, x.n, x.sub]),
+      [
+        ["Concluído", 52, "todos os documentos baixados"],
+        ["Em andamento", 14, "4 na fila · 1 no robô · 9 SEFAZ"],
+        ["Com problema", 5, "3 erros · 2 intervenções"],
+        ["Não solicitado", 13, "12 sem pedido · 1 cancelado"],
+      ],
+    );
+    assert.equal(g[3].fill, "transparent"); // o fundo da barra é o "não solicitado"
+  });
+
+  it("singular e partes vazias", () => {
+    const g = competenceGroups(countByStatus(["failed", "attention", "none"]));
+    assert.equal(g[1].sub, "nada em andamento");
+    assert.equal(g[2].sub, "1 erro · 1 intervenção");
+    assert.equal(g[3].sub, "1 sem pedido");
+  });
+});
+
+describe("saudação do Dashboard (horário do Piauí)", () => {
+  it("bom dia, boa tarde, boa noite", () => {
+    assert.equal(greeting(new Date("2026-10-03T11:00:00Z")), "Bom dia"); // 08:00 em Teresina
+    assert.equal(greeting(new Date("2026-10-03T16:00:00Z")), "Boa tarde"); // 13:00
+    assert.equal(greeting(new Date("2026-10-03T23:30:00Z")), "Boa noite"); // 20:30
+    assert.equal(greeting(new Date("2026-10-03T06:00:00Z")), "Boa noite"); // 03:00
+  });
+
+  it("dia por extenso sem o -feira", () => {
+    assert.equal(longDayLabel(new Date("2026-10-03T12:00:00Z")), "Sábado, 3 de outubro");
+    assert.equal(longDayLabel(new Date("2026-10-02T12:00:00Z")), "Sexta, 2 de outubro");
+    assert.equal(longDayLabel(new Date("2026-10-03T02:00:00Z")), "Sexta, 2 de outubro"); // 23:00 de sexta no Piauí
   });
 });

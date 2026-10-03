@@ -132,3 +132,78 @@ export function statusMapFromJobs(
   for (const [clientId, job] of latestJobByClient(jobs, competence)) out[clientId] = competenceStatusOf(job);
   return out;
 }
+
+/** Os 4 grupos da barra da competência no Dashboard (a cor só muda onde pede ação). */
+export type CompetenceGroupKey = "done" | "progress" | "problem" | "none";
+
+export interface CompetenceGroup {
+  key: CompetenceGroupKey;
+  label: string;
+  n: number;
+  /** quadradinho da legenda */
+  color: string;
+  /** trecho da barra ("Não solicitado" é o próprio fundo) */
+  fill: string;
+  sub: string;
+}
+
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+function parts(items: [number, string][]): string {
+  return items
+    .filter(([n]) => n > 0)
+    .map(([, text]) => text)
+    .join(" · ");
+}
+
+export function competenceGroups(c: Record<ClientCompetenceStatus, number>): CompetenceGroup[] {
+  return [
+    {
+      key: "done",
+      label: "Concluído",
+      n: c.done,
+      color: "#2ea062",
+      fill: "#2ea062",
+      sub: c.done > 0 ? "todos os documentos baixados" : "nenhum ainda",
+    },
+    {
+      key: "progress",
+      label: "Em andamento",
+      n: c.queued + c.running + c.sefaz,
+      color: "#e0a019",
+      fill: "#e0a019",
+      sub:
+        parts([
+          [c.queued, `${c.queued} na fila`],
+          [c.running, `${c.running} no robô`],
+          [c.sefaz, `${c.sefaz} SEFAZ`],
+        ]) || "nada em andamento",
+    },
+    {
+      key: "problem",
+      label: "Com problema",
+      n: c.failed + c.attention,
+      color: "#dc3b3b",
+      fill: "#dc3b3b",
+      sub:
+        parts([
+          [c.failed, plural(c.failed, "erro", "erros")],
+          [c.attention, plural(c.attention, "intervenção", "intervenções")],
+        ]) || "nenhum",
+    },
+    {
+      key: "none",
+      label: "Não solicitado",
+      n: c.none + c.cancelled,
+      color: "#d4d4cf",
+      fill: "transparent",
+      sub:
+        parts([
+          [c.none, `${c.none} sem pedido`],
+          [c.cancelled, plural(c.cancelled, "cancelado", "cancelados")],
+        ]) || "todos solicitados",
+    },
+  ];
+}

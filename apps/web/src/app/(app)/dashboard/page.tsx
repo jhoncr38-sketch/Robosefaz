@@ -1,17 +1,14 @@
-import { CalendarPlus } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { DashboardBoard, type DashboardCertSummary } from "@/components/dashboard/dashboard-board";
-import { PageHeader } from "@/components/page-header";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import { requireSession } from "@/lib/auth";
 import { previousCompetence, toCompetenceKey } from "@/lib/competence";
 import { isoDaysFromNow } from "@/lib/format";
 import { can } from "@/lib/permissions";
 import { JOB_SELECT } from "@/lib/queries";
 import { createClient } from "@/lib/supabase/server";
+import { greeting, longDayLabel } from "@/lib/timezone";
 import type { AutomationJob, DashboardStats } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -67,21 +64,18 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
       : null,
   };
 
+  const today = new Date();
+  const firstName = (profile.name ?? "").trim().split(/\s+/)[0];
+
   return (
     <>
-      <PageHeader
-        title="Dashboard"
-        description="Visão geral das automações do SIAT Web"
-        actions={
-          canRun ? (
-            <Button asChild className="h-9 gap-2 px-3.5 text-[13.5px] hover:bg-(--c-196640)">
-              <Link href={`/automation?competence=${competence}`} className="hover:no-underline">
-                <CalendarPlus className="size-[15px]" /> Processar competência
-              </Link>
-            </Button>
-          ) : null
-        }
-      />
+      <div className="mb-5">
+        <p className="text-[13px] text-(--c-6b6c66)">{longDayLabel(today)}</p>
+        <h1 className="mt-0.5 text-[22px] font-semibold tracking-[-0.01em] text-foreground">
+          {greeting(today)}
+          {firstName ? `, ${firstName}` : ""}
+        </h1>
+      </div>
 
       {params.error === "forbidden" ? (
         <Alert variant="destructive" className="mb-4">
@@ -93,11 +87,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         competence={competence}
         initialJobs={[...byId.values()]}
         clients={(clientsRes.data ?? []).map((c) => ({ id: c.id, name: c.trade_name || c.legal_name }))}
-        totals={{
-          downloads: n(stats.downloads_available),
-          completed: n(stats.jobs_completed),
-          failed: n(stats.jobs_failed),
-        }}
+        downloads={n(stats.downloads_available)}
         certs={certs}
         hostnames={Object.fromEntries((workersRes.data ?? []).filter((w) => w.hostname).map((w) => [w.worker_id, w.hostname]))}
         canRun={canRun}

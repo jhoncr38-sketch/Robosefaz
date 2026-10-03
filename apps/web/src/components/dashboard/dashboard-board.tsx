@@ -1,27 +1,16 @@
 "use client";
 
-import {
-  ArrowRight,
-  CalendarClock,
-  CircleCheck,
-  Hourglass,
-  ShieldAlert,
-  ShieldCheck,
-  TriangleAlert,
-  type LucideIcon,
-} from "lucide-react";
+import { CalendarPlus, CircleCheck, Download, Hand, Hourglass, ShieldAlert, ShieldCheck, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { JobStatusBadge } from "@/components/status-badge";
 import { useNow } from "@/hooks/use-now";
 import { useRealtimeJobs } from "@/hooks/use-realtime-jobs";
-import { SEFAZ_PHASE, useWaitingSince } from "@/hooks/use-waiting-since";
+import { SEFAZ_PHASE } from "@/hooks/use-waiting-since";
 import { formatCompetence } from "@/lib/competence";
 import {
-  COMPETENCE_STATUS_COLOR,
-  COMPETENCE_STATUS_LABEL,
-  COMPETENCE_STATUS_ORDER,
+  competenceGroups,
   competenceStatusOf,
   countByStatus,
   isExportJob,
@@ -45,12 +34,6 @@ export interface DashboardCertSummary {
   next: { clientId: string; name: string; validUntil: string } | null;
 }
 
-export interface DashboardTotals {
-  downloads: number;
-  completed: number;
-  failed: number;
-}
-
 const OP_TAG: Record<ExportTaskType | "EFD_CHECK" | "MALHA_CHECK", string> = {
   NFCE_EXPORT: "NFC-e",
   NFE_ISSUED_EXPORT: "Emit.",
@@ -63,7 +46,7 @@ const OP_TAG: Record<ExportTaskType | "EFD_CHECK" | "MALHA_CHECK", string> = {
 };
 
 const EXEC_GRID =
-  "grid grid-cols-[minmax(0,1fr)_auto_44px] gap-3 sm:grid-cols-[minmax(120px,2fr)_60px_minmax(150px,1.2fr)_minmax(130px,1.2fr)_56px]";
+  "grid grid-cols-[minmax(0,1fr)_minmax(0,auto)_44px] gap-3 sm:grid-cols-[minmax(120px,2fr)_minmax(150px,1.2fr)_minmax(150px,1.2fr)_56px]";
 
 function clientName(job: AutomationJob, names: Map<string, string>): string {
   return job.clients?.trade_name || job.clients?.legal_name || names.get(job.client_id) || "Cliente";
@@ -77,7 +60,7 @@ export function DashboardBoard({
   competence,
   initialJobs,
   clients,
-  totals,
+  downloads,
   certs,
   hostnames,
   canRun,
@@ -85,14 +68,14 @@ export function DashboardBoard({
   competence: string;
   initialJobs: AutomationJob[];
   clients: DashboardClient[];
-  totals: DashboardTotals;
+  /** arquivos prontos para baixar */
+  downloads: number;
   certs: DashboardCertSummary;
   hostnames: Record<string, string>;
   canRun: boolean;
 }) {
   const { jobs } = useRealtimeJobs(initialJobs);
   const now = useNow();
-  const waitingSince = useWaitingSince(jobs);
   const names = useMemo(() => new Map(clients.map((c) => [c.id, c.name])), [clients]);
   const compLabel = formatCompetence(competence);
   const scheduleHref = `/automation?competence=${competence}&select=pending`;
@@ -102,7 +85,6 @@ export function DashboardBoard({
   const statuses = clients.map((c) => competenceStatusOf(latest.get(c.id)));
   const counts = countByStatus(statuses);
   const pendingClients = clients.filter((_, i) => statuses[i] === "none");
-  const failedInComp = counts.failed;
 
   const running = jobs
     .filter((j) => isJobRunning(j.status))
@@ -113,66 +95,24 @@ export function DashboardBoard({
     .filter((j) => j.next_check_at)
     .sort((a, b) => (a.next_check_at ?? "").localeCompare(b.next_check_at ?? ""))[0];
 
-  // precisa de atenção
+  // precisa de atenção: só o que pede uma ação sua (erros e pendentes já estão no card da competência)
   const attention: { key: string; icon: LucideIcon; tone: string; title: string; sub: string; action: string; href: string }[] = [];
   for (const j of jobs.filter((x) => MANUAL_JOB_STATUSES.includes(x.status) || x.status === "certificate_required").slice(0, 3)) {
     attention.push({
       key: `manual-${j.id}`,
-      icon: TriangleAlert,
+      icon: Hand,
       tone: "bg-(--c-fdeee3) text-(--c-b4530f)",
       title: `${clientName(j, names)} precisa de intervenção`,
       sub: `${formatCompetence(j.competence)} · ${j.manual_action_message || j.last_message || "veja a fila"}`,
       action: "Abrir fila",
-      href: "/queue",
-    });
-  }
-  if (now !== null) {
-    const oldest = sefazJobs
-      .map((j) => ({ job: j, since: waitingSince[j.id] ?? j.updated_at }))
-      .sort((a, b) => a.since.localeCompare(b.since))[0];
-    if (oldest && now - new Date(oldest.since).getTime() > 2 * 3600_000) {
-      const hours = Math.floor((now - new Date(oldest.since).getTime()) / 3600_000);
-      attention.push({
-        key: "sefaz",
-        icon: Hourglass,
-        tone: "bg-(--c-fdf4e3) text-(--c-b7791f)",
-        title: `${clientName(oldest.job, names)} aguarda SEFAZ há ${hours}h`,
-        sub: `${formatCompetence(oldest.job.competence)} · o robô segue consultando`,
-        action: "Ver fila",
-        href: "/queue",
-      });
-    }
-  }
-  if (failedInComp > 0) {
-    attention.push({
-      key: "failed",
-      icon: TriangleAlert,
-      tone: "bg-(--c-fdecec) text-(--c-b42323)",
-      title: `${failedInComp} cliente(s) com erro em ${compLabel}`,
-      sub: "Veja o motivo e reprocesse",
-      action: "Ver erros",
-      href: "/errors",
-    });
-  }
-  if (canRun && pendingClients.length > 0) {
-    attention.push({
-      key: "pending",
-      icon: CalendarClock,
-      tone: "bg-(--c-e6f4ec) text-primary",
-      title: `${pendingClients.length} cliente(s) sem solicitação em ${compLabel}`,
-      sub: pendingClients
-        .slice(0, 4)
-        .map((c) => c.name.split(" ")[0])
-        .join(", ") + (pendingClients.length > 4 ? "…" : ""),
-      action: "Agendar",
-      href: scheduleHref,
+      href: "/queue?aba=intervencao",
     });
   }
   if (certs.expired + certs.expiring > 0) {
     attention.push({
       key: "certs",
       icon: ShieldAlert,
-      tone: "bg-(--c-fdf4e3) text-(--c-b7791f)",
+      tone: certs.expired > 0 ? "bg-(--c-fdecec) text-(--c-b42323)" : "bg-(--c-fff4e5) text-(--c-d97706)",
       title:
         certs.expired > 0
           ? `${certs.expired} certificado(s) vencido(s)`
@@ -190,10 +130,11 @@ export function DashboardBoard({
           compLabel={compLabel}
           total={clients.length}
           counts={counts}
-          totals={totals}
-          scheduleHref={canRun && pendingClients.length > 0 ? scheduleHref : null}
+          downloads={downloads}
+          pending={canRun ? pendingClients.length : 0}
+          scheduleHref={scheduleHref}
         />
-        <RecentExecutions jobs={jobs} names={names} competence={competence} now={now} />
+        <RecentExecutions jobs={jobs} names={names} now={now} />
       </div>
 
       <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-4">
@@ -245,103 +186,124 @@ function CompetenceHero({
   compLabel,
   total,
   counts,
-  totals,
+  downloads,
+  pending,
   scheduleHref,
 }: {
   compLabel: string;
   total: number;
   counts: ReturnType<typeof countByStatus>;
-  totals: DashboardTotals;
-  scheduleHref: string | null;
+  downloads: number;
+  /** clientes sem pedido que o usuário pode agendar (0 = sem botão) */
+  pending: number;
+  scheduleHref: string;
 }) {
-  const present = COMPETENCE_STATUS_ORDER.filter((s) => counts[s] > 0);
+  const [hover, setHover] = useState<number | null>(null);
+  const groups = competenceGroups(counts);
+  const pct = total > 0 ? Math.round((counts.done / total) * 100) : 0;
+  const shown = groups.map((g, i) => (g.n > 0 ? i : -1)).filter((i) => i >= 0);
+  const first = shown[0];
+  const last = shown[shown.length - 1];
   return (
     <Card className="flex flex-col gap-[18px] p-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex flex-[1_1_220px] flex-col gap-0.5">
-          <p className="text-xs text-(--c-6b6c66)">Competência atual</p>
-          <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+      <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
+        <div className="flex flex-[1_1_260px] flex-col gap-1">
+          <p className="text-xs text-(--c-6b6c66)">Competência</p>
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <span className="font-mono text-[26px] font-semibold tracking-[-0.02em]">{compLabel}</span>
-            <span className="text-[13px] whitespace-nowrap text-muted-foreground">
-              {counts.done} de {total} cliente(s) concluído(s)
+            <span className="text-[13.5px] text-(--c-4a4b46)">
+              <b className="font-semibold text-foreground">{pct}%</b> concluído · {counts.done} de {total} cliente(s)
             </span>
           </div>
         </div>
-        <div className="flex flex-wrap gap-x-7 gap-y-3">
-          <HeroStat label="Downloads disponíveis" value={totals.downloads} href="/downloads" />
-          <HeroStat label="Concluídos (total)" value={totals.completed} href="/history?status=completed" />
-          <HeroStat
-            label="Erros"
-            value={totals.failed}
-            href="/errors"
-            className={totals.failed === 0 ? "text-primary" : "text-(--c-b42323)"}
-          />
+        <div className="flex flex-wrap items-center gap-4">
+          <Link href="/downloads" className="flex items-center gap-1.5 text-[13px] whitespace-nowrap text-(--c-3d3e3a)">
+            <Download className="size-3.5 text-(--c-6b6c66)" />
+            <b className="font-mono text-[13px] font-semibold">{downloads}</b> para baixar
+          </Link>
+          {pending > 0 ? (
+            <Link
+              href={scheduleHref}
+              className="flex h-9 items-center gap-2 rounded-lg bg-primary px-3.5 text-[13.5px] font-medium whitespace-nowrap text-primary-foreground hover:bg-(--c-196640) hover:no-underline"
+            >
+              <CalendarPlus className="size-[15px]" /> Agendar {pending} pendente{pending === 1 ? "" : "s"}
+            </Link>
+          ) : null}
         </div>
       </div>
 
-      <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-[5px] bg-(--c-f0f0ec)" aria-hidden>
-        {total > 0
-          ? present.map((s) => (
-              <div key={s} style={{ width: `${(counts[s] / total) * 100}%`, background: COMPETENCE_STATUS_COLOR[s] }} />
-            ))
-          : null}
-      </div>
+      {total === 0 ? (
+        <p className="text-[12.5px] text-muted-foreground">Nenhum cliente ativo cadastrado.</p>
+      ) : (
+        <>
+          {/* barra contínua: concluído, em andamento e com problema; o fundo é o "não solicitado" */}
+          <div className="flex h-2 rounded-[4px] bg-(--c-f0f0ec)" onMouseLeave={() => setHover(null)}>
+            {groups.map((g, i) =>
+              g.n > 0 ? (
+                <div
+                  key={g.key}
+                  onMouseEnter={() => setHover(i)}
+                  className="relative cursor-default transition-opacity duration-150"
+                  style={{
+                    width: `${(g.n / total) * 100}%`,
+                    background: g.fill,
+                    opacity: hover === null || hover === i ? 1 : 0.35,
+                    borderRadius: `${i === first ? 4 : 0}px ${i === last ? 4 : 0}px ${i === last ? 4 : 0}px ${i === first ? 4 : 0}px`,
+                  }}
+                >
+                  {hover === i ? (
+                    <div className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-[7px] bg-[#1c1d1b] px-2.5 py-[7px] text-xs leading-[1.4] whitespace-nowrap text-white shadow-[0_6px_18px_rgba(0,0,0,.18)]">
+                      <b className="font-semibold">
+                        {g.label} · {g.n}
+                      </b>
+                      <br />
+                      <span className="text-[#d4d4cf]">{g.sub}</span>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null,
+            )}
+          </div>
 
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-        {total === 0 ? (
-          <span className="text-[12.5px] text-muted-foreground">Nenhum cliente ativo cadastrado.</span>
-        ) : (
-          present.map((s) => (
-            <div key={s} className="flex items-center gap-[7px] text-[12.5px] text-(--c-4a4b46)">
-              <span className="size-2 rounded-[2px]" style={{ background: COMPETENCE_STATUS_COLOR[s] }} />
-              {COMPETENCE_STATUS_LABEL[s]}
-              <span className="font-mono font-medium text-foreground">{counts[s]}</span>
-            </div>
-          ))
-        )}
-        <div className="flex-1" />
-        {scheduleHref ? (
-          <Link href={scheduleHref} className="flex items-center gap-1 text-[12.5px] font-medium text-primary">
-            Agendar pendentes <ArrowRight className="size-[13px]" />
-          </Link>
-        ) : null}
-      </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(4,minmax(0,1fr))]">
+            {groups.map((g) => (
+              <div key={g.key} className="flex min-w-0 flex-col gap-[3px]">
+                <div className="flex items-center gap-[7px] text-[12.5px] text-(--c-4a4b46)">
+                  <span className="size-2 shrink-0 rounded-[2px]" style={{ background: g.color }} />
+                  {g.label}
+                </div>
+                <span
+                  className={cn(
+                    "font-mono text-lg font-semibold",
+                    g.key === "problem" && g.n > 0 ? "text-(--c-b42323)" : "text-foreground",
+                  )}
+                >
+                  {g.n}
+                </span>
+                <span className="truncate text-[11.5px] text-(--c-6b6c66)" title={g.sub}>
+                  {g.sub}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </Card>
   );
 }
 
-function HeroStat({ label, value, href, className }: { label: string; value: number; href: string; className?: string }) {
-  return (
-    <Link href={href} className="flex flex-col gap-0.5 text-foreground hover:no-underline">
-      <span className="text-xs text-(--c-6b6c66)">{label}</span>
-      <span className={cn("text-xl font-semibold tabular-nums", className)}>{value}</span>
-    </Link>
-  );
-}
+type ExecTab = "all" | "active";
 
-type ExecTab = "all" | "active" | "competence";
-
-function RecentExecutions({
-  jobs,
-  names,
-  competence,
-  now,
-}: {
-  jobs: AutomationJob[];
-  names: Map<string, string>;
-  competence: string;
-  now: number | null;
-}) {
+function RecentExecutions({ jobs, names, now }: { jobs: AutomationJob[]; names: Map<string, string>; now: number | null }) {
   const [tab, setTab] = useState<ExecTab>("all");
   const final = ["completed", "failed", "cancelled"];
   const list = [...jobs]
-    .filter((j) => (tab === "active" ? !final.includes(j.status) : tab === "competence" ? j.competence === competence : true))
+    .filter((j) => (tab === "active" ? !final.includes(j.status) : true))
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
     .slice(0, 10);
   const tabs: [ExecTab, string][] = [
     ["all", "Todas"],
     ["active", "Em andamento"],
-    ["competence", formatCompetence(competence)],
   ];
 
   return (
@@ -376,7 +338,6 @@ function RecentExecutions({
         )}
       >
         <span>Cliente</span>
-        <span className="hidden sm:block">Comp.</span>
         <span className="hidden sm:block">Operações</span>
         <span>Status</span>
         <span className="text-right">Quando</span>
@@ -395,9 +356,10 @@ function RecentExecutions({
               "items-center border-b border-(--c-f2f2ef) px-[18px] py-2.5 text-[13px] text-foreground last:border-b-0 hover:bg-(--c-fafaf8) hover:no-underline",
             )}
           >
-            <span className="truncate font-medium">{clientName(j, names)}</span>
-            <span className="hidden font-mono text-[12.5px] text-(--c-4a4b46) sm:block">{formatCompetence(j.competence)}</span>
-            <span className="hidden gap-1 sm:flex">
+            <span className="truncate font-medium" title={`${clientName(j, names)} · ${formatCompetence(j.competence)}`}>
+              {clientName(j, names)}
+            </span>
+            <span className="hidden gap-1 overflow-hidden sm:flex">
               {j.operations.map((o) => (
                 <span
                   key={o}
@@ -408,7 +370,7 @@ function RecentExecutions({
                 </span>
               ))}
             </span>
-            <span className="min-w-0">
+            <span className="min-w-0 overflow-hidden">
               <JobStatusBadge status={j.status} />
             </span>
             <span className="text-right text-xs text-(--c-6b6c66)">
