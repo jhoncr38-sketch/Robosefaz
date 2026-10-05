@@ -26,10 +26,11 @@ describe("menu lateral", () => {
     );
   });
 
-  it("Resultados e Empresas também recolhem, como o SIAT", () => {
+  it("Resultados, Empresas e Administração também recolhem, como o SIAT", () => {
     const byKey = Object.fromEntries(folders.map((f) => [f.key, f.children.map((c) => c.href)]));
     assert.deepEqual(byKey.resultados, ["/downloads", "/history", "/errors"]);
     assert.deepEqual(byKey.empresas, ["/clients", "/certificates", "/organizations"]);
+    assert.deepEqual(byKey.admin, ["/users", "/devices", "/settings"]);
     assert.equal(new Set(folders.map((f) => f.key)).size, folders.length);
   });
 
@@ -46,7 +47,7 @@ describe("menu lateral", () => {
     assert.deepEqual(navLocation("/queue/123"), { group: "SIAT", label: "Fila de processamento" });
     assert.deepEqual(navLocation("/downloads"), { group: "Resultados", label: "Downloads" });
     assert.deepEqual(navLocation("/clients/abc"), { group: "Empresas", label: "Clientes" });
-    assert.deepEqual(navLocation("/devices"), { group: "Sistema", label: "Computadores" });
+    assert.deepEqual(navLocation("/devices"), { group: "Administração", label: "Computadores" });
     assert.equal(navLocation("/nada"), null);
   });
 

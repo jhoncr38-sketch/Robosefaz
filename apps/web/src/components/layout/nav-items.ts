@@ -13,6 +13,7 @@ import {
   ScanSearch,
   Settings,
   ShieldCheck,
+  SlidersHorizontal,
   TriangleAlert,
   Users,
   type LucideIcon,
@@ -100,9 +101,16 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Sistema",
     items: [
-      { href: "/users", label: "Usuários", icon: Users, permission: "users:manage" },
-      { href: "/devices", label: "Computadores", icon: Laptop },
-      { href: "/settings", label: "Configurações", icon: Settings },
+      {
+        key: "admin",
+        label: "Administração",
+        icon: SlidersHorizontal,
+        children: [
+          { href: "/users", label: "Usuários", icon: Users, permission: "users:manage" },
+          { href: "/devices", label: "Computadores", icon: Laptop },
+          { href: "/settings", label: "Configurações", icon: Settings },
+        ],
+      },
     ],
   },
 ];
