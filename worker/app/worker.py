@@ -30,6 +30,7 @@ from app.downloads.drive_ids import DriveIdLookup, drivefs_databases, link_drive
 from app.downloads.fallback import FallbackOrganizer, notes_folder_kind, organizer_for
 from app.downloads.folder_owner import load_office, save_office
 from app.downloads.note_count import count_pending_notes
+from app.downloads.note_index import index_pending_notes, serve_note_xml_requests
 from app.downloads.organizer import DownloadFolderUnavailable
 from app.utils.files import sha256_file
 from app.jobs.base_runner import RunnerDeps
@@ -63,6 +64,8 @@ class Worker:
         self._uncountable: set[str] = set()  # downloads cujo ZIP não deu para ler aqui
         self._warned_foreign: str | None = None  # dono de outro escritório já avisado no log
         self._note_count_failures = 0
+        self._unindexable: set[str] = set()  # ZIPs que não deu para indexar aqui
+        self._note_index_failures = 0
         self.scheduler = SchedulerRunner(deps)
         self.collector = CollectorRunner(deps)
         self.retention = RetentionService(repo, settings)
@@ -167,6 +170,7 @@ class Worker:
                     log.exception("Falha ao ligar as notas ao Google Drive")
             if ready:
                 await self._count_notes()
+                await self._index_notes()
             now = time.monotonic()
             if self._next_retention_at is None or now >= self._next_retention_at:
                 self._next_retention_at = now + self.settings.retention_interval_hours * 3600
@@ -200,6 +204,30 @@ class Worker:
         except Exception:
             self._note_count_failures += 1
             log.warning("Falha ao contar as notas dos downloads (%s/3)", self._note_count_failures, exc_info=True)
+
+    async def _index_notes(self) -> None:
+        """Índice das notas de cada ZIP (tela Notas do painel). Só lê; se falhar 3 vezes seguidas
+        (ex.: banco ainda sem a tabela), para até o próximo início do robô."""
+        if self._note_index_failures >= 3:
+            return
+        try:
+            await index_pending_notes(self.repo, self.organizer.base_dir, skip=self._unindexable)
+            self._note_index_failures = 0
+        except Exception:
+            self._note_index_failures += 1
+            log.warning("Falha ao indexar as notas dos downloads (%s/3)", self._note_index_failures, exc_info=True)
+
+    async def _serve_note_xml(self) -> None:
+        """"Ver a nota" no painel: extrai do ZIP só o XML pedido, a cada 5 s (só lê)."""
+        skipped: set[tuple[str, str]] = set()
+        while not self.stop_event.is_set():
+            try:
+                if await asyncio.to_thread(self._notes_folder_ready):
+                    await serve_note_xml_requests(self.repo, self.organizer.base_dir, skip=skipped)
+            except Exception:
+                log.warning("Falha ao entregar o XML pedido pelo painel", exc_info=True)
+                await self._sleep(60)  # não enche o registro (ex.: banco sem a tabela, sem internet)
+            await self._sleep(5)
 
     async def _drive_account(self) -> Path | None:
         """Conta do Google Drive da pasta das notas (1x por início do robô); troca de conta refaz os links."""
@@ -389,6 +417,7 @@ class Worker:
         tasks: list[asyncio.Task] = [
             asyncio.create_task(self._heartbeat(), name="heartbeat"),
             asyncio.create_task(self._maintenance(), name="maintenance"),
+            asyncio.create_task(self._serve_note_xml(), name="note-xml"),
             asyncio.create_task(self._watch_stop_flag(), name="stop-flag"),
             asyncio.create_task(self._watch_browser_flag(), name="browser-flag"),
             asyncio.create_task(self._local_status(), name="local-status"),

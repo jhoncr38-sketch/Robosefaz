@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   ListOrdered,
   Play,
+  Receipt,
   ScanSearch,
   Settings,
   ShieldCheck,
@@ -77,6 +78,7 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: FolderOpen,
         children: [
           { href: "/downloads", label: "Downloads", icon: Download, badge: "downloads" },
+          { href: "/notes", label: "Notas", icon: Receipt },
           { href: "/history", label: "Histórico", icon: History },
           { href: "/errors", label: "Erros", icon: TriangleAlert },
         ],

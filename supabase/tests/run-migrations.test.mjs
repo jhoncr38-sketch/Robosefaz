@@ -1035,5 +1035,48 @@ await test("canceladas: pedido próprio, respeita o cadastro, duplicidade separa
   assert.deepEqual(empty.rows.map((x) => x.document_type), ["NFE_EMITIDAS"]);
 });
 
+await test("notas: índice gravado pelo robô, lido só pelo escritório, XML pedido pelo painel", async () => {
+  const KEY = "22260837354860000133552260000000031820244645";
+  const dl = (
+    await db.query(
+      "insert into public.downloads (client_id, document_type, competence, filename, filepath, checksum) values ($1, 'NFE_EMITIDAS', '2026-08', 'n.zip', 'C:/n.zip', repeat('c', 64)) returning id",
+      [CLIENT_B1],
+    )
+  ).rows[0].id;
+  // o robô grava (upsert pela chave) e o escritório é preenchido pelo trigger
+  const ins = await as(DEVICE_B.authId, (tx) =>
+    tx.query(
+      "insert into public.notes (client_id, download_id, document_type, competence, chave, numero, zip_path, xml_name) values ($1, $2, 'NFE_EMITIDAS', '2026-08', $3, 3, 'C:/n.zip', $4) on conflict (client_id, document_type, chave) do update set download_id = excluded.download_id returning org_id",
+      [CLIENT_B1, dl, KEY, `${KEY}.xml`],
+    ),
+  );
+  assert.equal(ins.rows[0].org_id, ORG_B);
+  // escritório B vê; escritório A não
+  const seenB = await as(ADMIN_B, (tx) => tx.query("select numero from public.notes where chave = $1", [KEY]));
+  assert.equal(Number(seenB.rows[0].numero), 3);
+  const seenA = await as(ADMIN, (tx) => tx.query("select 1 from public.notes where chave = $1", [KEY]));
+  assert.equal(seenA.rows.length, 0);
+  // pedir o XML: só o próprio escritório consegue; o robô recebe o pedido
+  const foreign = await as(ADMIN, (tx) =>
+    tx.query("select public.request_note_xml((select id from public.notes where chave = $1)) ok", [KEY]),
+  );
+  assert.equal(foreign.rows[0].ok, false);
+  const mine = await as(ADMIN_B, (tx) =>
+    tx.query("select public.request_note_xml((select id from public.notes where chave = $1)) ok", [KEY]),
+  );
+  assert.equal(mine.rows[0].ok, true);
+  const pending = await as(DEVICE_B.authId, (tx) =>
+    tx.query("select id from public.notes where xml_requested_at is not null and xml is null and xml_error is null"),
+  );
+  assert.equal(pending.rows.length, 1);
+  await as(DEVICE_B.authId, (tx) => tx.query("update public.notes set xml = '<x/>', xml_at = now() where chave = $1", [KEY]));
+  // a limpeza automática apaga o download; o índice fica, apontando para o ZIP
+  await db.query("delete from public.downloads where id = $1", [dl]);
+  const kept = (await db.query("select download_id, zip_path, xml from public.notes where chave = $1", [KEY])).rows[0];
+  assert.equal(kept.download_id, null);
+  assert.equal(kept.zip_path, "C:/n.zip");
+  assert.equal(kept.xml, "<x/>");
+});
+
 console.log(`\n${passed} teste(s) de banco passaram${process.exitCode ? " (com falhas)" : ""}.`);
 await db.close();

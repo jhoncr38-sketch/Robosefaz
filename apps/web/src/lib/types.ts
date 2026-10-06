@@ -249,6 +249,42 @@ export interface DownloadRow {
   clients?: ClientRef | null;
 }
 
+/** Uma nota (XML) dentro de um ZIP baixado, lida pelo robô (tela Notas). */
+export interface NoteRow {
+  id: string;
+  org_id: string;
+  client_id: string;
+  /** null depois que a limpeza automática apaga o registro do download (o ZIP fica) */
+  download_id: string | null;
+  document_type: DocumentType;
+  competence: string;
+  chave: string;
+  modelo: number | null;
+  serie: number | null;
+  numero: number | null;
+  emitida_em: string | null;
+  valor: string | number | null;
+  emit_doc: string | null;
+  emit_nome: string | null;
+  emit_uf: string | null;
+  dest_doc: string | null;
+  dest_nome: string | null;
+  dest_uf: string | null;
+  cstat: string | null;
+  /** veio do ZIP de canceladas (o XML é o da nota autorizada) */
+  canceled: boolean;
+  zip_path: string;
+  xml_name: string;
+  /** XML da nota, só depois que alguém pediu para ver */
+  xml?: string | null;
+  xml_requested_at: string | null;
+  xml_at: string | null;
+  xml_error: string | null;
+  created_at: string;
+  clients?: { client_code: string; legal_name: string; trade_name: string | null; cnpj: string } | null;
+  downloads?: { filename: string; drive_file_id: string | null } | null;
+}
+
 export interface NotificationRow {
   id: string;
   user_id: string;

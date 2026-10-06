@@ -247,6 +247,42 @@ class FakeRepo:
             if d.get("id") == download_id:
                 d["note_count"] = count
 
+    # -- índice das notas e XML sob demanda ---------------------------------
+    notes: list[dict[str, Any]]
+
+    def _notes(self) -> list[dict[str, Any]]:
+        if not hasattr(self, "notes"):
+            self.notes = []
+        return self.notes
+
+    async def list_downloads_to_index(self, limit: int) -> list[dict[str, Any]]:
+        return [d for d in self.downloads if d.get("notes_indexed_at") is None][:limit]
+
+    async def upsert_notes(self, rows: list[dict[str, Any]]) -> None:
+        notes = self._notes()
+        for row in rows:
+            key = (row["client_id"], row["document_type"], row["chave"])
+            notes[:] = [n for n in notes if (n["client_id"], n["document_type"], n["chave"]) != key]
+            notes.append({"id": str(uuid.uuid4()), "xml": None, "xml_error": None, "xml_requested_at": None, **row})
+
+    async def set_download_notes_indexed(self, download_id: str, count: int) -> None:
+        for d in self.downloads:
+            if d.get("id") == download_id:
+                d["notes_indexed_at"] = now().isoformat()
+                d["note_count"] = count
+
+    async def list_note_xml_requests(self, limit: int) -> list[dict[str, Any]]:
+        pending = [n for n in self._notes() if n.get("xml_requested_at") and n.get("xml") is None and not n.get("xml_error")]
+        for n in pending:
+            dl = next((d for d in self.downloads if d.get("id") == n.get("download_id")), None)
+            n["downloads"] = dl
+        return pending[:limit]
+
+    async def set_note_xml(self, note_id: str, xml: str | None, error: str | None = None) -> None:
+        for n in self._notes():
+            if n["id"] == note_id:
+                n.update(xml=xml, xml_error=error, xml_at=now().isoformat() if xml else None)
+
     office = None  # escritório do computador (device_org); None = instalação antiga
 
     async def device_org(self):  # noqa: ANN201

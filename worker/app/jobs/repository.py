@@ -68,6 +68,12 @@ class JobRepository(Protocol):
     async def list_downloads_without_drive_id(self, limit: int) -> list[dict[str, Any]]: ...
     async def list_downloads_without_note_count(self, limit: int) -> list[dict[str, Any]]: ...
     async def set_download_note_count(self, download_id: str, count: int) -> None: ...
+    # -- índice das notas e XML sob demanda (painel "Notas") ----------------
+    async def list_downloads_to_index(self, limit: int) -> list[dict[str, Any]]: ...
+    async def upsert_notes(self, rows: list[dict[str, Any]]) -> None: ...
+    async def set_download_notes_indexed(self, download_id: str, count: int) -> None: ...
+    async def list_note_xml_requests(self, limit: int) -> list[dict[str, Any]]: ...
+    async def set_note_xml(self, note_id: str, xml: str | None, error: str | None = None) -> None: ...
     async def list_client_names(self) -> dict[str, str | None]: ...
     async def device_org(self) -> Office | None: ...
     async def rename_download(self, old_filename: str, new_filename: str, new_filepath: str, checksum: str) -> int: ...
@@ -359,6 +365,56 @@ class SupabaseJobRepository:
     @_transient
     async def set_download_note_count(self, download_id: str, count: int) -> None:
         await self._db.table("downloads").update({"note_count": count}).eq("id", download_id).execute()
+
+    # -- índice das notas e XML sob demanda (painel "Notas") ----------------
+    @_transient
+    async def list_downloads_to_index(self, limit: int) -> list[dict[str, Any]]:
+        res = (
+            await self._db.table("downloads")
+            .select("id, client_id, document_type, competence, filepath, size, checksum")
+            .is_("notes_indexed_at", "null")
+            .order("downloaded_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return res.data or []
+
+    @_transient
+    async def upsert_notes(self, rows: list[dict[str, Any]]) -> None:
+        for i in range(0, len(rows), 500):
+            await (
+                self._db.table("notes")
+                .upsert(rows[i : i + 500], on_conflict="client_id,document_type,chave", returning=ReturnMethod.minimal)
+                .execute()
+            )
+
+    @_transient
+    async def set_download_notes_indexed(self, download_id: str, count: int) -> None:
+        await (
+            self._db.table("downloads")
+            .update({"notes_indexed_at": iso(utcnow()), "note_count": count})
+            .eq("id", download_id)
+            .execute()
+        )
+
+    @_transient
+    async def list_note_xml_requests(self, limit: int) -> list[dict[str, Any]]:
+        res = (
+            await self._db.table("notes")
+            .select("id, chave, xml_name, zip_path, xml_requested_at, downloads(filepath, competence, document_type, size, checksum)")
+            .not_.is_("xml_requested_at", "null")
+            .is_("xml", "null")
+            .is_("xml_error", "null")
+            .order("xml_requested_at")
+            .limit(limit)
+            .execute()
+        )
+        return res.data or []
+
+    @_transient
+    async def set_note_xml(self, note_id: str, xml: str | None, error: str | None = None) -> None:
+        fields = {"xml": xml, "xml_at": iso(utcnow()) if xml else None, "xml_error": error}
+        await self._db.table("notes").update(fields).eq("id", note_id).execute()
 
     @_transient
     async def clear_download_drive_ids(self) -> int:
