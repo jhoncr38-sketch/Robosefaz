@@ -3,10 +3,13 @@ import type { Metadata } from "next";
 
 import { ListCard } from "@/components/data-list";
 import { HelpTip } from "@/components/list-extras";
+import { KeyInsightCard } from "@/components/notes/key-insight";
 import { NotesList } from "@/components/notes/notes-list";
 import { NotesSearch } from "@/components/notes/notes-search";
 import { EmptyState, PageHeader } from "@/components/page-header";
 import { requireSession } from "@/lib/auth";
+import { lookupCnpj } from "@/lib/cnpj-lookup";
+import { buildKeyInsight, type InsightClient, type KeyInsight } from "@/lib/key-insight";
 import { parseNoteQuery } from "@/lib/nfe-key";
 import { NOTE_LIST_SELECT } from "@/lib/notes";
 import { createClient } from "@/lib/supabase/server";
@@ -42,6 +45,40 @@ export default async function NotesPage({ searchParams }: PageProps<"/notes">) {
     }
     const { data } = await req;
     rows = (data ?? []) as unknown as NoteRow[];
+  }
+
+  // chave que não está nos arquivos: o que ela revela e com que empresa buscar no SIAT
+  let insight: KeyInsight | null = null;
+  let emitter: { nome: string; cidade: string } | null = null;
+  if (query?.kind === "chave" && rows.length === 0) {
+    const cnpj = query.value.slice(6, 20);
+    const competence = `20${query.value.slice(2, 4)}-${query.value.slice(4, 6)}`;
+    const [clientsRes, recipientsRes, downloadedRes] = await Promise.all([
+      supabase
+        .from("clients")
+        .select("id, client_code, legal_name, trade_name, cnpj, uses_nfe_received, uses_nfe_issued, uses_nfce")
+        .eq("active", true)
+        .order("legal_name"),
+      supabase.from("notes").select("client_id, emit_nome").eq("emit_doc", cnpj).limit(2000),
+      supabase.from("downloads").select("client_id").eq("competence", competence).eq("document_type", "NFE_RECEBIDAS").limit(2000),
+    ]);
+    const clients: InsightClient[] = (clientsRes.data ?? []).map((c) => ({
+      id: c.id,
+      client_code: c.client_code,
+      name: c.trade_name || c.legal_name,
+      cnpj: c.cnpj,
+      uses_nfe_received: c.uses_nfe_received,
+      uses_nfe_issued: c.uses_nfe_issued,
+      uses_nfce: c.uses_nfce,
+    }));
+    insight = buildKeyInsight(
+      query.value,
+      clients,
+      new Set((recipientsRes.data ?? []).map((r) => r.client_id as string)),
+      new Set((downloadedRes.data ?? []).map((r) => r.client_id as string)),
+    );
+    const known = (recipientsRes.data ?? []).find((r) => r.emit_nome)?.emit_nome as string | undefined;
+    if (insight && !insight.emitClient) emitter = known ? { nome: known, cidade: "" } : await lookupCnpj(cnpj);
   }
 
   const [{ count: total }, { count: indexed }, { count: pending }] = await Promise.all([
@@ -83,6 +120,8 @@ export default async function NotesPage({ searchParams }: PageProps<"/notes">) {
                   : "Nenhuma nota baixada ainda."
             }
           />
+        ) : rows.length === 0 && insight ? (
+          <KeyInsightCard insight={insight} emitter={emitter} />
         ) : rows.length === 0 ? (
           <EmptyState
             icon={<Receipt />}

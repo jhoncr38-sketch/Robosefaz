@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { formatDoc, formatMoney, formatNoteNumber, parseDanfe } from "../src/lib/danfe.ts";
-import { formatKey, isValidKey, keyParts, parseNoteQuery } from "../src/lib/nfe-key.ts";
+import { buildKeyInsight, type InsightClient } from "../src/lib/key-insight.ts";
+import { formatKey, isValidKey, keyCheckDigit, keyParts, parseNoteQuery } from "../src/lib/nfe-key.ts";
 
 const KEY = "22260837354860000133552260000000031820244645"; // chave real de uma NF-e do Piauí
 
@@ -72,5 +73,47 @@ describe("leitura do XML para a DANFE", () => {
     assert.equal(formatDoc("37354860000133"), "37.354.860/0001-33");
     assert.equal(formatDoc("03077247437"), "030.772.474-37");
     assert.equal(formatNoteNumber(12345), "000.012.345");
+  });
+});
+
+describe("o que a chave revela quando a nota não está no índice", () => {
+  const client = (id: string, cnpj: string, received = true): InsightClient => ({
+    id,
+    client_code: `CLI${id}`,
+    name: `Empresa ${id}`,
+    cnpj,
+    uses_nfe_received: received,
+    uses_nfe_issued: true,
+    uses_nfce: true,
+  });
+  const ASSAI = "22260806057223046163553000001722801561303961"; // emitente de fora (Assaí), 08/2026, série 300, nº 172280
+
+  it("emitente de fora: nota recebida, a pessoa escolhe a empresa; sugere quem ainda não baixou o mês", () => {
+    const clients = [client("1", "11222333000181"), client("2", "22333444000155"), client("3", "33444555000166", false)];
+    const i = buildKeyInsight(ASSAI, clients, new Set(["2"]), new Set(["1"]));
+    assert.ok(i && i.valid);
+    assert.equal(i.situation, "recebida-escolher");
+    assert.deepEqual([i.modeloLabel, i.serie, i.numero, i.anoMes, i.competence, i.uf], ["NF-e", 300, 172280, "08/2026", "2026-08", "22"]);
+    assert.equal(i.emitCnpj, "06057223046163");
+    assert.equal(i.emitClient, null);
+    assert.deepEqual(i.knownRecipients.map((c) => c.id), ["2"]); // já recebeu desse emitente
+    assert.deepEqual(i.missingRecipients.map((c) => c.id), []); // 1 já baixou o mês, 3 não usa recebidas
+    assert.deepEqual(i.otherRecipients.map((c) => c.id), ["1"]);
+    assert.equal(i.preselected, "2"); // único que já recebeu desse emitente
+  });
+
+  it("emitente é cliente: nota emitida, já vem selecionado", () => {
+    const i = buildKeyInsight(ASSAI, [client("9", "06.057.223/0461-63"), client("1", "11222333000181")], new Set(), new Set());
+    assert.equal(i?.situation, "emitida-cliente");
+    assert.equal(i?.preselected, "9");
+    assert.deepEqual(i?.missingRecipients.map((c) => c.id), ["1"]); // o emitente não entra na lista de quem recebeu
+  });
+
+  it("dígito errado e NFC-e de fora", () => {
+    assert.equal(buildKeyInsight(ASSAI.slice(0, 43) + "0", [], new Set(), new Set())?.situation, "invalida");
+    const first43 = ASSAI.slice(0, 20) + "65" + ASSAI.slice(22, 43);
+    const nfce = first43 + keyCheckDigit(first43); // mesma nota como NFC-e, com o dígito recalculado
+    assert.equal(buildKeyInsight(nfce, [], new Set(), new Set())?.situation, "nfce-fora");
+    assert.equal(buildKeyInsight("123", [], new Set(), new Set()), null);
   });
 });
