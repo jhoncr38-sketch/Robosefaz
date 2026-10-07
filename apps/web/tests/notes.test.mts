@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { formatDoc, formatMoney, formatNoteNumber, parseDanfe } from "../src/lib/danfe.ts";
-import { buildKeyInsight, type InsightClient } from "../src/lib/key-insight.ts";
+import { buildKeyInsight, canSearchInSiat, type InsightClient } from "../src/lib/key-insight.ts";
 import { formatKey, isValidKey, keyCheckDigit, keyParts, parseNoteQuery } from "../src/lib/nfe-key.ts";
 
 const KEY = "22260837354860000133552260000000031820244645"; // chave real de uma NF-e do Piauí
@@ -115,5 +115,16 @@ describe("o que a chave revela quando a nota não está no índice", () => {
     const nfce = first43 + keyCheckDigit(first43); // mesma nota como NFC-e, com o dígito recalculado
     assert.equal(buildKeyInsight(nfce, [], new Set(), new Set())?.situation, "nfce-fora");
     assert.equal(buildKeyInsight("123", [], new Set(), new Set()), null);
+  });
+
+  it("o robô só busca no SIAT NF-e válidas com uma empresa para entrar", () => {
+    const clients = [client("1", "11222333000181")];
+    assert.ok(canSearchInSiat(buildKeyInsight(ASSAI, clients, new Set(), new Set())!)); // recebida: escolhe a empresa
+    assert.ok(canSearchInSiat(buildKeyInsight(ASSAI, [client("9", "06057223046163")], new Set(), new Set())!)); // emitida
+    assert.ok(!canSearchInSiat(buildKeyInsight(ASSAI.slice(0, 43) + "0", clients, new Set(), new Set())!)); // dígito errado
+    const first43 = ASSAI.slice(0, 20) + "65" + ASSAI.slice(22, 43);
+    const nfce = first43 + keyCheckDigit(first43);
+    assert.ok(!canSearchInSiat(buildKeyInsight(nfce, [], new Set(), new Set())!)); // NFC-e de fora
+    assert.ok(!canSearchInSiat(buildKeyInsight(nfce, [client("9", "06057223046163")], new Set(), new Set())!)); // NFC-e do cliente: vem com o mês
   });
 });

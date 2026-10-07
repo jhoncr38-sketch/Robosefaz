@@ -1,6 +1,10 @@
 import { Search } from "lucide-react";
 
-/** Busca da tela Notas: número, chave de acesso, CNPJ/CPF ou nome (formulário simples, sem JS). */
+/**
+ * Busca da tela Notas (formulário simples, sem JS). O texto fala só da chave de acesso, que é o
+ * caminho oficial (e o único que o SIAT aceita); número, CNPJ/CPF e nome continuam funcionando
+ * para o que já está no índice, sem alarde.
+ */
 export function NotesSearch({ q }: { q: string }) {
   return (
     <form method="get" action="/notes" className="flex flex-wrap items-center gap-2.5 border-b border-(--c-efefeb) px-3.5 py-3">
@@ -11,8 +15,8 @@ export function NotesSearch({ q }: { q: string }) {
           defaultValue={q}
           autoFocus
           autoComplete="off"
-          placeholder="Número da nota, chave de acesso, CNPJ/CPF ou nome"
-          aria-label="Buscar nota"
+          placeholder="Chave de acesso da nota (44 números)"
+          aria-label="Buscar nota pela chave de acesso"
           className="min-w-0 flex-1 bg-transparent text-[13.5px] text-ellipsis outline-none placeholder:text-(--c-6b6c66)"
         />
       </label>

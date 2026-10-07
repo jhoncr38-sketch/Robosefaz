@@ -28,6 +28,20 @@ export function blockKey(doc: DocumentType): Exclude<TypeFilter, "all"> {
 /** file: arquivo com notas; empty: sem movimento; queued / waiting / error: pedido ainda sem resposta. */
 export type BlockState = "file" | "empty" | "queued" | "waiting" | "error";
 
+/** Uma exportação do mesmo mês e tipo (o robô grava uma versão nova quando o conteúdo mudou). */
+export interface FileVersion {
+  id: string;
+  filename: string;
+  downloaded_at: string;
+  note_count: number | null;
+  size: number;
+  /** veio de "Forçar reagendamento" (null: trabalho já apagado pela limpeza) */
+  forced: boolean | null;
+  drive_file_id: string | null;
+  /** notas a mais (ou a menos) que a versão anterior; null quando não dá para comparar */
+  delta: number | null;
+}
+
 export interface MonthBlock {
   id: string;
   doc: DocumentType;
@@ -36,6 +50,28 @@ export interface MonthBlock {
   count: number | null;
   alert?: NoteAlert;
   file?: DownloadRow;
+  /** todas as versões do arquivo no mês, da mais nova para a mais antiga (só em blocos com arquivo) */
+  versions?: FileVersion[];
+}
+
+/** Versões de um mesmo mês e tipo, da mais nova para a mais antiga, com a diferença de notas. */
+export function fileVersions(rows: DownloadRow[], forcedByJob: Record<string, boolean> = {}): FileVersion[] {
+  const sorted = [...rows].sort((a, b) => (a.downloaded_at < b.downloaded_at ? 1 : a.downloaded_at > b.downloaded_at ? -1 : 0));
+  return sorted.map((f, i) => {
+    const older = sorted[i + 1];
+    const count = f.note_count ?? null;
+    const delta = count !== null && older && older.note_count != null ? count - older.note_count : null;
+    return {
+      id: f.id,
+      filename: f.filename,
+      downloaded_at: f.downloaded_at,
+      note_count: count,
+      size: f.size,
+      forced: f.job_id && f.job_id in forcedByJob ? forcedByJob[f.job_id] : null,
+      drive_file_id: f.drive_file_id ?? null,
+      delta,
+    };
+  });
 }
 
 /** Situação do cliente no mês (abas): uma só por cliente; "Para conferir" é à parte. */
@@ -73,13 +109,19 @@ export function monthClients(
   tasks: Task[],
   clients: ClientInfo[],
   alerts: Record<string, NoteAlert> = {},
+  /** trabalho -> veio de "Forçar reagendamento" (para o histórico de versões) */
+  forcedByJob: Record<string, boolean> = {},
 ): MonthClient[] {
   const key = (clientId: string, doc: DocumentType) => `${clientId}|${doc}`;
   const latestFile = new Map<string, DownloadRow>();
+  const allFiles = new Map<string, DownloadRow[]>();
   for (const f of files) {
     const k = key(f.client_id, f.document_type);
     const prev = latestFile.get(k);
     if (!prev || f.downloaded_at > prev.downloaded_at) latestFile.set(k, f);
+    const group = allFiles.get(k);
+    if (group) group.push(f);
+    else allFiles.set(k, [f]);
   }
   const noMovement = new Map<string, NoMovementRow>();
   for (const n of empty) {
@@ -113,6 +155,7 @@ export function monthClients(
           count: blank ? 0 : (file.note_count ?? null),
           alert: alerts[file.id],
           file: blank ? undefined : file,
+          versions: blank ? undefined : fileVersions(allFiles.get(k) ?? [file], forcedByJob),
         });
       } else if (none) {
         blocks.push({ id: none.id, doc, state: "empty", count: 0, alert: alerts[none.id] });

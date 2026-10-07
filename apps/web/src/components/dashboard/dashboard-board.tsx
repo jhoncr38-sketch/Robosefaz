@@ -19,7 +19,7 @@ import {
 import { formatClock, formatDate, formatShortAgo } from "@/lib/format";
 import { JOB_STEPS, jobStepIndex } from "@/lib/job-steps";
 import { isJobRunning, MANUAL_JOB_STATUSES, TASK_TYPE_LABEL } from "@/lib/status";
-import type { AutomationJob, ExportTaskType } from "@/lib/types";
+import type { AutomationJob, JobOperation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export interface DashboardClient {
@@ -34,13 +34,14 @@ export interface DashboardCertSummary {
   next: { clientId: string; name: string; validUntil: string } | null;
 }
 
-const OP_TAG: Record<ExportTaskType | "EFD_CHECK" | "MALHA_CHECK", string> = {
+const OP_TAG: Record<JobOperation, string> = {
   NFCE_EXPORT: "NFC-e",
   NFE_ISSUED_EXPORT: "Emit.",
   NFE_RECEIVED_EXPORT: "Receb.",
   NFCE_CANCELED_EXPORT: "NFC-e canc.",
   NFE_ISSUED_CANCELED_EXPORT: "Emit. canc.",
   NFE_RECEIVED_CANCELED_EXPORT: "Receb. canc.",
+  NFE_KEY_EXPORT: "Nota pela chave",
   EFD_CHECK: "EFD",
   MALHA_CHECK: "Malhas",
 };

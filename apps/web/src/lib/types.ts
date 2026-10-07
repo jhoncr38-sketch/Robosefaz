@@ -31,6 +31,7 @@ export type TaskType =
   | "NFCE_CANCELED_EXPORT"
   | "NFE_ISSUED_CANCELED_EXPORT"
   | "NFE_RECEIVED_CANCELED_EXPORT"
+  | "NFE_KEY_EXPORT"
   | "CHECK_PROCESSING"
   | "DOWNLOAD"
   | "EFD_CHECK"
@@ -44,6 +45,8 @@ export type CanceledExportTaskType = Extract<
   "NFCE_CANCELED_EXPORT" | "NFE_ISSUED_CANCELED_EXPORT" | "NFE_RECEIVED_CANCELED_EXPORT"
 >;
 export type ExportTaskType = RegularExportTaskType | CanceledExportTaskType;
+/** o que um trabalho do robô pode conter: exportações do mês, uma nota pela chave, EFD ou malhas */
+export type JobOperation = ExportTaskType | "NFE_KEY_EXPORT" | "EFD_CHECK" | "MALHA_CHECK";
 
 export type TaskStatus =
   | "pending"
@@ -165,9 +168,11 @@ export interface AutomationJob {
   competence: string;
   start_date: string;
   end_date: string;
-  /** exportações de notas, ["EFD_CHECK"] (processamento da EFD) ou ["MALHA_CHECK"] (Consulta de Malhas) */
-  operations: (ExportTaskType | "EFD_CHECK" | "MALHA_CHECK")[];
+  /** exportações de notas, ["NFE_KEY_EXPORT"] (uma nota pela chave), ["EFD_CHECK"] ou ["MALHA_CHECK"] */
+  operations: JobOperation[];
   force_reschedule: boolean;
+  /** nota pela chave: a chave de acesso pedida na tela Notas */
+  note_key?: string | null;
   status: JobStatus;
   current_step: string | null;
   progress: number;

@@ -3,7 +3,7 @@
 import { Search } from "lucide-react";
 import Link from "next/link";
 
-import type { ExportTaskType } from "@/lib/types";
+import type { JobOperation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function ListCard({ className, children }: { className?: string; children: React.ReactNode }) {
@@ -109,18 +109,19 @@ export function Segmented<T extends string>({
   );
 }
 
-const OP_TAG: Record<ExportTaskType | "EFD_CHECK" | "MALHA_CHECK", string> = {
+const OP_TAG: Record<JobOperation, string> = {
   NFCE_EXPORT: "NFC-e",
   NFE_ISSUED_EXPORT: "Emit.",
   NFE_RECEIVED_EXPORT: "Receb.",
   NFCE_CANCELED_EXPORT: "NFC-e canc.",
   NFE_ISSUED_CANCELED_EXPORT: "Emit. canc.",
   NFE_RECEIVED_CANCELED_EXPORT: "Receb. canc.",
+  NFE_KEY_EXPORT: "Nota pela chave",
   EFD_CHECK: "EFD",
   MALHA_CHECK: "Malhas",
 };
 
-export function OpTags({ ops }: { ops: (ExportTaskType | "EFD_CHECK" | "MALHA_CHECK")[] }) {
+export function OpTags({ ops }: { ops: JobOperation[] }) {
   return (
     <span className="flex flex-wrap gap-1">
       {ops.map((o) => (

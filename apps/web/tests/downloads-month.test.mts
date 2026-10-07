@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { filterBlocks, monthClients, typeFilterFromDoc } from "../src/lib/downloads-month.ts";
+import { fileVersions, filterBlocks, monthClients, typeFilterFromDoc } from "../src/lib/downloads-month.ts";
 import type { NoMovementRow } from "../src/lib/no-movement.ts";
 import type { DocumentType, DownloadRow } from "../src/lib/types.ts";
 
@@ -104,5 +104,45 @@ describe("chips de tipo", () => {
     assert.equal(typeFilterFromDoc("NFE_EMITIDAS"), "emit");
     assert.equal(typeFilterFromDoc("NFCE_CANCELADAS"), "canc");
     assert.equal(typeFilterFromDoc("XYZ"), "all");
+  });
+});
+
+describe("versões do mesmo mês", () => {
+  it("lista da mais nova para a mais antiga, com origem e diferença de notas", () => {
+    const rows = monthClients(
+      [
+        file("v1", "lia", "NFE_RECEBIDAS", { note_count: 6, downloaded_at: "2026-09-28T23:37:00Z", job_id: "j1" }),
+        file("v3", "lia", "NFE_RECEBIDAS", { note_count: 8, downloaded_at: "2026-10-06T19:51:00Z", job_id: "j3" }),
+        file("v2", "lia", "NFE_RECEBIDAS", { note_count: 7, downloaded_at: "2026-10-01T17:53:00Z", job_id: "j2" }),
+        file("only", "lia", "NFCE", { note_count: 1, job_id: "j4" }),
+      ],
+      [],
+      [],
+      clients,
+      {},
+      { j1: false, j2: true, j3: true }, // j4 já apagado pela limpeza: origem desconhecida
+    );
+    const lia = rows.find((r) => r.code === "CLI000001")!;
+    const receb = lia.blocks.find((b) => b.doc === "NFE_RECEBIDAS")!;
+    assert.equal(receb.id, "v3"); // o bloco continua mostrando o mais novo
+    assert.deepEqual(
+      receb.versions!.map((v) => [v.id, v.forced, v.note_count, v.delta]),
+      [
+        ["v3", true, 8, 1],
+        ["v2", true, 7, 1],
+        ["v1", false, 6, null],
+      ],
+    );
+    const nfce = lia.blocks.find((b) => b.doc === "NFCE")!;
+    assert.equal(nfce.versions!.length, 1); // uma versão só: o marcador não aparece
+    assert.equal(nfce.versions![0].forced, null);
+  });
+
+  it("fileVersions aceita contagem ainda não feita", () => {
+    const v = fileVersions([
+      file("a", "lia", "NFCE", { note_count: null, downloaded_at: "2026-10-02T00:00:00Z" }),
+      file("b", "lia", "NFCE", { note_count: 4, downloaded_at: "2026-10-01T00:00:00Z" }),
+    ]);
+    assert.deepEqual(v.map((x) => [x.id, x.note_count, x.delta]), [["a", null, null], ["b", 4, null]]);
   });
 });

@@ -92,6 +92,16 @@ export function buildKeyInsight(
   };
 }
 
+/**
+ * O robô consegue buscar esta nota no SIAT? Só NF-e (modelo 55) com dígito certo, e quando há
+ * uma empresa para entrar: o emitente (cliente) ou alguém que pode ter recebido. NFC-e não tem
+ * busca pela chave no SIAT: ela vem junto com o mês.
+ */
+export function canSearchInSiat(insight: KeyInsight): boolean {
+  if (!insight.valid || insight.modelo !== "55") return false;
+  return insight.situation === "emitida-cliente" || insight.situation === "recebida-escolher";
+}
+
 /** Nome do estado pelo código IBGE que abre a chave. */
 export const UF_NAME: Record<string, string> = {
   "11": "RO", "12": "AC", "13": "AM", "14": "RR", "15": "PA", "16": "AP", "17": "TO", "21": "MA", "22": "PI", "23": "CE",

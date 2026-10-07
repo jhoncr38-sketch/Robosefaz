@@ -31,7 +31,7 @@ export default async function NotePage({ params }: PageProps<"/notes/[id]">) {
   return (
     <>
       <Link href="/notes" className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="size-3.5" /> Notas
+        <ArrowLeft className="size-3.5" /> Busca por chave de acesso
       </Link>
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4 print:hidden">
         <div className="min-w-0">

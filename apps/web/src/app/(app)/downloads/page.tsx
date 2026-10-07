@@ -45,6 +45,7 @@ export default async function DownloadsPage({ searchParams }: PageProps<"/downlo
       .from("downloads")
       .select("*, clients(client_code, legal_name, trade_name, cnpj)")
       .eq("competence", competence)
+      .is("note_key", null) // notas avulsas (pela chave) ficam na tela Notas
       .order("downloaded_at", { ascending: false })
       .limit(5000),
     supabase.from("clients").select("id, client_code, legal_name, trade_name, cnpj, active").order("legal_name"),
@@ -54,6 +55,7 @@ export default async function DownloadsPage({ searchParams }: PageProps<"/downlo
       .from("downloads")
       .select("id, client_id, document_type, competence, note_count, downloaded_at")
       .not("note_count", "is", null)
+      .is("note_key", null)
       .limit(10000),
     // processados sem notas (sem arquivo): uma linha por cliente, mês e tipo
     supabase.from("downloads_no_movement").select("*").eq("competence", competence).limit(5000),
@@ -75,12 +77,20 @@ export default async function DownloadsPage({ searchParams }: PageProps<"/downlo
     [...monthFiles, ...monthEmpty.map(asZeroCount)],
     [...((counted ?? []) as NoteCountRow[]), ...((emptyHistory ?? []) as NoMovementRow[]).map(asZeroCount)],
   );
+  // histórico de versões: qual exportação veio de "Forçar reagendamento"
+  const jobIds = Array.from(new Set(monthFiles.map((f) => f.job_id).filter((id): id is string => Boolean(id))));
+  const forcedByJob: Record<string, boolean> = {};
+  if (jobIds.length > 0) {
+    const { data: jobs } = await supabase.from("automation_jobs").select("id, force_reschedule").in("id", jobIds.slice(0, 1000));
+    for (const j of jobs ?? []) forcedByJob[j.id as string] = Boolean(j.force_reschedule);
+  }
   const rows = monthClients(
     monthFiles,
     monthEmpty,
     (tasks ?? []) as { client_id: string; document_type: DocumentType | null; status: TaskStatus; created_at: string }[],
     clients ?? [],
     alerts,
+    forcedByJob,
   );
   const target = drive ? bulkTarget(monthFiles, competence, undefined) : null;
 

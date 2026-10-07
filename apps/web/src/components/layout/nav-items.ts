@@ -78,7 +78,7 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: FolderOpen,
         children: [
           { href: "/downloads", label: "Downloads", icon: Download, badge: "downloads" },
-          { href: "/notes", label: "Notas", icon: Receipt },
+          { href: "/notes", label: "Busca por chave de acesso", icon: Receipt },
           { href: "/history", label: "Histórico", icon: History },
           { href: "/errors", label: "Erros", icon: TriangleAlert },
         ],

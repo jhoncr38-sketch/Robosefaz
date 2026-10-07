@@ -9,6 +9,7 @@ import {
   FileX,
   FolderDown,
   FolderOpen,
+  History,
   Receipt,
   Search,
   TriangleAlert,
@@ -19,11 +20,19 @@ import { useMemo, useState } from "react";
 
 import { ListEmptyText } from "@/components/data-list";
 import { StatusTabs } from "@/components/list-extras";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { normalizeCNPJ } from "@/lib/cnpj";
 import { formatCompetence } from "@/lib/competence";
 import { driveDownloadUrl, driveFolderUrl } from "@/lib/downloads";
-import { blockKey, filterBlocks, type MonthBlock, type MonthClient, type TypeFilter } from "@/lib/downloads-month";
+import {
+  blockKey,
+  type FileVersion,
+  filterBlocks,
+  type MonthBlock,
+  type MonthClient,
+  type TypeFilter,
+} from "@/lib/downloads-month";
 import { formatDateTime } from "@/lib/format";
 import { baseDocument, DOCUMENT_LABEL, isCanceledDocument } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -83,6 +92,85 @@ function IconButton({
       </TooltipTrigger>
       <TooltipContent className="max-w-64 text-xs">{label}</TooltipContent>
     </Tooltip>
+  );
+}
+
+function originLabel(v: FileVersion): string {
+  if (v.forced === true) return "forçar reagendamento";
+  if (v.forced === false) return "agendamento";
+  return "origem não registrada";
+}
+
+/**
+ * Mesmo mês e tipo exportado mais de uma vez (ex.: "Forçar reagendamento" com notas novas): o robô
+ * grava uma versão ao lado da anterior. Passar o mouse resume; clicar lista cada versão com o
+ * botão de baixar.
+ */
+function VersionsBadge({ versions, drive }: { versions: FileVersion[]; drive: boolean }) {
+  const latest = versions[0];
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          title={`${versions.length} versões deste mês · a atual é de ${formatDateTime(latest.downloaded_at)}. Clique para ver o histórico.`}
+          className="ml-1.5 inline-flex h-[18px] items-center gap-1 rounded-full border border-(--c-e3e3df) bg-(--c-f5f5f2) px-1.5 align-middle text-[10.5px] font-medium text-(--c-6b6c66) transition-colors hover:border-(--c-a9cdb8) hover:text-primary"
+        >
+          <History className="size-3" /> {versions.length} versões
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80 gap-2 text-xs">
+        <p className="font-medium">Versões deste mês</p>
+        <ul className="divide-y divide-(--c-efefeb)">
+          {versions.map((v, i) => {
+            const url = drive ? driveDownloadUrl(v.drive_file_id) : OPEN_FOLDER_URL(v.id);
+            const notes =
+              v.note_count === null ? "" : ` · ${NUM.format(v.note_count)} ${v.note_count === 1 ? "nota" : "notas"}`;
+            const delta = v.delta !== null && v.delta !== 0 ? ` (${v.delta > 0 ? "+" : ""}${NUM.format(v.delta)})` : "";
+            return (
+              <li key={v.id} className="flex items-center gap-2 py-1.5">
+                <div className="min-w-0 flex-1">
+                  <p className="font-mono text-[11.5px]">
+                    {formatDateTime(v.downloaded_at)}
+                    {i === 0 ? (
+                      <span className="ml-1.5 rounded bg-(--c-e6f4ec) px-1 py-px font-sans text-[10px] font-medium text-primary">atual</span>
+                    ) : null}
+                  </p>
+                  <p className="text-(--c-6b6c66)">
+                    {originLabel(v)}
+                    {notes}
+                    {delta}
+                  </p>
+                </div>
+                {url ? (
+                  <a
+                    href={url}
+                    target={drive ? "_blank" : undefined}
+                    rel="noopener noreferrer"
+                    title={`Baixar · ${v.filename}`}
+                    aria-label={`Baixar a versão de ${formatDateTime(v.downloaded_at)}`}
+                    className="grid size-6 shrink-0 place-items-center rounded-md bg-(--c-f3faf6) text-primary transition-colors hover:bg-(--c-dff1e6) hover:no-underline"
+                  >
+                    <Download className="size-3.5" />
+                  </a>
+                ) : (
+                  <span
+                    title="Esta versão ainda não está no Google Drive."
+                    className="grid size-6 shrink-0 cursor-not-allowed place-items-center rounded-md bg-(--c-f5f5f2) text-(--c-a3a39e)"
+                  >
+                    <Download className="size-3.5" />
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        <p className="text-[11px] leading-snug text-(--c-6b6c66)">
+          Cada exportação nova gravou um arquivo ao lado do anterior porque o conteúdo mudou. A atual é a mais completa;
+          nada é apagado.
+        </p>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -148,7 +236,10 @@ function Block({ b, drive }: { b: MonthBlock; drive: boolean }) {
           {DOCUMENT_LABEL[baseDocument(b.doc)]}
           {canceled ? <span className="ml-1 font-medium text-(--c-b42323)">canceladas</span> : null}
         </span>
-        <span className="whitespace-nowrap">{body}</span>
+        <span className="whitespace-nowrap">
+          {body}
+          {b.versions && b.versions.length > 1 ? <VersionsBadge versions={b.versions} drive={drive} /> : null}
+        </span>
       </div>
       {b.file ? (
         drive ? (

@@ -105,6 +105,7 @@ export const TASK_TYPE_LABEL: Record<TaskType, string> = {
   NFCE_CANCELED_EXPORT: "NFC-e canceladas",
   NFE_ISSUED_CANCELED_EXPORT: "NF-e emitidas canceladas",
   NFE_RECEIVED_CANCELED_EXPORT: "NF-e recebidas canceladas",
+  NFE_KEY_EXPORT: "Nota pela chave",
   CHECK_PROCESSING: "Consulta de processamento",
   DOWNLOAD: "Download",
   EFD_CHECK: "Consulta EFD",
