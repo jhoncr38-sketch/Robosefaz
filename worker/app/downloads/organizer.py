@@ -65,6 +65,17 @@ COMPANY_NOTE_FILE = re.compile(
 _LABEL_DOC = {label.lower(): doc for doc, label in DOC_LABEL.items()}
 NAME_IN_FILE_MAX = 50  # o nome da empresa já está na pasta; no arquivo, encurtado
 
+# nota avulsa (uma nota só, pedida pela chave na tela Notas): subpasta "Avulsas" dentro do tipo,
+# "NFe <chave> - CLI000036.zip". Não é um ZIP do mês: fica fora da tela Downloads e das renomeações.
+AVULSAS_FOLDER = "Avulsas"
+AVULSA_FILE = re.compile(r"^NFe (?P<key>\d{44}) - (?P<code>[A-Z0-9]{3,20})(?: \((?P<seq>\d+)\))?\.(?P<ext>zip|xml)$", re.I)
+
+
+def avulsa_filename(chave: str, client_code: str, *, sequence: int = 1, ext: str = ".zip") -> str:
+    ext = (ext if ext.startswith(".") else f".{ext}").lower()
+    suffix = "" if sequence <= 1 else f" ({sequence})"
+    return f"NFe {chave} - {client_code}{suffix}{ext}"
+
 
 def safe_folder_name(name: str | None, max_len: int = 60) -> str:
     """Nome de empresa válido como pasta do Windows (sem < > : " / \\ | ? *)."""
@@ -558,14 +569,21 @@ class DownloadOrganizer:
         client_name: str | None = None,
         *,
         keep_name: str | None = None,
+        note_key: str | None = None,
     ) -> DownloadedFile:
         """Move o arquivo baixado para o destino definitivo, evitando duplicatas idênticas.
 
         `keep_name`: grava com este nome (ex.: nota do plano B, que já tem registro no painel com
         ele); se já existir outro arquivo com o nome, vira a versão seguinte.
+        `note_key`: nota avulsa (pedida pela chave): vai para a subpasta Avulsas do tipo, com o
+        nome "NFe <chave> - <código>.zip", separada dos ZIPs do mês.
         """
         if not source.exists():
             raise FileNotFoundError(source)
+        if note_key is None and keep_name:
+            m = AVULSA_FILE.match(keep_name)
+            if m:
+                note_key = m["key"]
         kind = sniff_kind(source)
         if kind == "html":
             # portal devolveu uma página (sessão expirada/erro) em vez do arquivo
@@ -586,11 +604,52 @@ class DownloadOrganizer:
                     client_code, month
                 ):
                     client_name = None
+            if note_key:
+                return self._store_avulsa(source, client_code, competence, document_type, checksum, ext, client_name, note_key)
             return self._store(source, client_code, competence, document_type, checksum, ext, client_name, keep_name)
         except DownloadFolderUnavailable:
             raise
         except OSError as exc:
             raise DownloadFolderUnavailable(f"Falha ao gravar em {self.base_dir}: {exc}") from exc
+
+    def _store_avulsa(
+        self,
+        source: Path,
+        client_code: str,
+        competence: str,
+        document_type: DocumentType | str,
+        checksum: str,
+        ext: str,
+        client_name: str | None,
+        note_key: str,
+    ) -> DownloadedFile:
+        """Nota avulsa: ano/mês/cliente/tipo/Avulsas/NFe <chave> - <código>.zip (igual: reaproveita)."""
+        folder = ensure_dir(
+            ensure_within(self.base_dir, self.folder_for(client_code, competence, document_type, client_name) / AVULSAS_FOLDER)
+        )
+        seq = 1
+        while True:
+            target = folder / avulsa_filename(note_key, client_code, sequence=seq, ext=ext)
+            if not target.exists():
+                break
+            if target.is_file() and sha256_file(target) == checksum:
+                source.unlink(missing_ok=True)
+                return DownloadedFile(
+                    document_type=DocumentType(document_type),
+                    filename=target.name,
+                    filepath=str(target),
+                    size=target.stat().st_size,
+                    checksum=checksum,
+                )
+            seq += 1
+        final = move_atomic(source, target)
+        return DownloadedFile(
+            document_type=DocumentType(document_type),
+            filename=final.name,
+            filepath=str(final),
+            size=final.stat().st_size,
+            checksum=checksum,
+        )
 
     def _store(
         self,

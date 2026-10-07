@@ -14,7 +14,12 @@ from app.automation.siat.siat_malhas import MalhaResult, SiatMalhas
 from app.automation.siat.siat_login import SiatLogin
 from app.automation.siat.siat_navigation import SiatNavigation
 from app.automation.siat.siat_nfce import schedule_nfce_export
-from app.automation.siat.siat_nfe import schedule_canceled_export, schedule_nfe_issued_export, schedule_nfe_received_export
+from app.automation.siat.siat_nfe import (
+    schedule_canceled_export,
+    schedule_nfe_issued_export,
+    schedule_nfe_key_export,
+    schedule_nfe_received_export,
+)
 from app.automation.siat.siat_scheduler import SiatExportScheduler
 from app.automation.siat.siat_taxpayer import SiatTaxpayer
 from app.browser.browser_factory import BrowserOptions, BrowserSession
@@ -132,6 +137,12 @@ class SiatAutomationProvider(AutomationProvider):
             return await schedule_nfe_issued_export(*args)
         if task.task_type == TaskType.NFE_RECEIVED_EXPORT:
             return await schedule_nfe_received_export(*args)
+        if task.task_type == TaskType.NFE_KEY_EXPORT:
+            if not ctx.job.note_key or task.document_type is None:
+                raise AutomationError(ErrorCode.INVALID_CONFIGURATION, "Pedido de nota pela chave sem a chave ou sem o tipo.")
+            return await schedule_nfe_key_export(
+                scheduler, ctx.client, ctx.job.note_key, task.document_type, ctx.job.competence
+            )
         return await schedule_canceled_export(*args, document_type=TASK_DOCUMENT[task.task_type])
 
     async def check_status(self, ctx: AutomationContext, tasks: list[Task]) -> list[ExportStatusResult]:

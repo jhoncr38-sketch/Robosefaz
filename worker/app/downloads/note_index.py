@@ -135,6 +135,20 @@ def note_rows(download: dict[str, Any], zip_path: Path, notes: list[NoteInfo]) -
     return list(by_key.values())
 
 
+async def index_download_now(repo: Any, download_row: dict[str, Any], path: Path, document_type: str) -> int | None:
+    """Nota pela chave: lê o ZIP recém-gravado e põe a(s) nota(s) no índice na hora, sem esperar a
+    manutenção (quem pediu está olhando a tela Notas). Devolve quantas notas há no arquivo; None
+    se não deu para ler ou se a linha do download não tem id."""
+    notes = await asyncio.to_thread(index_zip, path)
+    if notes is None or not download_row.get("id"):
+        return None
+    row = {**download_row, "document_type": document_type}
+    if notes:
+        await repo.upsert_notes(note_rows(row, path, notes))
+    await repo.set_download_notes_indexed(row["id"], len(notes))
+    return len(notes)
+
+
 async def index_pending_notes(repo: Any, base_dir: Path, *, skip: set[str], limit: int = 50) -> int:
     """Indexa os downloads que ainda não foram lidos. `skip`: ZIPs que não deu para ler neste
     computador (ficam para o próximo início do robô). Devolve quantos ZIPs indexou."""

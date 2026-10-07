@@ -12,7 +12,9 @@ As requisições são interceptadas com `context.route` — nada sai para a inte
 
 from __future__ import annotations
 
+import io
 import json
+import zipfile
 from dataclasses import dataclass, field
 
 from playwright.async_api import Route
@@ -65,6 +67,12 @@ class MockState:
     downloads_served: int = 0
     # como o SIAT real: recusa pedido com os mesmos parâmetros ("Já existe um agendamento ... busque o ID")
     reject_duplicates: bool = False
+    # nota pela chave ("Pesquisar SOMENTE pela Chave da NFE" -> Exportar): o ZIP vem no clique.
+    # key_exports: chaves pedidas; key_empty: ZIP vazio (nota não é do contribuinte);
+    # key_error: o portal recusa com esta mensagem em vez de entregar o arquivo
+    key_exports: list[str] = field(default_factory=list)
+    key_empty: bool = False
+    key_error: str | None = None
     deleted: list[str] = field(default_factory=list)
     # o SIAT real às vezes demora a tirar da lista a linha excluída (ms)
     delete_delay_ms: int = 0
@@ -297,7 +305,7 @@ LEGACY_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><
   <input type="radio" name="n-tipo" id="n-chave" checked><label for="n-chave">Pesquisar SOMENTE pela Chave da NFE</label>
   <input type="radio" name="n-tipo" id="n-emit"><label for="n-emit">Contribuinte como Emitente</label>
   <input type="radio" name="n-tipo" id="n-dest"><label for="n-dest">Contribuinte como Destinatário</label>
-  <div id="n-chave-box"><label for="n-ch">Chave NFE (DANFE):</label><input id="n-ch"><button>Exportar</button></div>
+  <div id="n-chave-box"><label for="n-ch">Chave NFE (DANFE):</label><input id="n-ch"><button id="n-exportar">Exportar</button></div>
   <div id="n-periodo" style="display:none">
     <label for="n-insc">Inscrição:</label><select id="n-insc">__OPTIONS__</select>
     <table class="grp"><tr><td>Razão Social:</td><td><input id="n-razao" disabled></td></tr>
@@ -314,7 +322,7 @@ LEGACY_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><
     <button id="n-agendar">Agendar exportação</button>
   </div>
   <h4>Exportação de Notas Fiscais Agendadas</h4>
-  <table id="n-table"><thead><tr><th>ID</th><th>Situação</th><th>Data de criação</th><th>CNPJ<select><option>Selecione...</option></select></th><th>IE<select><option>Selecione...</option></select></th><th>Data processamento</th><th>Ações</th></tr></thead><tbody></tbody></table>
+  <table id="n-table"><thead><tr><th>ID</th><th>Situação</th><th>Data de criação</th><th>CNPJ<select><option>Selecione...</option></select></th><th>IE<select><option>Selecione...</option>__IE_FILTER__</select></th><th>Data processamento</th><th>Ações</th></tr></thead><tbody></tbody></table>
 </section>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -437,8 +445,46 @@ async function agendar(fam) {
 }
 $('c-agendar').onclick = () => agendar('nfce');
 $('n-agendar').onclick = () => agendar('nfe');
+// uma nota só, pela chave: como no SIAT real (06/10/2026), o ZIP da nota vem NO CLIQUE,
+// sem agendamento e sem linha nova na lista (ZIP vazio quando a nota não é do contribuinte)
+$('n-exportar').onclick = async () => {
+  const chave = $('n-ch').value.trim();
+  $('msg').style.display = 'none';
+  if (!/^[0-9]{44}$/.test(chave)) {
+    $('msg').style.display = 'block'; $('msg').textContent = 'Erro: informe a Chave NFE com 44 dígitos.'; return;
+  }
+  const res = await fetch('/siatweb/api/exportar-chave/' + chave);
+  if (!res.ok) { $('msg').style.display = 'block'; $('msg').textContent = await res.text(); return; }
+  const blob = await res.blob();
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'NFe' + chave + '.zip';
+  document.body.appendChild(link); link.click(); link.remove();
+};
 render();
 </script></body></html>"""
+
+
+# ZIP sem nenhum arquivo (o que o SIAT entrega quando a nota não é do contribuinte)
+EMPTY_ZIP = b"PK\x05\x06" + b"\x00" * 18
+
+
+def nfe_zip(chave: str, *, dest_cnpj: str = "11222333000181") -> bytes:
+    """ZIP com o XML de uma NF-e de verdade (o suficiente para o índice): emitente de fora,
+    destinatário = contribuinte do mock, número/série/mês tirados da própria chave."""
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?><nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">'
+        f'<NFe><infNFe Id="NFe{chave}" versao="4.00"><ide><cUF>{chave[:2]}</cUF><mod>{chave[20:22]}</mod>'
+        f"<serie>{int(chave[22:25])}</serie><nNF>{int(chave[25:34])}</nNF><dhEmi>20{chave[2:4]}-{chave[4:6]}-15T10:00:00-03:00</dhEmi></ide>"
+        f"<emit><CNPJ>{chave[6:20]}</CNPJ><xNome>SENDAS DISTRIBUIDORA S/A</xNome><enderEmit><UF>PI</UF></enderEmit></emit>"
+        f"<dest><CNPJ>{dest_cnpj}</CNPJ><xNome>Empresa A LTDA</xNome><enderDest><UF>PI</UF></enderDest></dest>"
+        "<total><ICMSTot><vNF>1234.56</vNF></ICMSTot></total></infNFe></NFe>"
+        "<protNFe><infProt><cStat>100</cStat></infProt></protNFe></nfeProc>"
+    )
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(f"{chave}.xml", xml)
+    return buf.getvalue()
 
 
 def _options(state: MockState) -> str:
@@ -489,6 +535,17 @@ def build_handler(state: MockState):
                 content_type="application/json",
                 body=json.dumps({**params, "id": request_id, "created": "24/09/2026 23:30:00"}),
             )
+        elif path.startswith("/siatweb/api/exportar-chave/"):
+            chave = path.rsplit("/", 1)[-1]
+            state.key_exports.append(chave)
+            if state.key_error:
+                await route.fulfill(status=400, content_type="text/plain; charset=utf-8", body=state.key_error)
+            else:
+                await route.fulfill(
+                    status=200,
+                    content_type="application/zip",
+                    body=EMPTY_ZIP if state.key_empty else nfe_zip(chave),
+                )
         elif path.startswith("/siatweb/api/excluir/"):
             state.deleted.append(path.rsplit("/", 1)[-1])
             await route.fulfill(status=200, content_type="application/json", body="{}")
@@ -505,6 +562,8 @@ def build_handler(state: MockState):
                 .replace("__IE_OVERRIDE__", json.dumps(state.rows_ie_override))
                 .replace("__NOTICE__", json.dumps(state.show_notice))
                 .replace("__REJECT_DUP__", json.dumps(state.reject_duplicates))
+                # como o SIAT real: o filtro "IE" do cabeçalho da lista também lista inscrições
+                .replace("__IE_FILTER__", "".join(f"<option>{ie[:-1]}-{ie[-1]}</option>" for ie in state.inscricoes))
                 .replace("__DEL_DELAY__", str(state.delete_delay_ms))
                 .replace("__MALHAS_IE__", (state.inscricoes[0] if state.inscricoes else "") if state.malhas_prefilled else "")
                 .replace("__MALHAS_RAZAO__", state.legacy_user if state.malhas_prefilled else "")

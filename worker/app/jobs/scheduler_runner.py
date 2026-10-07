@@ -9,14 +9,16 @@ from __future__ import annotations
 import asyncio
 
 from datetime import timedelta
+from pathlib import Path
 
 from app.automation.base import AutomationContext
+from app.downloads.note_index import index_download_now
 from app.jobs.base_runner import BaseRunner, now_utc
 from app.jobs.dedup import DuplicateGuard
 from app.jobs.efd_check import run_efd_check
 from app.jobs.malha_check import run_malha_check
 from app.jobs.errors import AutomationError, ErrorCode, JobCancelled
-from app.jobs.models import EXPORT_TASK_TYPES, Job, Task, TaskStatus, TaskType
+from app.jobs.models import EXPORT_TASK_TYPES, ExportRequestResult, Job, Task, TaskStatus, TaskType
 from app.jobs.reporter import JobReporter
 from app.jobs.state_machine import JobStatus
 from app.logs.job_logger import JobLogger
@@ -28,7 +30,11 @@ TASK_STEP: dict[TaskType, JobStatus] = {
     TaskType.NFCE_CANCELED_EXPORT: JobStatus.SCHEDULING_NFCE,
     TaskType.NFE_ISSUED_CANCELED_EXPORT: JobStatus.SCHEDULING_NFE_ISSUED,
     TaskType.NFE_RECEIVED_CANCELED_EXPORT: JobStatus.SCHEDULING_NFE_RECEIVED,
+    TaskType.NFE_KEY_EXPORT: JobStatus.SCHEDULING_NFE_RECEIVED,
 }
+
+# nota pela chave: o SIAT processa um pedido de uma nota só em poucos minutos
+KEY_CHECK_MINUTES = 2
 
 # Ordem fixa das operações (NFC-e -> NF-e emitidas -> NF-e recebidas)
 TASK_ORDER = {t: i for i, t in enumerate(EXPORT_TASK_TYPES)}
@@ -140,10 +146,19 @@ class SchedulerRunner(BaseRunner):
 
                     await reporter.step(TASK_STEP[task.task_type])
                     await self.repo.update_task(task.id, status=TaskStatus.RUNNING.value, started_at=now_utc())
-                    ctx.on_submit = self._submit_marker(task, logger)
-                    ctx.on_rejected = self._submit_unmark(task, logger)
+                    if task.task_type != TaskType.NFE_KEY_EXPORT:
+                        # marca "enviada" antes do clique para uma retentativa não repetir o pedido;
+                        # na nota pela chave o SIAT não agenda (entrega o arquivo no clique), então
+                        # repetir é inofensivo e a tarefa precisa continuar "em andamento" para o
+                        # Reprocessar refazê-la se algo falhar depois do clique
+                        ctx.on_submit = self._submit_marker(task, logger)
+                        ctx.on_rejected = self._submit_unmark(task, logger)
                     result = await provider.schedule(ctx, task)
                     ctx.on_submit = ctx.on_rejected = None
+                    if result.downloaded is not None or result.no_notes:
+                        # nota pela chave: o SIAT entregou o arquivo no clique; nada a coletar depois
+                        await self._complete_direct(job, task, result, logger)
+                        continue
                     new_status = TaskStatus.DRY_RUN if result.dry_run else TaskStatus.SCHEDULED
                     await self.repo.update_task(
                         task.id,
@@ -172,6 +187,61 @@ class SchedulerRunner(BaseRunner):
             await self._failed(job, reporter, tasks, logger, ctx, exc)
         finally:
             await self.repo.release_lock(job.id, self.deps.worker_id)
+
+    async def _complete_direct(self, job: Job, task: Task, result: ExportRequestResult, logger: JobLogger) -> None:
+        """Nota pela chave: o SIAT entrega o ZIP no clique em "Exportar" (sem agendamento). Registra
+        o download, indexa na hora e encerra a tarefa, como o Collector faria."""
+        stored = result.downloaded
+        if stored is None:
+            await self.repo.update_task(
+                task.id,
+                status=TaskStatus.COMPLETED.value,
+                finished_at=now_utc(),
+                result={"no_notes": True, "raw_status": "ZIP vazio", "raw_message": result.raw_message},
+            )
+            task.status = TaskStatus.COMPLETED
+            task.result = {"no_notes": True}
+            await logger.info(
+                "Nota pela chave: o SIAT devolveu um ZIP vazio; a nota não consta para este contribuinte.", step="scheduling"
+            )
+            return
+        download_task = await self.repo.create_task(
+            job_id=job.id,
+            client_id=job.client_id,
+            task_type=TaskType.DOWNLOAD,
+            competence=job.competence,
+            status=TaskStatus.COMPLETED,
+            document_type=stored.document_type,
+            result={"export_task_id": task.id, **stored.model_dump(mode="json")},
+        )
+        download_row = await self.repo.insert_download(
+            client_id=job.client_id,
+            job_id=job.id,
+            automation_task_id=download_task.id,
+            document_type=stored.document_type.value,
+            competence=job.competence,
+            filename=stored.filename,
+            filepath=stored.filepath,
+            size=stored.size,
+            checksum=stored.checksum,
+            downloaded_at=now_utc(),
+            **({"note_key": job.note_key} if job.note_key else {}),
+        )
+        indexed: int | None = None
+        try:
+            indexed = await index_download_now(self.repo, download_row, Path(stored.filepath), stored.document_type.value)
+        except Exception as exc:  # noqa: BLE001 - a manutenção indexa depois
+            await logger.warning(f"Não foi possível indexar a nota agora ({exc}); a manutenção fará em seguida.", step="organizing_files")
+        await self.repo.update_task(
+            task.id, status=TaskStatus.COMPLETED.value, finished_at=now_utc(), result=result.model_dump(mode="json")
+        )
+        task.status = TaskStatus.COMPLETED
+        task.result = {"downloaded": True}
+        await logger.info(
+            f"Nota pela chave exportada na hora: {stored.filename}"
+            + (f" ({indexed} nota(s) já na tela Notas)." if indexed is not None else "."),
+            step="organizing_files",
+        )
 
     def _submit_marker(self, task: Task, logger: JobLogger):  # noqa: ANN202
         """Marca a tarefa como agendada no banco ANTES do clique final.
@@ -232,8 +302,22 @@ class SchedulerRunner(BaseRunner):
     ) -> None:
         scheduled = [t for t in tasks if t.status == TaskStatus.SCHEDULED]
         dry = [t for t in tasks if t.status == TaskStatus.DRY_RUN]
+        done = [t for t in tasks if t.status == TaskStatus.COMPLETED]
+        if not scheduled and done and job.note_key:
+            # nota pela chave entregue no clique: o trabalho termina aqui
+            found = any(not t.result.get("no_notes") for t in done)
+            message = (
+                "Nota exportada do SIAT e disponível na tela Notas"
+                if found
+                else "Nota não encontrada no SIAT com o certificado desta empresa"
+            )
+            await reporter.set_final(JobStatus.COMPLETED, finished_at=now_utc(), last_message=message)
+            await logger.info(message, step="completed")
+            return
         if scheduled:
             interval = int(await self.repo.get_setting("collector_interval_minutes", self.settings.collector_interval_minutes))
+            if job.note_key:
+                interval = min(interval, KEY_CHECK_MINUTES)
             await reporter.set_final(
                 JobStatus.WAITING_SEFAZ,
                 next_check_at=now_utc() + timedelta(minutes=interval),

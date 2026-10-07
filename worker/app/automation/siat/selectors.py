@@ -124,6 +124,11 @@ class SiatSelectors:
     legacy_user_label: str = r"usu[áa]rio\s*:\s*(.+)"
     legacy_radio_emitente: str = r"contribuinte\s+como\s+emitente"
     legacy_radio_destinatario: str = r"contribuinte\s+como\s+destinat[áa]rio"
+    # NF-e: uma nota só, pela chave de acesso -> campo "Chave NFE (DANFE)" e botão "Exportar"
+    legacy_radio_chave: str = r"pesquisar\s+somente\s+pela\s+chave"
+    # "Chave NFE (DANFE):" (e NÃO o rótulo do radio "Pesquisar SOMENTE pela Chave da NFE")
+    legacy_key_label: str = r"chave\s+nfe\b"
+    legacy_export_key_button: str = r"^\s*exportar\s*$"
     legacy_inscricao_label: str = r"inscri[çc][ãa]o"
     # grupos de opções (a opção "Todas" aparece em mais de um grupo na NF-e)
     legacy_group_tipo_nota: str = r"tipo\s+de\s+nota"

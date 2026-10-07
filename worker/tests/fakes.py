@@ -97,10 +97,13 @@ class FakeRepo:
         force: bool = False,
         task_status: TaskStatus = TaskStatus.PENDING,
         check_count: int = 0,
+        note_key: str | None = None,
+        key_document: DocumentType = DocumentType.NFE_RECEBIDAS,
     ) -> Job:
         ops = operations or [TaskType.NFCE_EXPORT, TaskType.NFE_ISSUED_EXPORT, TaskType.NFE_RECEIVED_EXPORT]
         job_id = str(uuid.uuid4())
         self.jobs[job_id] = {
+            "note_key": note_key,
             "id": job_id,
             "client_id": client.id,
             "competence": competence,
@@ -117,7 +120,8 @@ class FakeRepo:
             "provider": "SIAT",
         }
         for op in ops:
-            doc = TASK_DOCUMENT.get(op)
+            # nota pela chave: o tipo (emitida/recebida) vem na tarefa, decidido pela chave
+            doc = key_document if op == TaskType.NFE_KEY_EXPORT else TASK_DOCUMENT.get(op)
             tid = str(uuid.uuid4())
             self.tasks[tid] = {
                 "id": tid,
@@ -221,6 +225,7 @@ class FakeRepo:
         self.logs.append(kw)
 
     async def insert_download(self, **fields: Any) -> dict[str, Any]:
+        fields.setdefault("id", str(uuid.uuid4()))  # como o banco: a linha volta com id
         self.downloads.append(fields)
         return fields
 
@@ -486,7 +491,9 @@ class FakeProvider(AutomationProvider):
         tmp = ctx.settings.downloads_dir.parent / f"tmp_{task.id}.zip"
         tmp.parent.mkdir(parents=True, exist_ok=True)
         tmp.write_bytes(f"conteudo {task.document_type}".encode())
-        return ctx.organizer.store(tmp, ctx.client.client_code, ctx.job.competence, task.document_type)  # type: ignore[arg-type]
+        return ctx.organizer.store(
+            tmp, ctx.client.client_code, ctx.job.competence, task.document_type, note_key=ctx.job.note_key  # type: ignore[arg-type]
+        )
 
 
 async def _read_efd_messages(self, ctx: AutomationContext, competence: str) -> list:

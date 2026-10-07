@@ -16,12 +16,15 @@ from __future__ import annotations
 import asyncio
 import re
 from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Awaitable, Callable, Literal
 
-from playwright.async_api import Error as PlaywrightError, Page
+from playwright.async_api import Download, Error as PlaywrightError, Page, TimeoutError as PlaywrightTimeout
 
 from app.automation.base import AutomationContext
 from app.automation.siat.page_helpers import dialog_by_title, fill_field, find_clickable, first_visible, wait_idle
+from app.downloads.organizer import DownloadFolderUnavailable, EmptyExportError, InvalidDownloadError
+from app.utils.files import ensure_dir, safe_name
 from app.automation.siat.selectors import SiatSelectors, get_selectors
 from app.automation.siat.siat_legacy import (
     NFCE,
@@ -36,6 +39,10 @@ from app.jobs.models import base_document, DocumentType, ExportRequestResult, is
 from app.utils.competence import format_br_date
 
 MessageKind = Literal["success", "duplicate", "error", "unknown"]
+
+# nota pela chave: quanto esperar pelo arquivo depois do clique em "Exportar" (o SIAT real
+# entrega em 1-2 s; passado isso, vale a lista de agendamentos/mensagem)
+DIRECT_DOWNLOAD_WAIT_MS = 20_000
 
 
 def classify_message(text: str, sel: SiatSelectors | None = None) -> MessageKind:
@@ -134,6 +141,166 @@ class SiatExportScheduler:
         )
         await fill_field(self.page, self.sel.rx("legacy_date_start_label"), format_br_date(start_date), what="Data inicial")
         await fill_field(self.page, self.sel.rx("legacy_date_end_label"), format_br_date(end_date), what="Data final")
+
+    async def schedule_by_key(self, chave: str, document_type: DocumentType, competence: str) -> ExportRequestResult:
+        """Uma nota só: "Pesquisar SOMENTE pela Chave da NFE" -> Chave NFE (DANFE) -> [Exportar].
+
+        O pedido entra na mesma lista "Exportação de Notas Fiscais Agendadas" dos pedidos do mês;
+        o ID novo é identificado como nos outros (antes x depois do clique; pela data de criação).
+        """
+        await self.legacy.go_to(family_of(document_type))
+        await self.legacy.dismiss_notices()
+        await self._choose(self.sel.rx("legacy_radio_chave"), "Pesquisar somente pela chave")
+        await fill_field(self.page, self.sel.rx("legacy_key_label"), chave, what="Chave NFE (DANFE)")
+        # PROTEÇÃO CONTRA CLIENTE ERRADO: o contribuinte aberto é o do certificado escolhido
+        await self._security_check()
+        client_ie = self.legacy.require_ie()
+        await self.ctx.logger.info(
+            f"Formulário preenchido: {document_type.value}, IE {client_ie}, chave {chave}",
+            step="scheduling",
+            metadata={"document_type": document_type.value, "competence": competence, "chave": chave},
+        )
+        await self.ctx.reporter.screenshot("form_chave")
+
+        if self.ctx.dry_run:
+            await self.ctx.logger.warning("AUTOMATION_DRY_RUN ativo: botão 'Exportar' NÃO foi clicado.", step="scheduling")
+            return ExportRequestResult(
+                document_type=document_type, requested_at=datetime.now(timezone.utc), dry_run=True, raw_message="dry-run"
+            )
+
+        before_rows, _ = await self.legacy.read_rows()
+        before = {r.request_id for r in before_rows}
+        await self._security_check()
+        # PROTEÇÃO CONTRA CLIENTE ERRADO: sem o campo "Inscrição" nesta tela, a lista de
+        # agendamentos (que é do contribuinte logado) precisa ser da IE do cliente
+        listed = [r.ie for r in before_rows if r.ie]
+        if listed and not any(ie_matches(ie, client_ie) for ie in listed):
+            raise TaxpayerMismatchError(f"IE {client_ie}", f"IE {listed[0]}", security=True)
+        # só o botão "Exportar" do campo da chave (não o menu "Consultar/Exportar NF-e")
+        button = await first_visible(
+            [
+                self.page.get_by_role("button", name=self.sel.rx("legacy_export_key_button")),
+                self.page.get_by_role("link", name=self.sel.rx("legacy_export_key_button")),
+                self.page.locator("input[type=submit], input[type=button]").filter(has_text=self.sel.rx("legacy_export_key_button")),
+            ],
+            10_000,
+        )
+        if button is None:
+            raise AutomationError(ErrorCode.SELECTOR_NOT_FOUND, "Botão 'Exportar' da chave não encontrado.")
+        if self.ctx.on_submit is not None:
+            await self.ctx.on_submit()
+        submitted_at = datetime.now(timezone.utc)
+        # O SIAT real (06/10/2026) entrega o ZIP da nota NO CLIQUE, sem agendar nada. Se em vez
+        # disso ele agendar (ou recusar), segue pela lista/mensagem como nos pedidos do mês.
+        download: Download | None = None
+        try:
+            async with self.page.expect_download(timeout=DIRECT_DOWNLOAD_WAIT_MS) as info:
+                await button.click()
+            download = await info.value
+        except PlaywrightTimeout:
+            pass
+        await wait_idle(self.page, 20_000)
+
+        message = await self.legacy.feedback_text()
+        kind = classify_message(message, self.sel)
+        await self.ctx.logger.info(f"Retorno do SIAT: {message or '(sem mensagem)'}", step="scheduling")
+        await self.ctx.reporter.screenshot("result_chave")
+        if download is not None:
+            return await self._store_direct(download, chave, document_type, competence, message)
+        if kind in ("duplicate", "error") and self.ctx.on_rejected is not None:
+            await self.ctx.on_rejected()
+        if kind == "error":
+            raise AutomationError(ErrorCode.SCHEDULE_FAILED, f"SIAT recusou a exportação pela chave: {message}", retryable=False)
+
+        after_rows, _ = await self.legacy.read_rows()
+        foreign = [r for r in after_rows if r.request_id not in before and r.ie and not ie_matches(r.ie, client_ie)]
+        if foreign:
+            raise TaxpayerMismatchError(f"IE {client_ie}", f"IE {foreign[0].ie}", security=True)
+        new_ids = new_request_ids(before, after_rows, client_ie)
+        claimed: set[str] = self.ctx.state.setdefault("claimed_request_ids", set())
+        if kind == "duplicate":
+            # a mesma chave já pedida antes: o SIAT aponta o ID existente; aproveita (nunca exclui)
+            request_id = new_ids[0] if len(new_ids) == 1 else extract_protocol(message, self.sel)
+            if request_id is not None:
+                await self._check_existing(request_id, client_ie)
+        else:
+            request_id = pick_new_request_id(before, after_rows, client_ie, submitted_at, claimed)
+            request_id = request_id or extract_protocol(message, self.sel)
+        if request_id is None:
+            if kind != "success":
+                raise AutomationError(
+                    ErrorCode.SCHEDULE_FAILED,
+                    "Não foi possível confirmar a exportação pela chave (nenhum ID novo na lista). Verifique no portal.",
+                    retryable=False,
+                )
+            await self.ctx.logger.warning(
+                f"Exportação confirmada pela mensagem, mas o ID não foi identificado (novos: {new_ids}).", step="scheduling"
+            )
+        if request_id:
+            claimed.add(request_id)
+        return ExportRequestResult(
+            document_type=document_type,
+            external_request_id=request_id,
+            requested_at=datetime.now(timezone.utc),
+            dry_run=False,
+            raw_message=("JA_EXISTENTE_NO_PORTAL: " if kind == "duplicate" else "") + (message or ""),
+        )
+
+    async def _store_direct(
+        self, download: Download, chave: str, document_type: DocumentType, competence: str, message: str
+    ) -> ExportRequestResult:
+        """Arquivo da nota entregue no clique: salva, organiza em .../Avulsas e devolve pronto."""
+        failure = await download.failure()
+        if failure:
+            raise AutomationError(ErrorCode.DOWNLOAD_FAILED, f"Download da nota falhou: {failure}", retryable=True)
+        tmp_dir: Path = self.ctx.state["tmp_dir"]
+        ensure_dir(tmp_dir)
+        tmp_path = tmp_dir / f"chave_{chave}_{safe_name(download.suggested_filename or 'nota.zip')}"
+        try:
+            await download.save_as(str(tmp_path))
+        except PlaywrightError as exc:
+            raise AutomationError(
+                ErrorCode.DOWNLOAD_FAILED, f"Não foi possível salvar o arquivo da nota: {exc}", retryable=True
+            ) from exc
+        await self.ctx.logger.info(
+            f"O SIAT entregou o arquivo da nota na hora ({tmp_path.stat().st_size} bytes), sem agendamento.",
+            step="scheduling",
+        )
+        try:
+            stored = self.ctx.organizer.store(
+                tmp_path,
+                self.ctx.client.client_code,
+                competence,
+                document_type,
+                client_name=self.ctx.client.trade_name or self.ctx.client.legal_name,
+                note_key=chave,
+            )
+        except EmptyExportError:
+            tmp_path.unlink(missing_ok=True)
+            await self.ctx.logger.info(
+                "O SIAT devolveu um ZIP vazio: a nota não consta para este contribuinte.", step="scheduling"
+            )
+            return ExportRequestResult(
+                document_type=document_type,
+                requested_at=datetime.now(timezone.utc),
+                no_notes=True,
+                raw_message="SEM_NOTA: ZIP vazio. " + (message or ""),
+            )
+        except InvalidDownloadError as exc:
+            tmp_path.unlink(missing_ok=True)
+            raise AutomationError(
+                ErrorCode.SCHEDULE_FAILED, f"O SIAT devolveu uma página em vez do arquivo da nota: {exc}", retryable=False
+            ) from exc
+        except DownloadFolderUnavailable as exc:
+            tmp_path.unlink(missing_ok=True)
+            raise AutomationError(ErrorCode.DOWNLOAD_FAILED, f"Pasta de downloads indisponível: {exc}", retryable=True) from exc
+        await self.ctx.logger.info(f"Nota gravada em {stored.filepath}.", step="scheduling")
+        return ExportRequestResult(
+            document_type=document_type,
+            requested_at=datetime.now(timezone.utc),
+            raw_message="DOWNLOAD_IMEDIATO. " + (message or ""),
+            downloaded=stored,
+        )
 
     async def _check_existing(self, request_id: str, client_ie: str) -> None:
         """Agendamento já existente informado pelo SIAT: confere a IE da linha, se ela estiver na lista."""

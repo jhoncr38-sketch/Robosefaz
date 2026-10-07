@@ -52,7 +52,9 @@ def _same_content(row: dict[str, Any], base_dir: Path) -> Path | None:
     if not (year and month and doc and size is not None and checksum):
         return None
     try:
-        files = sorted(base_dir.glob(f"{year}/{month}/*/{doc}/*.zip"))
+        files = sorted(base_dir.glob(f"{year}/{month}/*/{doc}/*.zip")) + sorted(
+            base_dir.glob(f"{year}/{month}/*/{doc}/Avulsas/*.zip")  # notas avulsas (pela chave)
+        )
         for path in files:
             # o tamanho primeiro: só calcula o SHA-256 de quem pode ser
             if path.stat().st_size == size and sha256_file(path) == checksum:

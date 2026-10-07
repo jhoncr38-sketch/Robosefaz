@@ -119,8 +119,17 @@ class SiatExportConsult:
             raise AutomationError(ErrorCode.DOWNLOAD_FAILED, f"Agendamento {status.external_request_id} não está mais na lista.")
         row, row_locator = found
         # PROTEÇÃO CONTRA CLIENTE ERRADO: a linha precisa ser da IE do cliente
-        if not row.ie or not ie_matches(row.ie, client_ie):
-            raise TaxpayerMismatchError(f"IE {client_ie}", f"IE {row.ie or 'não informada'}", security=True)
+        if row.ie and not ie_matches(row.ie, client_ie):
+            raise TaxpayerMismatchError(f"IE {client_ie}", f"IE {row.ie}", security=True)
+        if not row.ie:
+            # nota pela chave: o SIAT pode deixar a coluna IE vazia (o pedido não passa pela
+            # inscrição); vale o contribuinte conferido no painel ao entrar com o certificado
+            if not self.ctx.job.note_key:
+                raise TaxpayerMismatchError(f"IE {client_ie}", "IE não informada", security=True)
+            await self.ctx.logger.warning(
+                f"Agendamento {status.external_request_id} sem IE na lista; nota pela chave do contribuinte conferido no painel.",
+                step="downloading",
+            )
 
         rx = self.sel.rx("legacy_download_button")
         button = await first_visible(
@@ -155,6 +164,7 @@ class SiatExportConsult:
                 self.ctx.job.competence,
                 task.document_type,
                 client_name=self.ctx.client.trade_name or self.ctx.client.legal_name,
+                note_key=self.ctx.job.note_key,
             )
         except EmptyExportError:
             tmp_path.unlink(missing_ok=True)

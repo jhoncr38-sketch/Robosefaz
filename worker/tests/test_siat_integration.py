@@ -43,12 +43,18 @@ def integration_settings(settings: Settings) -> Settings:
 
 
 async def _context(  # noqa: ANN202
-    repo: FakeRepo, settings: Settings, *, subject: str | None = None, operations: list[TaskType] | None = None, **client_kw  # noqa: ANN003
+    repo: FakeRepo,
+    settings: Settings,
+    *,
+    subject: str | None = None,
+    operations: list[TaskType] | None = None,
+    note_key: str | None = None,
+    **client_kw,  # noqa: ANN003
 ):
     client = make_client(**client_kw)
     cert = make_certificate(client, **({"subject_name": subject} if subject else {}))
     repo.add_client(client, cert)
-    job = repo.add_job(client, operations)
+    job = repo.add_job(client, operations, note_key=note_key)
     logger = JobLogger(repo, job.id)
     reporter = JobReporter(repo, job, settings, logger, phase="schedule", initial=JobStatus.STARTING, poll_interval=0.1)
     ctx = AutomationContext(

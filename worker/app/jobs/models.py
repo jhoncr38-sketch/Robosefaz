@@ -17,6 +17,9 @@ class TaskType(StrEnum):
     NFCE_CANCELED_EXPORT = "NFCE_CANCELED_EXPORT"
     NFE_ISSUED_CANCELED_EXPORT = "NFE_ISSUED_CANCELED_EXPORT"
     NFE_RECEIVED_CANCELED_EXPORT = "NFE_RECEIVED_CANCELED_EXPORT"
+    # uma nota só, pela chave de acesso ("Pesquisar SOMENTE pela Chave da NFE"; desde a 1.2.34).
+    # O tipo (emitida/recebida) vem na tarefa: emitente da chave = cliente -> emitida.
+    NFE_KEY_EXPORT = "NFE_KEY_EXPORT"
     CHECK_PROCESSING = "CHECK_PROCESSING"
     DOWNLOAD = "DOWNLOAD"
     EFD_CHECK = "EFD_CHECK"  # consulta do processamento da EFD (mensagens do DT-e)
@@ -31,6 +34,7 @@ EXPORT_TASK_TYPES: tuple[TaskType, ...] = (
     TaskType.NFE_ISSUED_CANCELED_EXPORT,
     TaskType.NFE_RECEIVED_EXPORT,
     TaskType.NFE_RECEIVED_CANCELED_EXPORT,
+    TaskType.NFE_KEY_EXPORT,
 )
 
 # "agendar tudo" sem dizer quais: os pedidos normais (as canceladas só quando pedidas)
@@ -181,6 +185,8 @@ class Job(_Base):
     manual_action_requested_at: datetime | None = None
     manual_action_confirmed_at: datetime | None = None
     started_at: datetime | None = None
+    # nota pela chave (tela Notas do painel): a chave de acesso que o robô digita no SIAT
+    note_key: str | None = None
 
 
 class Task(_Base):
@@ -212,6 +218,10 @@ class ExportRequestResult(_Base):
     requested_at: datetime
     dry_run: bool = False
     raw_message: str | None = None
+    # nota pela chave: o SIAT entrega o ZIP no clique, sem agendar; o arquivo já organizado
+    downloaded: DownloadedFile | None = None
+    # nota pela chave: o SIAT devolveu um ZIP vazio (a nota não consta para este contribuinte)
+    no_notes: bool = False
 
 
 class ExportStatus(StrEnum):
@@ -239,3 +249,7 @@ class DownloadedFile(_Base):
     checksum: str
     # plano B: a pasta das notas estava fora do ar e a nota ficou na pasta local
     saved_locally: bool = False
+
+
+# ExportRequestResult referencia DownloadedFile, definido depois dele
+ExportRequestResult.model_rebuild()

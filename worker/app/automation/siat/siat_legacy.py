@@ -370,6 +370,10 @@ class SiatLegacy:
             sel = selects.nth(i)
             if not await sel.is_visible():
                 continue
+            # os filtros "CNPJ"/"IE" no cabeçalho da lista de agendamentos também listam IEs:
+            # não são o campo "Inscrição" do formulário (na busca pela chave ele nem aparece)
+            if await sel.locator("xpath=ancestor::th").count():
+                continue
             options = await sel.locator("option").all_inner_texts()
             if any(len(only_digits(o)) >= 8 for o in options):
                 return sel
