@@ -464,6 +464,7 @@ def cap_painel_acesso() -> list:
                 ["Clientes", "Cadastro das empresas."],
                 ["Certificados", "Certificado digital de cada cliente e sua validade."],
                 ["Downloads", "Notas baixadas, com a quantidade de notas e os botões Baixar e Abrir pasta."],
+                ["Busca por chave de acesso", "Achar uma nota pela chave da DANFE, ver a DANFE na tela e, se faltar, buscar no SIAT (beta)."],
                 ["Histórico", "Todas as execuções, com detalhes, logs e resultado."],
                 ["Erros", "Falhas, com o motivo e o print da tela."],
                 ["Usuários", "Quem acessa o painel e com qual perfil."],
@@ -799,6 +800,42 @@ def cap_downloads() -> list:
         *tip(
             "O botão funciona no computador onde o robô está instalado. Se a nota foi baixada por outro "
             "computador, aparece um aviso e abre a pasta de notas deste computador."
+        ),
+        H2("Mais de um arquivo no mesmo mês (versões)"),
+        P(
+            "Quando o mesmo mês e tipo é exportado de novo (por exemplo, <b>Forçar reagendamento</b> depois que "
+            "entraram notas novas), o robô compara o ZIP novo com o que já está na pasta. Se for igual, não grava "
+            "nada. Se o conteúdo mudou, grava uma versão ao lado, com " + code("(2)") + ", " + code("(3)") + "… "
+            "e nunca apaga a anterior. A tela Downloads mostra só a versão mais nova; nos blocos com mais de uma, "
+            "aparece o marcador <b>“N versões”</b>: passe o mouse para o resumo e clique para ver cada versão "
+            "(data, se veio de agendamento normal ou forçado, quantidade de notas e a diferença para a anterior), "
+            "cada uma com o botão de baixar. A versão atual é a mais completa."
+        ),
+        H2("Busca por chave de acesso (beta)"),
+        P(
+            "Em <b>Resultados › Busca por chave de acesso</b>, cole os <b>44 números</b> da chave da DANFE. O robô "
+            "lê cada XML dos ZIPs baixados e guarda chave, número, data, valor, emitente e destinatário; se a nota "
+            "já foi baixada, ela abre na hora, montada no formato da DANFE, com os botões <b>Baixar XML desta "
+            "nota</b> e <b>Imprimir</b>. A visualização serve para conferência: o documento fiscal é o XML."
+        ),
+        P(
+            "Se a nota ainda não foi baixada, a tela mostra o que a chave revela (tipo, número, série, mês, estado "
+            "e CNPJ do emitente) e o campo <b>Buscar no SIAT com o certificado de</b>. Se o emitente é cliente do "
+            "escritório, ele já vem escolhido; se a nota foi recebida, escolha quem comprou. O robô entra no SIAT "
+            "com o certificado dessa empresa, usa <b>Pesquisar SOMENTE pela Chave da NFE</b> e o SIAT entrega o "
+            "arquivo na hora. Leva cerca de 1 minuto e precisa de um computador do escritório com o robô ligado "
+            "(versão 1.2.34 ou mais nova)."
+        ),
+        *bullets(
+            [
+                "Vale só para NF-e (modelo 55). NFC-e não tem busca pela chave no SIAT: ela vem junto com o mês.",
+                "O SIAT só entrega a nota ao emitente ou ao destinatário. Com a empresa errada, a resposta é "
+                "“nota não encontrada”; escolha outra empresa e busque de novo.",
+                "O arquivo fica na pasta da empresa, em " + code("NFE_RECEBIDAS\\Avulsas") + " (ou "
+                + code("NFE_EMITIDAS\\Avulsas") + "), fora da lista da tela Downloads. Quando o mês inteiro for "
+                "exportado depois, a mesma nota vem no ZIP do mês; na busca ela continua aparecendo uma vez só.",
+                "Ao terminar, chega um aviso no sino com o link para a nota.",
+            ]
         ),
     ]
 
