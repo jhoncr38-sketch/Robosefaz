@@ -1078,5 +1078,72 @@ await test("notas: índice gravado pelo robô, lido só pelo escritório, XML pe
   assert.equal(kept.xml, "<x/>");
 });
 
+await test("nota pela chave: pedido do painel vira trabalho do robô; só robôs 1.2.34+ pegam; emitente decide o tipo", async () => {
+  const ASSAI = "22260806057223046163553000001722801561303961"; // emitente de fora: nota recebida
+  // operador do escritório B pede a nota com o certificado do cliente B1
+  const r1 = (await as(ADMIN_B, (tx) => tx.query("select public.request_note_from_siat($1, $2) r", [CLIENT_B1, ASSAI]))).rows[0].r;
+  assert.ok(r1.job_id);
+  assert.equal(r1.document_type, "NFE_RECEBIDAS");
+  assert.equal(r1.competence, "2026-08");
+  const job = (await db.query("select note_key, competence, operations, status, org_id from public.automation_jobs where id = $1", [r1.job_id])).rows[0];
+  assert.equal(job.note_key, ASSAI);
+  assert.deepEqual([job.competence, job.status, job.org_id], ["2026-08", "queued", ORG_B]);
+  assert.match(String(job.operations), /NFE_KEY_EXPORT/); // PGlite devolve o array de enum como texto
+  const task = (await db.query("select task_type, document_type, dedup_key from public.automation_tasks where job_id = $1", [r1.job_id])).rows[0];
+  assert.equal(task.task_type, "NFE_KEY_EXPORT");
+  assert.equal(task.document_type, "NFE_RECEBIDAS");
+  assert.ok(task.dedup_key.endsWith(`|KEY:${ASSAI}`));
+  // pedir de novo enquanto está em andamento: devolve o mesmo trabalho
+  const r2 = (await as(ADMIN_B, (tx) => tx.query("select public.request_note_from_siat($1, $2) r", [CLIENT_B1, ASSAI]))).rows[0].r;
+  assert.deepEqual([r2.job_id, r2.duplicate], [r1.job_id, true]);
+  // chave curta, NFC-e e cliente de outro escritório: recusados
+  await rejects(as(ADMIN_B, (tx) => tx.query("select public.request_note_from_siat($1, '123')", [CLIENT_B1])), /INVALID_KEY/);
+  await rejects(
+    as(ADMIN_B, (tx) => tx.query("select public.request_note_from_siat($1, $2)", [CLIENT_B1, ASSAI.slice(0, 20) + "65" + ASSAI.slice(22)])),
+    /INVALID_KEY/,
+  );
+  await rejects(as(ADMIN, (tx) => tx.query("select public.request_note_from_siat($1, $2)", [CLIENT_B1, ASSAI])), /FORBIDDEN|CLIENT/);
+  // fila: robô 1.2.33 não pega; 1.2.34 pega
+  await as(DEVICE_B.authId, (tx) =>
+    tx.query(`insert into public.worker_heartbeats (worker_id, kind, meta) values
+      ('PC-B-1233', 'all', '{"version":"1.2.33"}'), ('PC-B-1234', 'all', '{"version":"1.2.34"}')`),
+  );
+  const old = await as(DEVICE_B.authId, (tx) => tx.query("select id from public.claim_next_job('PC-B-1233')"));
+  assert.ok(!old.rows.some((r) => r.id === r1.job_id), "robô antigo não pode pegar a nota pela chave");
+  const fresh = await as(DEVICE_B.authId, (tx) => tx.query("select id, note_key from public.claim_next_job('PC-B-1234')"));
+  assert.equal(fresh.rows[0]?.id, r1.job_id);
+  assert.equal(fresh.rows[0]?.note_key, ASSAI);
+  // o robô grava o ZIP da nota (fora da tela Downloads) e, ao concluir, o aviso aponta para a tela Notas
+  await as(DEVICE_B.authId, (tx) =>
+    tx.query(
+      "insert into public.downloads (client_id, job_id, document_type, competence, filename, filepath, checksum, note_key) values ($1, $2, 'NFE_RECEBIDAS', '2026-08', 'NFe.zip', 'C:/NFe.zip', repeat('d', 64), $3)",
+      [CLIENT_B1, r1.job_id, ASSAI],
+    ),
+  );
+  await db.query("update public.automation_jobs set status = 'completed', last_message = 'Nota exportada' where id = $1", [r1.job_id]);
+  const notice = (await db.query("select title, link from public.notifications where dedup_key = $1", ["job-completed:" + r1.job_id])).rows[0];
+  assert.equal(notice.title, "Nota encontrada no SIAT.");
+  assert.equal(notice.link, "/notes?q=" + ASSAI);
+  // já indexada: não cria trabalho novo
+  await as(DEVICE_B.authId, (tx) =>
+    tx.query(
+      "insert into public.notes (client_id, document_type, competence, chave, numero, zip_path, xml_name) values ($1, 'NFE_RECEBIDAS', '2026-08', $2, 172280, 'C:/NFe.zip', $3)",
+      [CLIENT_B1, ASSAI, `${ASSAI}.xml`],
+    ),
+  );
+  const r3 = (await as(ADMIN_B, (tx) => tx.query("select public.request_note_from_siat($1, $2) r", [CLIENT_B1, ASSAI]))).rows[0].r;
+  assert.equal(r3.already_indexed, true);
+  assert.ok(r3.note_id);
+  // emitente é o próprio cliente: nota emitida
+  const cnpjB1 = (await db.query("select regexp_replace(cnpj, '\\D', '', 'g') c from public.clients where id = $1", [CLIENT_B1])).rows[0].c;
+  const first43 = "2226" + "08" + cnpjB1 + "55" + "001" + "000000777" + "1" + "12345678";
+  let sum = 0, w = 2;
+  for (let i = first43.length - 1; i >= 0; i--) { sum += Number(first43[i]) * w; w = w === 9 ? 2 : w + 1; }
+  const dv = 11 - (sum % 11);
+  const issued = first43 + String(dv >= 10 ? 0 : dv);
+  const r4 = (await as(ADMIN_B, (tx) => tx.query("select public.request_note_from_siat($1, $2) r", [CLIENT_B1, issued]))).rows[0].r;
+  assert.equal(r4.document_type, "NFE_EMITIDAS");
+});
+
 console.log(`\n${passed} teste(s) de banco passaram${process.exitCode ? " (com falhas)" : ""}.`);
 await db.close();
