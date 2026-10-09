@@ -6,7 +6,7 @@ import re
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Iterator
+from typing import Callable, Iterator
 from datetime import datetime, timezone
 
 from app.automation.base import AutomationContext
@@ -18,6 +18,7 @@ from app.downloads.fallback import organizer_for
 from app.downloads.organizer import DownloadOrganizer
 from app.jobs.errors import AutomationError, CertificateNotInstalledError, ErrorCode, error_code_of
 from app.jobs.models import Certificate, Client, Job
+from app.jobs.quick_check import QuickCheckGovernor
 from app.jobs.reporter import JobReporter
 from app.jobs.repository import JobRepository
 from app.jobs.retry import RetryPolicy
@@ -69,6 +70,10 @@ class RunnerDeps:
     worker_id: str
     retry_policy: RetryPolicy
     activity: Activity = field(default_factory=Activity)
+    # o robô está encerrando (parar-robo, atualização, Ctrl+C): esperas opcionais são puladas
+    stopping: Callable[[], bool] = field(default=lambda: False)
+    # pausa automática da conferência rápida (SEFAZ lenta): compartilhada pelos agendadores deste robô
+    quick_check: QuickCheckGovernor = field(default_factory=QuickCheckGovernor)
 
     @classmethod
     def build(
@@ -82,6 +87,10 @@ class RunnerDeps:
         organizer: DownloadOrganizer | None = None,
     ) -> "RunnerDeps":
         return cls(
+            quick_check=QuickCheckGovernor(
+                misses_to_pause=max(1, settings.quick_check_pause_after),
+                pause_seconds=max(0, settings.quick_check_pause_minutes) * 60,
+            ),
             repo=repo,
             registry=registry,
             settings=settings,

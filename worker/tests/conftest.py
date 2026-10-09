@@ -36,6 +36,7 @@ def settings(tmp_path: Path) -> Settings:
         manual_action_timeout=2_000,
         retry_delays="10,30,60",
         max_attempts=3,
+        quick_check_seconds=0,  # conferência rápida desligada nos testes antigos (ligada em test_quick_check)
     )
 
 

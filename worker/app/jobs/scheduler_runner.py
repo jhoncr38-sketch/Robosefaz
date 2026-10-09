@@ -7,17 +7,19 @@ o Collector retoma depois.
 from __future__ import annotations
 
 import asyncio
+import time
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from app.automation.base import AutomationContext
 from app.downloads.note_index import index_download_now
 from app.jobs.base_runner import BaseRunner, now_utc
+from app.jobs.collect import ExportCollection
 from app.jobs.dedup import DuplicateGuard
 from app.jobs.efd_check import run_efd_check
 from app.jobs.malha_check import run_malha_check
-from app.jobs.errors import AutomationError, ErrorCode, JobCancelled
+from app.jobs.errors import AutomationError, ErrorCode, JobCancelled, TaxpayerMismatchError
 from app.jobs.models import EXPORT_TASK_TYPES, ExportRequestResult, Job, Task, TaskStatus, TaskType
 from app.jobs.reporter import JobReporter
 from app.jobs.state_machine import JobStatus
@@ -40,7 +42,7 @@ KEY_CHECK_MINUTES = 2
 TASK_ORDER = {t: i for i, t in enumerate(EXPORT_TASK_TYPES)}
 
 
-class SchedulerRunner(BaseRunner):
+class SchedulerRunner(ExportCollection, BaseRunner):
     phase = "schedule"
 
     async def run_once(self) -> bool:
@@ -169,13 +171,22 @@ class SchedulerRunner(BaseRunner):
                         result=result.model_dump(mode="json"),
                     )
                     task.status = new_status
+                    # a conferência rápida usa estes dados na mesma sessão: com o número do pedido em
+                    # mãos, ela localiza a linha direto (sem recuperar o ID pela data de criação)
+                    task.external_request_id = result.external_request_id
+                    task.requested_at = result.requested_at
                     await logger.info(
                         f"{task.task_type}: {'simulado (dry-run)' if result.dry_run else 'agendado'}"
                         f"{' - protocolo ' + result.external_request_id if result.external_request_id else ''}.",
                         step=TASK_STEP[task.task_type].value,
                     )
 
-            await self._finish_after_scheduling(job, reporter, tasks, logger)
+                quick = await self._quick_collect(job, ctx, provider, reporter, logger, tasks)
+
+            if quick is not None:
+                await self._finish_after_quick(job, reporter, logger, retry_in=quick)
+            else:
+                await self._finish_after_scheduling(job, reporter, tasks, logger)
 
         except asyncio.CancelledError:
             # worker interrompido (2º Ctrl+C): devolve o job à fila sem contar tentativa
@@ -295,6 +306,132 @@ class SchedulerRunner(BaseRunner):
                 error_code=ErrorCode.INVALID_CONFIGURATION.value,
                 error_message="Job sem tarefas de exportação pendentes.",
                 last_message="Job sem tarefas de exportação pendentes.",
+            )
+
+    async def _quick_collect(
+        self,
+        job: Job,
+        ctx: AutomationContext,
+        provider,  # noqa: ANN001 - AutomationProvider
+        reporter: JobReporter,
+        logger: JobLogger,
+        tasks: list[Task],
+    ) -> int | None:
+        """Conferência rápida (1.2.35): com o navegador ainda aberto e logado, confere a lista do SIAT
+        logo depois de agendar e baixa o que já ficou pronto; repete a cada `quick_check_interval_seconds`
+        até `quick_check_seconds`. Inclui o agendamento que já existia no SIAT (feito à mão antes) e já
+        está "Processado": baixa na primeira conferência, sem espera.
+
+        É um bônus: qualquer falha aqui (SIAT fora, internet, página lenta) só registra um aviso e o
+        trabalho segue como antes, para a consulta normal. Nunca agenda nem exclui nada. Só o erro de
+        contribuinte errado e o cancelamento interrompem o trabalho.
+
+        None = não houve conferência rápida (fluxo antigo). Senão, os minutos pedidos por downloads
+        que falharam (0 = nenhum), para espaçar a próxima consulta.
+        """
+        pending = [t for t in tasks if t.status == TaskStatus.SCHEDULED and t.is_export]
+        if not pending or ctx.dry_run:
+            return None
+        budget = float(await self.repo.get_setting("quick_check_seconds", self.settings.quick_check_seconds) or 0)
+        interval = float(
+            await self.repo.get_setting("quick_check_interval_seconds", self.settings.quick_check_interval_seconds) or 0
+        )
+        if budget <= 0:
+            return None
+        if self.deps.stopping():
+            await logger.info("Robô encerrando: conferência rápida pulada.", step="checking_processing")
+            return None
+        governor = self.deps.quick_check
+        if not governor.should_run(time.monotonic()):
+            back = datetime.now() + timedelta(seconds=governor.remaining_seconds(time.monotonic()))
+            await logger.info(
+                "Conferência rápida em pausa automática: nos últimos clientes nada ficou pronto na hora "
+                f"(SEFAZ lenta). Este computador volta a conferir às {back:%H:%M}.",
+                step="checking_processing",
+            )
+            return None
+        original = list(pending)
+        interrupted = False
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + budget
+        retry: list[int] = []
+        await logger.info(
+            f"Conferindo se a SEFAZ já processou {len(pending)} pedido(s) antes de fechar o navegador "
+            f"(até {int(budget)} s).",
+            step="checking_processing",
+        )
+        try:
+            while True:
+                await reporter.step(JobStatus.CHECKING_PROCESSING, "Conferindo se a SEFAZ já processou")
+                statuses = await provider.check_status(ctx, pending)
+                await self._record_check(job, statuses, quick=True)
+                retry += await self._apply_statuses(job, ctx, provider, reporter, logger, pending, statuses, quick=True)
+                pending = [t for t in pending if t.status == TaskStatus.SCHEDULED]
+                if not pending or loop.time() + interval > deadline:
+                    break
+                if not await self._pause(interval, reporter):
+                    await logger.info("Robô encerrando: conferência rápida interrompida.", step="checking_processing")
+                    interrupted = True
+                    break
+        except (JobCancelled, TaxpayerMismatchError):
+            raise
+        except AutomationError as exc:
+            if exc.code in (ErrorCode.TAXPAYER_MISMATCH, ErrorCode.SECURITY_CLIENT_MISMATCH):
+                raise
+            await logger.warning(
+                f"Conferência rápida não foi possível ({exc.message}); os pedidos serão conferidos na consulta normal.",
+                step="checking_processing",
+            )
+        except Exception as exc:  # noqa: BLE001 - bônus: nunca derruba o trabalho
+            await logger.warning(
+                f"Conferência rápida não foi possível ({type(exc).__name__}: {exc}); "
+                "os pedidos serão conferidos na consulta normal.",
+                step="checking_processing",
+            )
+        # algo ficou pronto (baixado, sem notas, erro da SEFAZ ou download a refazer)?
+        found = any(t.status != TaskStatus.SCHEDULED for t in original)
+        was_probing = governor.probing
+        if interrupted and not found:
+            return min(retry) if retry else 0  # robô encerrando no meio: não conta como "SEFAZ lenta"
+        if governor.record(found, time.monotonic()):
+            minutes = round(governor.pause_seconds / 60)
+            await logger.info(
+                f"Nada ficou pronto na conferência rápida dos últimos clientes: a SEFAZ parece lenta. "
+                f"Este computador pula a conferência por {minutes} min e depois tenta de novo.",
+                step="checking_processing",
+            )
+        elif found and was_probing:
+            await logger.info("Conferência rápida voltou ao normal: a SEFAZ já está processando na hora.", step="checking_processing")
+        return min(retry) if retry else 0
+
+    async def _pause(self, seconds: float, reporter: JobReporter) -> bool:
+        """Espera entre conferências, atenta a cancelamento e ao robô encerrando. False = encerrando."""
+        loop = asyncio.get_running_loop()
+        end = loop.time() + seconds
+        last_cancel_check = loop.time()
+        while (remaining := end - loop.time()) > 0:
+            if self.deps.stopping():
+                return False
+            await asyncio.sleep(min(1.0, remaining))
+            if loop.time() - last_cancel_check >= 5:
+                await reporter.check_cancel()
+                last_cancel_check = loop.time()
+        return not self.deps.stopping()
+
+    async def _finish_after_quick(
+        self, job: Job, reporter: JobReporter, logger: JobLogger, *, retry_in: int
+    ) -> None:
+        """Depois da conferência rápida: conclui se tudo ficou pronto; senão, segue para a consulta normal."""
+        refreshed = await self.repo.list_tasks(job.id)
+        exports = [t for t in refreshed if t.is_export and not t.superseded]
+        done = sum(1 for t in exports if t.status == TaskStatus.COMPLETED)
+        await self._conclude(job, reporter, refreshed, logger, retry_in=retry_in or None)
+        waiting = [t for t in exports if t.status in (TaskStatus.SCHEDULED, TaskStatus.PROCESSED)]
+        if waiting:
+            await logger.info(
+                f"Navegador fechado: {done} de {len(exports)} pedido(s) já resolvido(s) na conferência rápida; "
+                f"{len(waiting)} seguem para a consulta normal.",
+                step="waiting_sefaz",
             )
 
     async def _finish_after_scheduling(

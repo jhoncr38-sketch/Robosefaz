@@ -82,6 +82,13 @@ class Settings(BaseSettings):
     worker_poll_interval: float = 5.0
     collector_poll_interval: float = 60.0
     collector_interval_minutes: int = 30
+    # conferência rápida (1.2.35): depois de agendar, com o navegador ainda aberto, confere a lista
+    # e baixa o que já ficou pronto. Tempo máximo de espera (0 desliga) e intervalo entre conferências.
+    quick_check_seconds: int = 180
+    quick_check_interval_seconds: int = 60
+    # pausa automática: N clientes seguidos sem nada pronto na hora pausam a conferência por M minutos
+    quick_check_pause_after: int = 3
+    quick_check_pause_minutes: int = 30
     collector_max_checks: int = 96
     stale_lock_minutes: int = 45
     # robô sem sinal de vida há mais que isso é considerado desligado: outro robô assume os jobs dele

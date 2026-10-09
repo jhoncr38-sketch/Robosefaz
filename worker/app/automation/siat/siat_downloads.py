@@ -62,7 +62,8 @@ class SiatExportConsult:
             family_tasks = [t for t in tasks if t.document_type and family_of(t.document_type) == family]
             if not family_tasks:
                 continue
-            await self.legacy.go_to(family)
+            # lista recém-aberta: a situação que estava na tela pode ter mudado (conferência rápida)
+            await self.legacy.go_to(family, refresh=True)
             claimed = {t.external_request_id for t in tasks if t.external_request_id}
             # clique enviado mas ID não anotado: recupera pela IE + data de criação, todas as tarefas
             # da família juntas (NF-e emitidas e recebidas saem na mesma lista, segundos uma da outra)

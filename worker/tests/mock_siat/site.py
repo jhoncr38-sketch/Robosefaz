@@ -61,6 +61,9 @@ class MockState:
     # IE exibida nas linhas da lista (None = a IE informada no agendamento)
     rows_ie_override: str | None = None
     export_status: str = "Processado"
+    # situação a cada vez que a lista é aberta pelo menu (ex.: ["Aguardando", "Processado"]):
+    # como no SIAT real, a página não se atualiza sozinha
+    export_status_sequence: list[str] | None = None
     # "Comunicado Importante" ao abrir a exportação de NFC-e
     show_notice: bool = True
     scheduled: list[dict] = field(default_factory=list)
@@ -327,6 +330,10 @@ LEGACY_HTML = """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><
 <script>
 const $ = (id) => document.getElementById(id);
 const status = __STATUS__;
+// situação por abertura da lista (Consultar/Exportar pelo menu): [1ª, 2ª, ...]; null = sempre `status`
+const statusSeq = __STATUS_SEQ__;
+let listViews = 0;
+function currentStatus() { return statusSeq ? statusSeq[Math.min(Math.max(listViews - 1, 0), statusSeq.length - 1)] : status; }
 const ieOverride = __IE_OVERRIDE__;
 $('auto').onclick = (e) => { e.preventDefault(); $('root').classList.add('open'); };
 document.querySelectorAll('.grp').forEach((g) => { g.onmouseenter = () => { document.querySelectorAll('.grp').forEach(x => x.classList.remove('open')); g.classList.add('open'); }; });
@@ -335,6 +342,7 @@ document.querySelectorAll('[data-go]').forEach((a) => a.onclick = (e) => {
   $('root').classList.remove('open');
   document.querySelectorAll('.grp').forEach(x => x.classList.remove('open'));
   if (a.dataset.go === 'none') return;
+  if (a.dataset.go === 'nfce' || a.dataset.go === 'nfe') listViews++;
   $('nfce').style.display = a.dataset.go === 'nfce' ? 'block' : 'none';
   $('nfe').style.display = a.dataset.go === 'nfe' ? 'block' : 'none';
   $('malhas').style.display = a.dataset.go === 'malhas' ? 'block' : 'none';
@@ -392,8 +400,8 @@ function render() {
       const tr = document.createElement('tr');
       const ie = fmtIe(ieOverride || r.ie);
       tr.innerHTML = fam === 'nfce'
-        ? '<td>' + r.id + '</td><td>' + status + '</td><td>' + r.created + '</td><td>' + r.created + '</td><td></td><td>' + ie + '</td>'
-        : '<td>' + r.id + '</td><td>' + status + '</td><td>' + r.created + '</td><td></td><td>' + ie + '</td><td>' + r.created + '</td>';
+        ? '<td>' + r.id + '</td><td>' + currentStatus() + '</td><td>' + r.created + '</td><td>' + r.created + '</td><td></td><td>' + ie + '</td>'
+        : '<td>' + r.id + '</td><td>' + currentStatus() + '</td><td>' + r.created + '</td><td></td><td>' + ie + '</td><td>' + r.created + '</td>';
       tr.innerHTML +=
         '<td><button>Info</button><button class="dl">Download</button><button class="del">Excluir</button></td>';
       tr.querySelector('.del').onclick = () => {
@@ -559,6 +567,7 @@ def build_handler(state: MockState):
                 LEGACY_HTML.replace("__USER__", state.legacy_user)
                 .replace("__OPTIONS__", _options(state))
                 .replace("__STATUS__", json.dumps(state.export_status))
+                .replace("__STATUS_SEQ__", json.dumps(state.export_status_sequence))
                 .replace("__IE_OVERRIDE__", json.dumps(state.rows_ie_override))
                 .replace("__NOTICE__", json.dumps(state.show_notice))
                 .replace("__REJECT_DUP__", json.dumps(state.reject_duplicates))

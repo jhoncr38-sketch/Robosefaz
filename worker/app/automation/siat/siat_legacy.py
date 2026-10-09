@@ -301,9 +301,15 @@ class SiatLegacy:
             raise AutomationError(ErrorCode.LOGIN_FAILED, "O SIAT web abriu sem usuário logado.")
         await self.ctx.logger.info(f"SIAT web aberto. Usuário: {user}", step="opening_siat_module")
 
-    async def go_to(self, family: str) -> None:
-        """Autoatendimento -> NFC-e/NF-e -> Consultar/Exportar."""
-        if self.ctx.state.get("legacy_page") == family:
+    async def go_to(self, family: str, *, refresh: bool = False) -> None:
+        """Autoatendimento -> NFC-e/NF-e -> Consultar/Exportar.
+
+        `refresh`: abre a tela de novo mesmo já estando nela. A lista de agendamentos do SIAT não
+        se atualiza sozinha: sem isso, uma nova conferência lia a situação de quando a página foi
+        aberta ("aguardando" para sempre). Pelo menu, e não com F5: recarregar a página depois de
+        "Agendar exportação" pode reenviar o formulário e criar um pedido repetido.
+        """
+        if not refresh and self.ctx.state.get("legacy_page") == family:
             return
         if family == NFCE:
             patterns = (self.sel.rx("legacy_menu_root"), self.sel.rx("legacy_menu_nfce"), self.sel.rx("legacy_menu_nfce_export"))

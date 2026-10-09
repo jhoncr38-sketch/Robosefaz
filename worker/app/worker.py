@@ -58,6 +58,7 @@ class Worker:
         self.stop_event = asyncio.Event()
         self.browser_slots = asyncio.Semaphore(settings.max_parallel_jobs)
         deps = RunnerDeps.build(repo, default_registry(), settings, self.worker_id)
+        deps.stopping = self.stop_event.is_set
         self.activity = deps.activity
         self.organizer = deps.organizer
         self._drive_db: Path | None = None  # banco da conta do Google Drive da pasta das notas

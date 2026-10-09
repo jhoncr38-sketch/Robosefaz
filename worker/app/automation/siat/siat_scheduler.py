@@ -315,7 +315,10 @@ class SiatExportScheduler:
         if row.ie and not ie_matches(row.ie, client_ie):
             raise TaxpayerMismatchError(f"IE {client_ie}", f"IE {row.ie}", security=True)
         await self.ctx.logger.info(
-            f"Agendamento já existia no SIAT: reaproveitando o ID {request_id} ({row.situacao}).", step="scheduling"
+            f"Agendamento já existia no SIAT: reaproveitando o ID {request_id} "
+            f"(situação: {row.situacao or 'não informada'}"
+            + (f", feito em {row.created}" if row.created else "")
+            + ").", step="scheduling"
         )
 
     async def _delete_existing(self, request_id: str, client_ie: str) -> bool:
