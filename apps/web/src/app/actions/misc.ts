@@ -31,7 +31,18 @@ export async function markAllNotificationsRead(): Promise<ActionResult> {
   return { ok: true };
 }
 
-const NUMERIC_SETTINGS = new Set(["collector_interval_minutes", "collector_max_checks", "certificate_warning_days"]);
+const NUMERIC_SETTINGS = new Set([
+  "collector_interval_minutes",
+  "collector_max_checks",
+  "certificate_warning_days",
+  "quick_check_seconds",
+  "quick_check_interval_seconds",
+]);
+/** limites por parâmetro (padrão: 1 a 10.000); a conferência rápida aceita 0 = desligada */
+const NUMERIC_LIMITS: Record<string, [number, number]> = {
+  quick_check_seconds: [0, 900],
+  quick_check_interval_seconds: [10, 300],
+};
 
 export async function updateSetting(key: string, rawValue: string): Promise<ActionResult> {
   const auth = await authorize("settings:write");
@@ -43,7 +54,10 @@ export async function updateSetting(key: string, rawValue: string): Promise<Acti
   let value: unknown = rawValue;
   if (NUMERIC_SETTINGS.has(key)) {
     const n = Number(rawValue);
-    if (!Number.isInteger(n) || n < 1 || n > 10_000) return { ok: false, error: "Informe um número inteiro válido." };
+    const [min, max] = NUMERIC_LIMITS[key] ?? [1, 10_000];
+    if (!Number.isInteger(n) || n < min || n > max) {
+      return { ok: false, error: `Informe um número inteiro entre ${min} e ${max}.` };
+    }
     value = n;
   }
   const supabase = await createClient();

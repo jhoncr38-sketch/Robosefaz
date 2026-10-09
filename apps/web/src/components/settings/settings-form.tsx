@@ -14,6 +14,8 @@ const LABELS: Record<string, { label: string; suffix?: string }> = {
   collector_interval_minutes: { label: "Intervalo de consulta do Collector", suffix: "minutos" },
   collector_max_checks: { label: "Máximo de consultas por agendamento", suffix: "consultas" },
   certificate_warning_days: { label: "Alerta de vencimento de certificado", suffix: "dias" },
+  quick_check_seconds: { label: "Conferência rápida depois de agendar (0 desliga)", suffix: "segundos" },
+  quick_check_interval_seconds: { label: "Intervalo da conferência rápida", suffix: "segundos" },
 };
 
 function SettingRow({ setting, editable }: { setting: AppSetting; editable: boolean }) {
