@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { authorize } from "@/lib/auth";
+import { INVITE_PATH } from "@/lib/auth-link";
+import { siteUrl } from "@/lib/site-url";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { ActionResult, OrganizationStatus } from "@/lib/types";
@@ -57,7 +59,7 @@ export async function createOrganization(input: z.input<typeof createSchema>): P
         user_metadata: { name: adminName },
         app_metadata: appMetadata,
       })
-    : await admin.auth.admin.inviteUserByEmail(adminEmail, { data: { name: adminName } }).then(async (r) => {
+    : await admin.auth.admin.inviteUserByEmail(adminEmail, { data: { name: adminName }, redirectTo: await siteUrl(INVITE_PATH) }).then(async (r) => {
         if (r.error || !r.data.user) return r;
         await admin.auth.admin.updateUserById(r.data.user.id, { app_metadata: appMetadata });
         await admin.from("profiles").update({ role: "admin", name: adminName, org_id: org.id }).eq("user_id", r.data.user.id);

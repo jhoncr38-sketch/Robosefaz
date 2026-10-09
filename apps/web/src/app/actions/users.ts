@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { authorize } from "@/lib/auth";
+import { INVITE_PATH } from "@/lib/auth-link";
+import { siteUrl } from "@/lib/site-url";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { ActionResult, UserRole } from "@/lib/types";
@@ -37,7 +39,7 @@ export async function createUser(input: z.input<typeof userCreateSchema>): Promi
         user_metadata: { name },
         app_metadata: { role, org_id: orgId },
       })
-    : await admin.auth.admin.inviteUserByEmail(email, { data: { name } }).then(async (res) => {
+    : await admin.auth.admin.inviteUserByEmail(email, { data: { name }, redirectTo: await siteUrl(INVITE_PATH) }).then(async (res) => {
         if (res.error || !res.data.user) return res;
         await admin.auth.admin.updateUserById(res.data.user.id, { app_metadata: { role, org_id: orgId } });
         // o profile nasce sem escritório (o convite é criado antes do app_metadata): a service role vincula
