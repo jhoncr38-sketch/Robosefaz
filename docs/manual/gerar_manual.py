@@ -278,7 +278,10 @@ def cap_visao_geral() -> list:
                 "Você escolhe a competência e os clientes no painel (tela <b>Automação</b>).",
                 "O robô entra no SIAT com o certificado de cada cliente e agenda NFC-e, NF-e emitidas e NF-e "
                 "recebidas. O SIAT responde: <i>“download disponível em até 1 dia útil”</i>.",
-                "O robô volta ao SIAT a cada 30 minutos para ver se os arquivos ficaram prontos.",
+                "Antes de fechar o navegador, ele confere a lista por até 3 minutos e já baixa o que "
+                "ficou pronto (inclusive um agendamento que alguém já tinha feito à mão no SIAT). O que "
+                "ainda não ficou pronto ele confere a cada 30 minutos. Se em 3 clientes seguidos nada "
+                "ficar pronto na hora (SEFAZ lenta), ele pula essa espera por 30 minutos e depois tenta de novo.",
                 "Quando ficam prontos, ele baixa os ZIPs e guarda em pastas com o nome da empresa.",
                 "O painel mostra tudo em tempo real, e o ícone ao lado do relógio avisa quando as notas chegam.",
             ]
@@ -630,7 +633,7 @@ def cap_fila() -> list:
                 ["5 a 48%", "Abrindo o navegador, entrando no SIAT e no e-AGEAT", "Robô"],
                 ["50 / 60 / 70%", "Agendando NFC-e / NF-e emitidas / NF-e recebidas", "Robô"],
                 ["<b>80%</b>", "<b>Aguardando SEFAZ</b>: tudo agendado, falta a SEFAZ processar", "SEFAZ (até 1 dia útil)"],
-                ["85%", "Consultando se ficou pronto (a cada 30 minutos)", "Robô"],
+                ["85%", "Consultando se ficou pronto (logo depois de agendar e, se faltar algo, a cada 30 minutos)", "Robô"],
                 ["90 a 98%", "Baixando e organizando os arquivos", "Robô"],
                 ["100%", "Concluído", ""],
             ],
@@ -931,6 +934,9 @@ def cap_historico() -> list:
                 ["Intervalo de consulta do Collector", "30 min", "De quanto em quanto tempo o robô verifica se a SEFAZ liberou."],
                 ["Máximo de consultas por agendamento", "96", "Depois disso (cerca de 48 h), o agendamento é encerrado com aviso."],
                 ["Alerta de vencimento de certificado", "30 dias", "Antecedência do aviso de certificado vencendo."],
+                ["Conferência rápida depois de agendar", "180 s", "Quanto tempo o robô espera, com o navegador "
+                 "aberto, para já baixar o que ficou pronto. 0 desliga."],
+                ["Intervalo da conferência rápida", "60 s", "De quanto em quanto tempo ele confere nesse período."],
             ],
             [60, 22, 88],
         ),
@@ -1143,7 +1149,8 @@ def cap_problemas() -> list:
                 ],
                 [
                     "Agendamento parado em 80% por muito tempo",
-                    "Normal: é a SEFAZ processando (até 1 dia útil). O robô consulta a cada 30 minutos.",
+                    "Normal: é a SEFAZ processando (até 1 dia útil). O robô já conferiu logo depois de "
+                    "agendar e agora consulta a cada 30 minutos.",
                 ],
                 [
                     "Status Erro: “Contribuinte aberto no portal difere do cliente”",
