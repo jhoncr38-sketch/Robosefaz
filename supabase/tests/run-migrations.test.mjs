@@ -29,7 +29,8 @@ create table auth.users (
   id uuid primary key default gen_random_uuid(),
   email text,
   raw_user_meta_data jsonb default '{}'::jsonb,
-  raw_app_meta_data jsonb default '{}'::jsonb
+  raw_app_meta_data jsonb default '{}'::jsonb,
+  last_sign_in_at timestamptz
 );
 create function auth.uid() returns uuid language sql stable as $$
   select nullif(nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub', '')::uuid
@@ -1143,6 +1144,34 @@ await test("nota pela chave: pedido do painel vira trabalho do robô; só robôs
   const issued = first43 + String(dv >= 10 ? 0 : dv);
   const r4 = (await as(ADMIN_B, (tx) => tx.query("select public.request_note_from_siat($1, $2) r", [CLIENT_B1, issued]))).rows[0].r;
   assert.equal(r4.document_type, "NFE_EMITIDAS");
+});
+
+await test("operação do dia: cada escritório vê só os próprios trabalhos; o dono vê números de todos", async () => {
+  const from = new Date(Date.now() - 2 * 86_400_000).toISOString();
+  const to = new Date(Date.now() + 3_600_000).toISOString();
+  // escritório B: só os próprios trabalhos e robôs; sem resumo de escritórios
+  const b = (await as(ADMIN_B, (tx) => tx.query("select public.operation_report($1, $2) r", [from, to]))).rows[0].r;
+  assert.equal(b.owner, false);
+  assert.equal(b.offices, null);
+  assert.ok(b.jobs.length > 0, "o escritório B tem trabalhos nos testes anteriores");
+  const ids = b.jobs.map((j) => j.id);
+  const orgs = (await db.query("select distinct org_id from public.automation_jobs where id = any($1::uuid[])", [ids])).rows;
+  assert.deepEqual(orgs.map((r) => r.org_id), [ORG_B]);
+  assert.ok(b.sessions.every((x) => x.org_id === ORG_B));
+  // dono (escritório A): os próprios trabalhos com nome de cliente; dos outros, só números
+  const a = (await as(ADMIN, (tx) => tx.query("select public.operation_report($1, $2) r", [from, to]))).rows[0].r;
+  assert.equal(a.owner, true);
+  const aOrgs = (await db.query("select distinct org_id from public.automation_jobs where id = any($1::uuid[])", [a.jobs.map((j) => j.id)])).rows;
+  assert.ok(aOrgs.every((r) => r.org_id === ORG_A), "nenhum trabalho de outro escritório na lista do dono");
+  const officeB = a.offices.find((o) => o.id === ORG_B);
+  assert.ok(officeB && typeof officeB.clients === "number" && officeB.own === false);
+  assert.ok(!JSON.stringify(a.offices).includes("CLI"), "resumo sem códigos de cliente");
+  // eventos de outro escritório: só quantidades (sem nome de cliente nem e-mail)
+  const foreign = a.events.filter((e) => !e.own);
+  assert.ok(foreign.every((e) => !/CLI\d|@/.test(e.text)));
+  // período inválido
+  await rejects(as(ADMIN, (tx) => tx.query("select public.operation_report($1, $2)", [to, from])), /INVALID_PERIOD/);
+  await rejects(as("anon", (tx) => tx.query("select public.operation_report($1, $2)", [from, to])), /permission denied/);
 });
 
 console.log(`\n${passed} teste(s) de banco passaram${process.exitCode ? " (com falhas)" : ""}.`);

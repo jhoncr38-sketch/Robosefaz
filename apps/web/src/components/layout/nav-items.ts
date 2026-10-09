@@ -1,4 +1,5 @@
 import {
+  Activity,
   Bot,
   Building2,
   Download,
@@ -61,6 +62,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Operação",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/operation", label: "Operação do dia", icon: Activity },
       {
         key: "siat",
         label: "SIAT",

@@ -36,7 +36,7 @@ describe("menu lateral", () => {
 
   it("todas as páginas continuam no menu (inclusive as de dentro do SIAT)", () => {
     const hrefs = NAV_ITEMS.map((i) => i.href);
-    for (const href of ["/dashboard", "/automation", "/malhas", "/efd", "/queue", "/downloads", "/notes", "/history", "/errors", "/clients", "/certificates", "/organizations", "/users", "/devices", "/settings"]) {
+    for (const href of ["/dashboard", "/operation", "/automation", "/malhas", "/efd", "/queue", "/downloads", "/notes", "/history", "/errors", "/clients", "/certificates", "/organizations", "/users", "/devices", "/settings"]) {
       assert.ok(hrefs.includes(href), href);
     }
     assert.equal(new Set(hrefs).size, hrefs.length);
