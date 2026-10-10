@@ -38,8 +38,7 @@ import {
   blocksNewRequest,
   COMPETENCE_STATUS_LABEL,
   COMPETENCE_STATUS_TONE,
-  isExportJob,
-  statusMapFromJobs,
+  plannerStatusMap,
   type CompetenceStatusMap,
 } from "@/lib/competence-status";
 import { formatDate } from "@/lib/format";
@@ -68,12 +67,13 @@ function opsForClient(client: PlannerClient, ops: RegularExportTaskType[]): Regu
 }
 
 /** Bloqueio de cada cliente e o atalho para resolver. */
-type LockReason = "cert" | "ops" | "requested";
+type LockReason = "cert" | "ops" | "requested" | "siat";
 
 const LOCK_TEXT: Record<LockReason, string> = {
   cert: "sem certificado válido",
   ops: "operação não habilitada no cadastro",
   requested: "já solicitado nesta competência",
+  siat: "sem inscrição estadual: só NFS-e (ligue o botão NFS-e ou use a tela NFS-e Nacional)",
 };
 
 export function AutomationScheduler({
@@ -89,11 +89,15 @@ export function AutomationScheduler({
 }) {
   const router = useRouter();
   const active = useMemo(() => clients.filter((c) => c.active), [clients]);
+  // empresas só de serviço (sem SIAT): nesta tela só entram na busca de NFS-e
+  const nfseOnly = useMemo(() => new Set(clients.filter((c) => !c.uses_siat).map((c) => c.id)), [clients]);
   const [competence, setCompetence] = useState(initialCompetence);
   const [statusCache, setStatusCache] = useState<Record<string, StatusMap>>({ [initialCompetence]: initialStatuses });
   const [operations, setOperations] = useState<RegularExportTaskType[]>(EXPORT_OPERATIONS.map((o) => o.value));
   // "Canceladas": um pedido a mais de cada tipo marcado, com Status "Canceladas" (ZIP próprio)
   const [canceled, setCanceled] = useState(false);
+  // NFS-e Nacional: pede também a busca das notas de serviço de quem entrar na fila
+  const [nfse, setNfse] = useState(true);
   const [q, setQ] = useState("");
   // abre em "Pendentes", com os pendentes selecionados
   const [filter, setFilter] = useState<Filter>("pending");
@@ -128,9 +132,8 @@ export function AutomationScheduler({
           toast.error("Não foi possível carregar a situação dos clientes. Recarregue a página.");
           return;
         }
-        // pedido só de canceladas não conta como "mês solicitado"
-        const jobs = (data ?? []).filter(isExportJob);
-        setStatusCache((prev) => ({ ...prev, [competence]: statusMapFromJobs(jobs, competence) }));
+        // pedido só de canceladas não conta como "mês solicitado"; na empresa só de serviço vale a busca de NFS-e
+        setStatusCache((prev) => ({ ...prev, [competence]: plannerStatusMap(data ?? [], competence, nfseOnly) }));
       });
     return () => {
       cancelled = true;
@@ -143,18 +146,29 @@ export function AutomationScheduler({
     () =>
       active.map((c) => {
         const status = statuses?.[c.id] ?? "none";
-        const ops = opsForClient(c, operations);
+        const siat = c.uses_siat;
+        const ops = siat ? opsForClient(c, operations) : [];
         const certOk = c.certificate_status === "valid" || c.certificate_status === "expiring";
         const blocked = blocksNewRequest(status);
         let lock: LockReason | null = null;
         if (!certOk) lock = "cert";
+        // empresa só de serviço: entra só com o botão NFS-e ligado; a busca já pedida no mês não se repete
+        else if (!siat) lock = !nfse ? "siat" : blocked ? "requested" : null;
         // já solicitado: com "Canceladas" ligado, pede só as canceladas (os pedidos repetidos são ignorados)
         else if (blocked && !force && !canceled) lock = "requested";
         else if (ops.length === 0) lock = "ops";
-        const hint = blocked && !force ? "só as canceladas" : blocked ? "reagendar (duplica)" : status === "failed" || status === "cancelled" ? "pode reagendar" : "";
-        return { client: c, status, ops, certOk, blocked, lock, hint };
+        const hint = !siat
+          ? ""
+          : blocked && !force
+            ? "só as canceladas"
+            : blocked
+              ? "reagendar (duplica)"
+              : status === "failed" || status === "cancelled"
+                ? "pode reagendar"
+                : "";
+        return { client: c, status, ops, certOk, blocked, lock, hint, siat };
       }),
-    [active, statuses, operations, force, canceled],
+    [active, statuses, operations, force, canceled, nfse],
   );
 
   const term = q.trim().toLowerCase();
@@ -180,7 +194,9 @@ export function AutomationScheduler({
   const visibleLocked = visible.filter((r) => r.lock);
   const allOn = visibleOpen.length > 0 && visibleOpen.every((r) => selected.has(r.client.id));
   const someOn = visibleOpen.some((r) => selected.has(r.client.id));
-  const canProcess = !loading && chosen.length > 0 && operations.length > 0 && !pending;
+  const chosenSiat = chosen.filter((r) => r.siat);
+  const chosenNfseOnly = chosen.filter((r) => !r.siat);
+  const canProcess = !loading && chosen.length > 0 && (operations.length > 0 || chosenSiat.length === 0) && !pending;
   const maxCompetence = currentCompetence();
   const nextComp = shiftCompetence(competence, 1);
   const prevComp = shiftCompetence(competence, -1);
@@ -213,14 +229,15 @@ export function AutomationScheduler({
   }
 
   function submit() {
-    const ids = chosen.map((r) => r.client.id);
     startTransition(async () => {
       const res = await createJobs({
-        client_ids: ids,
+        client_ids: chosenSiat.map((r) => r.client.id),
+        nfse_client_ids: chosenNfseOnly.map((r) => r.client.id),
         competence,
         operations: withCanceled(operations, canceled),
         force,
         respect_client_flags: true,
+        nfse,
       });
       setConfirmOpen(false);
       if (!res.ok) {
@@ -230,7 +247,7 @@ export function AutomationScheduler({
       const summary = res.data ?? null;
       setProcessedResult(summary);
       // os agendados passam a aparecer como "Na fila" (o banco confirma em seguida)
-      const queued = (summary?.results ?? []).filter((r) => r.job_id).map((r) => r.client_id);
+      const queued = [...(summary?.results ?? []).filter((r) => r.job_id).map((r) => r.client_id), ...(summary?.nfseQueued ?? [])];
       setStatusCache((prev) => ({
         ...prev,
         [competence]: { ...prev[competence], ...Object.fromEntries(queued.map((id) => [id, "queued" as const])) },
@@ -339,6 +356,22 @@ export function AutomationScheduler({
             {canceled ? <SquareCheck className="size-[13px]" /> : <Square className="size-[13px]" />}
             Canceladas
           </button>
+          <button
+            type="button"
+            aria-pressed={nfse}
+            title="Busca também as notas de serviço (NFS-e Nacional) dos clientes que entrarem na fila: prestadas e tomadas, sem passar pelo SIAT"
+            onClick={() => {
+              setProcessedResult(null);
+              setNfse((v) => !v);
+            }}
+            className={cn(
+              "flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[12.5px]",
+              nfse ? "border-(--c-9fd3b5) bg-(--c-eef7f1) text-(--c-17603b)" : "border-input bg-card text-(--c-6b6c66)",
+            )}
+          >
+            {nfse ? <SquareCheck className="size-[13px]" /> : <Square className="size-[13px]" />}
+            NFS-e
+          </button>
         </div>
       </section>
 
@@ -424,7 +457,15 @@ export function AutomationScheduler({
                   </span>
                 </div>
                 <div className="hidden flex-wrap gap-1 md:flex">
-                  {EXPORT_OPERATIONS.map((op) => {
+                  {!r.siat ? (
+                    <span
+                      title="Empresa sem inscrição estadual: não usa o SIAT; só a busca de NFS-e Nacional"
+                      className="rounded bg-(--c-eef7f1) px-[5px] py-px font-mono text-[10.5px] whitespace-nowrap text-(--c-17603b)"
+                    >
+                      só NFS-e
+                    </span>
+                  ) : null}
+                  {(r.siat ? EXPORT_OPERATIONS : []).map((op) => {
                     const enabled = c[op.flag];
                     const onTop = operations.includes(op.value);
                     return (
@@ -483,9 +524,16 @@ export function AutomationScheduler({
             <CircleCheck className="size-4 shrink-0 text-(--c-1c7a47)" />
             <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-[13px] text-(--c-1c5e3c)">
               <span>
-                <b className="font-semibold">{processedResult.created} cliente(s) adicionados à fila.</b> O robô começa
-                assim que estiver livre.
+                <b className="font-semibold">
+                  {processedResult.created || processedResult.nfseQueued?.length || 0} cliente(s) adicionados à fila.
+                </b>{" "}
+                O robô começa assim que estiver livre.
               </span>
+              {processedResult.nfse ? (
+                <span className="text-xs text-(--c-6b6c66)">
+                  Busca de NFS-e Nacional pedida para {processedResult.nfse} cliente(s).
+                </span>
+              ) : null}
               {processedResult.duplicates > 0 ? (
                 <span className="text-xs text-(--c-6b6c66)">
                   {processedResult.duplicates} já estavam agendados e foram ignorados.
@@ -541,7 +589,8 @@ export function AutomationScheduler({
             <span className="text-[13px] whitespace-nowrap text-(--c-4a4b46)">
               <b className="font-semibold text-foreground">{chosen.length}</b> clientes ·{" "}
               <b className="font-semibold text-foreground">{exportCount}</b> exportações
-              {chosen.length ? ` · ~${Math.ceil(chosen.length * 1.5)} min + retorno SEFAZ` : ""}
+              {chosenNfseOnly.length ? ` · ${chosenNfseOnly.length} só NFS-e` : ""}
+              {chosenSiat.length ? ` · ~${Math.ceil(chosenSiat.length * 1.5)} min + retorno SEFAZ` : ""}
             </span>
             <button
               type="button"

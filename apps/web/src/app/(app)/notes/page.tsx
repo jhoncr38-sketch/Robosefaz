@@ -72,7 +72,9 @@ export default async function NotesPage({ searchParams }: PageProps<"/notes">) {
   let emitter: { nome: string; cidade: string } | null = null;
   let activeJob: NoteSearchJob | null = null;
   let lastSearch: LastSearch | null = null;
-  if (query?.kind === "chave" && rows.length === 0) {
+  // a chave da NFS-e (50 números) não passa pelo SIAT: vem da busca de NFS-e Nacional
+  const nfseKey = query?.kind === "chave" && query.value.length === 50;
+  if (query?.kind === "chave" && rows.length === 0 && !nfseKey) {
     const cnpj = query.value.slice(6, 20);
     const competence = `20${query.value.slice(2, 4)}-${query.value.slice(4, 6)}`;
     const [clientsRes, recipientsRes, downloadedRes, jobRes] = await Promise.all([
@@ -80,6 +82,8 @@ export default async function NotesPage({ searchParams }: PageProps<"/notes">) {
         .from("clients")
         .select("id, client_code, legal_name, trade_name, cnpj, uses_nfe_received, uses_nfe_issued, uses_nfce")
         .eq("active", true)
+        // empresa só de serviço não entra no SIAT: fora da lista de quem pode buscar a nota
+        .eq("uses_siat", true)
         .order("legal_name"),
       supabase.from("notes").select("client_id, emit_nome").eq("emit_doc", cnpj).limit(2000),
       supabase.from("downloads").select("client_id").eq("competence", competence).eq("document_type", "NFE_RECEBIDAS").limit(2000),
@@ -148,7 +152,7 @@ export default async function NotesPage({ searchParams }: PageProps<"/notes">) {
         help={
           <HelpTip>
             <p>
-              Cole a <b>chave de acesso</b> da nota (os 44 números da DANFE). O robô lê cada XML dos ZIPs baixados e
+              Cole a <b>chave de acesso</b> da nota (os 44 números da DANFE ou os 50 da NFS-e). O robô lê cada XML dos ZIPs baixados e
               guarda a chave, o número, a data, o valor, o emitente e o destinatário; se a nota já foi baixada, ela
               aparece na hora.
             </p>
@@ -187,6 +191,12 @@ export default async function NotesPage({ searchParams }: PageProps<"/notes">) {
             canRun={can(profile.role, "automation:run")}
             lastSearch={lastSearch}
             error={actionError}
+          />
+        ) : rows.length === 0 && nfseKey ? (
+          <EmptyState
+            icon={<Receipt />}
+            title="Esta NFS-e ainda não está nos arquivos"
+            description="Notas de serviço chegam pela busca de NFS-e Nacional (com o certificado do prestador ou do tomador). Peça a busca do cliente na tela NFS-e Nacional e tente de novo."
           />
         ) : rows.length === 0 ? (
           <EmptyState

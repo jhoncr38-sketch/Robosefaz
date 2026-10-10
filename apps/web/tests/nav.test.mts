@@ -19,10 +19,10 @@ const siat = folders.find((f) => f.key === "siat") as NavFolder;
 
 describe("menu lateral", () => {
   it("SIAT agrupa automações, malhas, EFD e fila, nessa ordem", () => {
-    assert.equal(siat.label, "SIAT");
+    assert.equal(siat.label, "Robô");
     assert.deepEqual(
       siat.children.map((c) => c.href),
-      ["/automation", "/malhas", "/efd", "/queue"],
+      ["/automation", "/malhas", "/efd", "/nfse", "/queue"],
     );
   });
 
@@ -36,15 +36,15 @@ describe("menu lateral", () => {
 
   it("todas as páginas continuam no menu (inclusive as de dentro do SIAT)", () => {
     const hrefs = NAV_ITEMS.map((i) => i.href);
-    for (const href of ["/dashboard", "/operation", "/automation", "/malhas", "/efd", "/queue", "/downloads", "/notes", "/history", "/errors", "/clients", "/certificates", "/organizations", "/users", "/devices", "/settings"]) {
+    for (const href of ["/dashboard", "/operation", "/automation", "/malhas", "/efd", "/nfse", "/queue", "/downloads", "/notes", "/history", "/errors", "/clients", "/certificates", "/organizations", "/users", "/devices", "/settings"]) {
       assert.ok(hrefs.includes(href), href);
     }
     assert.equal(new Set(hrefs).size, hrefs.length);
   });
 
   it("breadcrumb: páginas de um grupo aparecem como Grupo › página", () => {
-    assert.deepEqual(navLocation("/malhas"), { group: "SIAT", label: "Consulta de Malhas" });
-    assert.deepEqual(navLocation("/queue/123"), { group: "SIAT", label: "Fila de processamento" });
+    assert.deepEqual(navLocation("/malhas"), { group: "Robô", label: "Consulta de Malhas" });
+    assert.deepEqual(navLocation("/queue/123"), { group: "Robô", label: "Fila de processamento" });
     assert.deepEqual(navLocation("/downloads"), { group: "Resultados", label: "Downloads" });
     assert.deepEqual(navLocation("/clients/abc"), { group: "Empresas", label: "Clientes" });
     assert.deepEqual(navLocation("/devices"), { group: "Administração", label: "Computadores" });

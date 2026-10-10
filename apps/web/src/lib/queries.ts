@@ -34,6 +34,7 @@ export async function loadPlannerClients(): Promise<PlannerClient[]> {
       trade_name: c.trade_name,
       cnpj: c.cnpj,
       active: c.active,
+      uses_siat: c.uses_siat !== false,
       uses_nfce: c.uses_nfce,
       uses_nfe_issued: c.uses_nfe_issued,
       uses_nfe_received: c.uses_nfe_received,

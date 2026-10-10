@@ -14,6 +14,10 @@ export interface BatchSummary {
   duplicates: number;
   failed: number;
   results: CreateJobResult[];
+  /** buscas de NFS-e Nacional pedidas junto */
+  nfse?: number;
+  /** empresas só de serviço que entraram na fila (só NFS-e) */
+  nfseQueued?: string[];
 }
 
 function rpcError(message: string): string {
@@ -37,27 +41,44 @@ export async function createJobs(input: z.input<typeof automationRequestSchema>)
   }
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("create_automation_jobs_batch", {
-    p_client_ids: parsed.data.client_ids,
-    p_competence: parsed.data.competence,
-    p_operations: parsed.data.operations,
-    p_force: parsed.data.force,
-    p_respect_client_flags: parsed.data.respect_client_flags,
-  });
-  if (error) return { ok: false, error: rpcError(error.message) };
+  let results: CreateJobResult[] = [];
+  if (parsed.data.client_ids.length > 0) {
+    const { data, error } = await supabase.rpc("create_automation_jobs_batch", {
+      p_client_ids: parsed.data.client_ids,
+      p_competence: parsed.data.competence,
+      p_operations: parsed.data.operations,
+      p_force: parsed.data.force,
+      p_respect_client_flags: parsed.data.respect_client_flags,
+    });
+    if (error) return { ok: false, error: rpcError(error.message) };
+    results = (data ?? []) as CreateJobResult[];
+  }
 
-  const results = (data ?? []) as CreateJobResult[];
   const summary: BatchSummary = {
     created: results.filter((r) => r.job_id).length,
     duplicates: results.filter((r) => r.duplicate).length,
     failed: results.filter((r) => !r.job_id && !r.duplicate).length,
     results,
   };
+  // NFS-e junto com o pedido do mês: para quem entrou na fila agora e para as empresas só de serviço
+  let nfseNote = "";
+  const nfseOnly = parsed.data.nfse ? parsed.data.nfse_client_ids : [];
+  const queued = [...new Set([...results.filter((r) => r.job_id).map((r) => r.client_id), ...nfseOnly])];
+  if (parsed.data.nfse && queued.length > 0) {
+    const nfse = await supabase.rpc("create_nfse_fetch_jobs", { p_client_ids: queued, p_competence: parsed.data.competence });
+    if (nfse.error) nfseNote = ` A busca de NFS-e não foi pedida: ${rpcError(nfse.error.message)}`;
+    else {
+      const out = nfse.data as { created: number; results: { client_id: string; job_id?: string }[] };
+      summary.nfse = out.created;
+      summary.nfseQueued = out.results.filter((r) => r.job_id && nfseOnly.includes(r.client_id)).map((r) => r.client_id);
+      if (summary.nfse) nfseNote = ` ${summary.nfse} busca(s) de NFS-e.`;
+    }
+  }
   revalidateQueue();
   return {
     ok: true,
     data: summary,
-    message: `${summary.created} tarefa(s) criada(s)${summary.duplicates ? `, ${summary.duplicates} já agendada(s)` : ""}.`,
+    message: `${summary.created} tarefa(s) criada(s)${summary.duplicates ? `, ${summary.duplicates} já agendada(s)` : ""}.${nfseNote}`,
   };
 }
 

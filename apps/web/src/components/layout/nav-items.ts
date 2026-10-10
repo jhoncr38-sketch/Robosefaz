@@ -1,6 +1,7 @@
 import {
   Activity,
   Bot,
+  BriefcaseBusiness,
   Building2,
   Download,
   FileSearch,
@@ -64,13 +65,15 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/operation", label: "Operação do dia", icon: Activity },
       {
+        // tudo o que o robô faz: SIAT e NFS-e Nacional (a chave "siat" fica: é ela que lembra a pasta aberta)
         key: "siat",
-        label: "SIAT",
+        label: "Robô",
         icon: Bot,
         children: [
           { href: "/automation", label: "Executar automações", icon: Play, permission: "automation:run" },
           { href: "/malhas", label: "Consulta de Malhas", icon: ScanSearch },
           { href: "/efd", label: "Consulta EFD", icon: FileSearch },
+          { href: "/nfse", label: "NFS-e Nacional", icon: BriefcaseBusiness },
           { href: "/queue", label: "Fila de processamento", icon: ListOrdered, badge: "queue", badgeWarn: true },
         ],
       },

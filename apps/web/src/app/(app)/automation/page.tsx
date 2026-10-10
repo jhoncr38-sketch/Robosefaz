@@ -4,7 +4,7 @@ import { AutomationScheduler } from "@/components/automation/automation-schedule
 import { PageHeader } from "@/components/page-header";
 import { requirePermission } from "@/lib/auth";
 import { currentCompetence, previousCompetence, toCompetenceKey } from "@/lib/competence";
-import { isExportJob, statusMapFromJobs } from "@/lib/competence-status";
+import { plannerStatusMap } from "@/lib/competence-status";
 import { can } from "@/lib/permissions";
 import { loadPlannerClients } from "@/lib/queries";
 import { createClient } from "@/lib/supabase/server";
@@ -31,10 +31,9 @@ export default async function AutomationPage({ searchParams }: PageProps<"/autom
       .order("created_at", { ascending: false })
       .limit(5000),
   ]);
-  // pedido só de canceladas não conta como "mês solicitado"
-  const jobs = ((jobsRes.data ?? []) as { client_id: string; competence: string; status: JobStatus; created_at: string; operations: string[] }[]).filter(
-    isExportJob,
-  );
+  // pedido só de canceladas não conta como "mês solicitado"; na empresa só de serviço vale a busca de NFS-e
+  const jobs = (jobsRes.data ?? []) as { client_id: string; competence: string; status: JobStatus; created_at: string; operations: string[] }[];
+  const nfseOnly = new Set(clients.filter((c) => !c.uses_siat).map((c) => c.id));
 
   return (
     <>
@@ -44,7 +43,7 @@ export default async function AutomationPage({ searchParams }: PageProps<"/autom
         clients={clients}
         canForce={can(profile.role, "automation:force")}
         initialCompetence={competence}
-        initialStatuses={statusMapFromJobs(jobs, competence)}
+        initialStatuses={plannerStatusMap(jobs, competence, nfseOnly)}
       />
     </>
   );

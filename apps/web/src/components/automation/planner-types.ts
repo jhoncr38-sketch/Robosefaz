@@ -7,6 +7,8 @@ export interface PlannerClient {
   trade_name: string | null;
   cnpj: string;
   active: boolean;
+  /** false = empresa só de serviço: fora do SIAT, só a busca de NFS-e */
+  uses_siat: boolean;
   uses_nfce: boolean;
   uses_nfe_issued: boolean;
   uses_nfe_received: boolean;

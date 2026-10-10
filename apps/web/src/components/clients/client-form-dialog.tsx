@@ -3,7 +3,7 @@
 import { Loader2, Pencil, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
 import { saveClient } from "@/app/actions/clients";
@@ -37,6 +37,7 @@ function defaults(client?: Client): ClientInput {
     email: client?.email ?? "",
     phone: client?.phone ?? "",
     active: client?.active ?? true,
+    uses_siat: client?.uses_siat ?? true,
     uses_nfce: client?.uses_nfce ?? true,
     uses_nfe_issued: client?.uses_nfe_issued ?? true,
     uses_nfe_received: client?.uses_nfe_received ?? true,
@@ -54,8 +55,10 @@ export function ClientFormDialog({ client, trigger }: { client?: Client; trigger
     handleSubmit,
     control,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<ClientInput>({ defaultValues: defaults(client) });
+  const usesSiat = useWatch({ control, name: "uses_siat" }) !== false;
 
   function onSubmit(values: ClientInput) {
     setServerErrors({});
@@ -151,6 +154,30 @@ export function ClientFormDialog({ client, trigger }: { client?: Client; trigger
           <Separator />
           <div className="space-y-3">
             <p className="text-sm font-medium">Configurações SIAT</p>
+            <Controller
+              control={control}
+              name="uses_siat"
+              render={({ field }) => (
+                <label className="flex items-start gap-2 text-sm">
+                  <Switch
+                    checked={field.value !== false}
+                    onCheckedChange={(v) => {
+                      field.onChange(v);
+                      // ao voltar a usar o SIAT, as três notas voltam marcadas (dá para desmarcar)
+                      for (const name of ["uses_nfce", "uses_nfe_issued", "uses_nfe_received"] as const) setValue(name, v);
+                    }}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    Usa o SIAT (tem inscrição estadual)
+                    <span className="block text-[11px] text-muted-foreground">
+                      Desligue para empresa só de serviço: ela fica fora de Executar automações (SIAT), Malhas e EFD, e as
+                      notas vêm só pela NFS-e Nacional.
+                    </span>
+                  </span>
+                </label>
+              )}
+            />
             {(
               [
                 ["uses_nfce", "Utiliza NFC-e"],
@@ -163,8 +190,8 @@ export function ClientFormDialog({ client, trigger }: { client?: Client; trigger
                 control={control}
                 name={name}
                 render={({ field }) => (
-                  <label className="flex items-center gap-2 text-sm">
-                    <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} />
+                  <label className={usesSiat ? "flex items-center gap-2 text-sm" : "flex items-center gap-2 text-sm opacity-50"}>
+                    <Checkbox checked={usesSiat && field.value} disabled={!usesSiat} onCheckedChange={(v) => field.onChange(v === true)} />
                     {label}
                   </label>
                 )}

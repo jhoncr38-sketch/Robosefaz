@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BriefcaseBusiness,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -48,6 +49,7 @@ const ICON: Record<Exclude<TypeFilter, "all">, LucideIcon> = {
   nfce: Receipt,
   emit: FileOutput,
   receb: FileInput,
+  nfse: BriefcaseBusiness,
   canc: FileX,
 };
 
@@ -56,6 +58,7 @@ const TYPE_CHIPS: [TypeFilter, string][] = [
   ["nfce", "NFC-e"],
   ["emit", "Emitidas"],
   ["receb", "Recebidas"],
+  ["nfse", "NFS-e"],
   ["canc", "Canceladas"],
 ];
 
@@ -95,7 +98,8 @@ function IconButton({
   );
 }
 
-function originLabel(v: FileVersion): string {
+function originLabel(v: FileVersion, nfse: boolean): string {
+  if (nfse) return "busca de NFS-e";
   if (v.forced === true) return "forçar reagendamento";
   if (v.forced === false) return "agendamento";
   return "origem não registrada";
@@ -106,7 +110,7 @@ function originLabel(v: FileVersion): string {
  * grava uma versão ao lado da anterior. Passar o mouse resume; clicar lista cada versão com o
  * botão de baixar.
  */
-function VersionsBadge({ versions, drive }: { versions: FileVersion[]; drive: boolean }) {
+function VersionsBadge({ versions, drive, nfse = false }: { versions: FileVersion[]; drive: boolean; nfse?: boolean }) {
   const latest = versions[0];
   return (
     <Popover>
@@ -137,7 +141,7 @@ function VersionsBadge({ versions, drive }: { versions: FileVersion[]; drive: bo
                     ) : null}
                   </p>
                   <p className="text-(--c-6b6c66)">
-                    {originLabel(v)}
+                    {originLabel(v, nfse)}
                     {notes}
                     {delta}
                   </p>
@@ -238,7 +242,7 @@ function Block({ b, drive }: { b: MonthBlock; drive: boolean }) {
         </span>
         <span className="whitespace-nowrap">
           {body}
-          {b.versions && b.versions.length > 1 ? <VersionsBadge versions={b.versions} drive={drive} /> : null}
+          {b.versions && b.versions.length > 1 ? <VersionsBadge versions={b.versions} drive={drive} nfse={key === "nfse"} /> : null}
         </span>
       </div>
       {b.file ? (

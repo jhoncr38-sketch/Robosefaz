@@ -28,7 +28,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     supabase.from("automation_jobs").select(JOB_SELECT).eq("competence", competence).order("created_at", { ascending: false }).limit(2000),
     supabase.from("automation_jobs").select(JOB_SELECT).order("created_at", { ascending: false }).limit(15),
     supabase.from("automation_jobs").select(JOB_SELECT).not("status", "in", FINAL).order("created_at").limit(300),
-    supabase.from("clients").select("id, legal_name, trade_name").eq("active", true).order("legal_name"),
+    // empresas só de serviço (sem SIAT) não entram na barra da competência do SIAT
+    supabase.from("clients").select("id, legal_name, trade_name").eq("active", true).eq("uses_siat", true).order("legal_name"),
     supabase
       .from("certificates")
       .select("client_id, valid_until, clients(legal_name, trade_name)")

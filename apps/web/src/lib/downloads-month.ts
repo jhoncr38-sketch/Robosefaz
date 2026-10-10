@@ -6,21 +6,24 @@ import type { NoMovementRow } from "./no-movement.ts";
 import type { NoteAlert } from "./note-count.ts";
 import type { DocumentType, DownloadRow, TaskStatus } from "./types.ts";
 
-/** Ordem dos blocos na linha: as notas do mês e, depois, as canceladas. */
+/** Ordem dos blocos na linha: as notas do mês, as de serviço (NFS-e) e, depois, as canceladas. */
 export const BLOCK_ORDER: DocumentType[] = [
   "NFCE",
   "NFE_EMITIDAS",
   "NFE_RECEBIDAS",
+  "NFSE_PRESTADAS",
+  "NFSE_TOMADAS",
   "NFCE_CANCELADAS",
   "NFE_EMITIDAS_CANCELADAS",
   "NFE_RECEBIDAS_CANCELADAS",
 ];
 
 /** Chips de tipo do topo da lista. */
-export type TypeFilter = "all" | "nfce" | "emit" | "receb" | "canc";
+export type TypeFilter = "all" | "nfce" | "emit" | "receb" | "nfse" | "canc";
 
 export function blockKey(doc: DocumentType): Exclude<TypeFilter, "all"> {
   if (doc.endsWith("_CANCELADAS")) return "canc";
+  if (doc === "NFSE_PRESTADAS" || doc === "NFSE_TOMADAS") return "nfse";
   if (doc === "NFCE") return "nfce";
   return doc === "NFE_EMITIDAS" ? "emit" : "receb";
 }
@@ -194,8 +197,12 @@ export function filterBlocks(rows: MonthClient[], type: TypeFilter): MonthClient
     .filter((r) => r.blocks.length > 0);
 }
 
-/** Chip pela URL antiga (?type=NFE_EMITIDAS). */
+const CHIP_KEYS: Exclude<TypeFilter, "all">[] = ["nfce", "emit", "receb", "nfse", "canc"];
+
+/** Chip pela URL: ?type=nfse ou o formato antigo (?type=NFE_EMITIDAS). */
 export function typeFilterFromDoc(value: unknown): TypeFilter {
-  if (typeof value !== "string" || !(BLOCK_ORDER as string[]).includes(value)) return "all";
+  if (typeof value !== "string") return "all";
+  if ((CHIP_KEYS as string[]).includes(value)) return value as TypeFilter;
+  if (!(BLOCK_ORDER as string[]).includes(value)) return "all";
   return blockKey(value as DocumentType);
 }

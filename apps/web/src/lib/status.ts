@@ -110,6 +110,7 @@ export const TASK_TYPE_LABEL: Record<TaskType, string> = {
   DOWNLOAD: "Download",
   EFD_CHECK: "Consulta EFD",
   MALHA_CHECK: "Consulta de malhas",
+  NFSE_FETCH: "NFS-e Nacional",
 };
 
 export const EXPORT_OPERATIONS: {
@@ -141,7 +142,14 @@ export const DOCUMENT_LABEL: Record<DocumentType, string> = {
   NFCE_CANCELADAS: "NFC-e canceladas",
   NFE_EMITIDAS_CANCELADAS: "NF-e emitidas canceladas",
   NFE_RECEBIDAS_CANCELADAS: "NF-e recebidas canceladas",
+  NFSE_PRESTADAS: "NFS-e prestadas",
+  NFSE_TOMADAS: "NFS-e tomadas",
 };
+
+/** Notas de serviço (NFS-e Nacional). */
+export function isNfseDocument(doc: DocumentType): boolean {
+  return doc === "NFSE_PRESTADAS" || doc === "NFSE_TOMADAS";
+}
 
 const CANCELED_BASE: Partial<Record<DocumentType, DocumentType>> = {
   NFCE_CANCELADAS: "NFCE",
@@ -195,6 +203,7 @@ export const ERROR_CODE_LABEL: Record<string, string> = {
   PROFILE_IN_USE: "Perfil do navegador em uso",
   BROWSER_ERROR: "Erro no navegador",
   COLLECTOR_EXHAUSTED: "Arquivo não disponibilizado a tempo",
+  NFSE_UNAVAILABLE: "NFS-e Nacional indisponível",
   WORKER_LOST: "Worker interrompido",
   UNEXPECTED: "Erro inesperado",
 };

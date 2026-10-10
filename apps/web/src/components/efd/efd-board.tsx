@@ -24,7 +24,7 @@ import {
   type EfdTab,
 } from "@/lib/efd";
 import { formatDateTime } from "@/lib/format";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, subscribeWithAuth } from "@/lib/supabase/client";
 import type { EfdDeclaration } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -114,14 +114,23 @@ function DeclarationDetail({ decl }: { decl: EfdDeclaration }) {
   );
 }
 
+/** Empresa só de serviço (sem SIAT): aparece só na lista dos que ficam fora, com o motivo. */
+export interface NoSiatClient {
+  id: string;
+  client_code: string;
+  name: string;
+}
+
 export function EfdBoard({
   clients,
+  noSiat = [],
   declarations,
   jobs,
   competence,
   canRun,
 }: {
   clients: EfdClient[];
+  noSiat?: NoSiatClient[];
   declarations: EfdDeclaration[];
   jobs: EfdCheckJob[];
   competence: string;
@@ -149,11 +158,11 @@ export function EfdBoard({
         if (!row.operations?.includes("EFD_CHECK") || row.competence !== competence) return;
         if (refreshTimer.current) clearTimeout(refreshTimer.current);
         refreshTimer.current = setTimeout(() => router.refresh(), 800);
-      })
-      .subscribe();
+      });
+    const closeChannel = subscribeWithAuth(channel);
     return () => {
       if (refreshTimer.current) clearTimeout(refreshTimer.current);
-      void supabase.removeChannel(channel);
+      closeChannel();
     };
   }, [competence, router]);
 
@@ -242,14 +251,27 @@ export function EfdBoard({
     });
   }
 
-  const lockedRows: LockedRow[] = locked.map((r) => ({
-    id: r.client.id,
-    name: r.client.name,
-    code: r.client.client_code,
-    reason: "sem certificado válido",
-    danger: true,
-    action: { label: "Renovar certificado", href: `/clients/${r.client.id}` },
-  }));
+  const lockedRows: LockedRow[] = [
+    ...locked.map((r) => ({
+      id: r.client.id,
+      name: r.client.name,
+      code: r.client.client_code,
+      reason: "sem certificado válido",
+      danger: true,
+      action: { label: "Renovar certificado", href: `/clients/${r.client.id}` },
+    })),
+    // empresas só de serviço (sem SIAT): nunca entram nesta consulta
+    ...noSiat
+      .filter((c) => !term || `${c.client_code} ${c.name}`.toLowerCase().includes(term))
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        code: c.client_code,
+        reason: "sem inscrição estadual (só NFS-e)",
+        danger: false,
+        action: { label: "Ver cadastro", href: `/clients/${c.id}` },
+      })),
+  ];
 
   return (
     <section className="overflow-clip rounded-xl border bg-card shadow-card">
@@ -325,7 +347,7 @@ export function EfdBoard({
         <span className="hidden md:block" />
       </div>
 
-      {visible.length === 0 && locked.length === 0 ? (
+      {visible.length === 0 && lockedRows.length === 0 ? (
         <ListEmptyText>Nenhum cliente encontrado.</ListEmptyText>
       ) : (
         visible.map((r) => {
@@ -433,7 +455,7 @@ export function EfdBoard({
       )}
 
       <LockedGroup
-        title={`${lockedRows.length} sem certificado válido`}
+        title={`${lockedRows.length} ${lockedRows.length === 1 ? "fica" : "ficam"} fora desta consulta`}
         rows={lockedRows}
         open={showLocked}
         onToggle={() => setShowLocked((v) => !v)}

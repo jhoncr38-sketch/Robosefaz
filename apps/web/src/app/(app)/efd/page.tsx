@@ -54,8 +54,11 @@ export default async function EfdPage({ searchParams }: PageProps<"/efd">) {
         key={competence}
         competence={competence}
         canRun={can(profile.role, "automation:run")}
+        noSiat={clients
+          .filter((c) => c.active && !c.uses_siat)
+          .map((c) => ({ id: c.id, client_code: c.client_code, name: c.trade_name || c.legal_name }))}
         clients={clients
-          .filter((c) => c.active)
+          .filter((c) => c.active && c.uses_siat)
           .map((c) => ({
             id: c.id,
             client_code: c.client_code,

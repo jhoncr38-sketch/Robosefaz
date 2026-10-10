@@ -61,12 +61,14 @@ export interface DanfeData {
   infAdic: string;
 }
 
-function block(src: string, name: string): string {
+/** Conteúdo da primeira tag `name` (com filhos). Também usado na leitura da NFS-e. */
+export function block(src: string, name: string): string {
   const m = new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)</${name}>`).exec(src);
   return m ? m[1] : "";
 }
 
-function tag(src: string, name: string): string {
+/** Texto da primeira tag `name` sem filhos. */
+export function tag(src: string, name: string): string {
   const m = new RegExp(`<${name}(?:\\s[^>]*)?>([^<]*)</${name}>`).exec(src);
   return m ? decode(m[1].trim()) : "";
 }

@@ -19,6 +19,8 @@ export interface ClientRow {
   trade_name: string | null;
   cnpj: string;
   state_registration: string | null;
+  /** false = empresa só de serviço (sem SIAT) */
+  uses_siat: boolean;
   active: boolean;
   certificate_status: CertificateStatus | null;
   certificate_valid_until: string | null;
@@ -163,7 +165,16 @@ export function ClientsTable({ rows, initialQuery = "" }: { rows: ClientRow[]; i
               </div>
               <div className="hidden flex-col gap-px md:flex">
                 <span className="font-mono text-[12.5px] text-(--c-4a4b46)">{formatCNPJ(r.cnpj)}</span>
-                <span className="font-mono text-[11px] text-(--c-6b6c66)">IE {r.state_registration ?? "—"}</span>
+                {r.uses_siat ? (
+                  <span className="font-mono text-[11px] text-(--c-6b6c66)">IE {r.state_registration ?? "—"}</span>
+                ) : (
+                  <span
+                    title="Empresa sem inscrição estadual: fora do SIAT, só a NFS-e Nacional"
+                    className="w-fit rounded bg-(--c-eef7f1) px-[5px] py-px font-mono text-[10.5px] text-(--c-17603b)"
+                  >
+                    só NFS-e
+                  </span>
+                )}
               </div>
               <div className="hidden md:block">
                 <CertificateCell status={r.certificate_status} validUntil={r.certificate_valid_until} />

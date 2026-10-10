@@ -78,7 +78,7 @@ export function Header({
       </Sheet>
 
       {where ? (
-        // sem espaço, o grupo ("SIAT ›") some inteiro (quebra para a 2ª linha, escondida); o nome da página fica
+        // sem espaço, o grupo ("Robô ›") some inteiro (quebra para a 2ª linha, escondida); o nome da página fica
         <div className="hidden h-5 min-w-[70px] flex-row-reverse flex-wrap items-center justify-end gap-x-2 overflow-hidden text-[13px] leading-5 whitespace-nowrap text-(--c-6b6c66) md:flex">
           <span className="min-w-0 truncate font-medium text-foreground">{where.label}</span>
           <span className="flex items-center gap-2">

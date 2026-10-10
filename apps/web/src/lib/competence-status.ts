@@ -123,6 +123,19 @@ export function countByStatus(statuses: ClientCompetenceStatus[]): Record<Client
 
 export type CompetenceStatusMap = Record<string, ClientCompetenceStatus>;
 
+type PlannerJob = { client_id: string; competence: string; status: JobStatus; created_at: string; operations?: readonly string[] | null };
+
+/**
+ * Situação de cada cliente na tela Executar automações. Para quem usa o SIAT vale o pedido das
+ * notas do mês; para a empresa só de serviço (nfseOnly), o pedido da busca de NFS-e.
+ */
+export function plannerStatusMap(jobs: PlannerJob[], competence: string, nfseOnly: ReadonlySet<string>): CompetenceStatusMap {
+  const relevant = jobs.filter((j) =>
+    nfseOnly.has(j.client_id) ? Boolean(j.operations?.includes("NFSE_FETCH")) : isExportJob(j),
+  );
+  return statusMapFromJobs(relevant, competence);
+}
+
 /** Situação de cada cliente na competência (clientes sem job ficam de fora = "Não solicitado"). */
 export function statusMapFromJobs(
   jobs: { client_id: string; competence: string; status: JobStatus; created_at: string }[],

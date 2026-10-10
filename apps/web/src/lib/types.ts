@@ -35,7 +35,8 @@ export type TaskType =
   | "CHECK_PROCESSING"
   | "DOWNLOAD"
   | "EFD_CHECK"
-  | "MALHA_CHECK";
+  | "MALHA_CHECK"
+  | "NFSE_FETCH";
 
 /** pedidos normais (só as notas ativas) */
 export type RegularExportTaskType = Extract<TaskType, "NFCE_EXPORT" | "NFE_ISSUED_EXPORT" | "NFE_RECEIVED_EXPORT">;
@@ -45,8 +46,8 @@ export type CanceledExportTaskType = Extract<
   "NFCE_CANCELED_EXPORT" | "NFE_ISSUED_CANCELED_EXPORT" | "NFE_RECEIVED_CANCELED_EXPORT"
 >;
 export type ExportTaskType = RegularExportTaskType | CanceledExportTaskType;
-/** o que um trabalho do robô pode conter: exportações do mês, uma nota pela chave, EFD ou malhas */
-export type JobOperation = ExportTaskType | "NFE_KEY_EXPORT" | "EFD_CHECK" | "MALHA_CHECK";
+/** o que um trabalho do robô pode conter: exportações do mês, uma nota pela chave, EFD, malhas ou NFS-e */
+export type JobOperation = ExportTaskType | "NFE_KEY_EXPORT" | "EFD_CHECK" | "MALHA_CHECK" | "NFSE_FETCH";
 
 export type TaskStatus =
   | "pending"
@@ -66,7 +67,10 @@ export type DocumentType =
   | "NFE_RECEBIDAS"
   | "NFCE_CANCELADAS"
   | "NFE_EMITIDAS_CANCELADAS"
-  | "NFE_RECEBIDAS_CANCELADAS";
+  | "NFE_RECEBIDAS_CANCELADAS"
+  /** NFS-e Nacional (notas de serviço, lidas da API do ADN) */
+  | "NFSE_PRESTADAS"
+  | "NFSE_TOMADAS";
 
 export type CertificateStatus = "valid" | "expiring" | "expired" | "error";
 
@@ -124,6 +128,8 @@ export interface Client {
   email: string | null;
   phone: string | null;
   active: boolean;
+  /** tem inscrição estadual e é atendida pelo SIAT; false = só serviço (NFS-e Nacional) */
+  uses_siat: boolean;
   uses_nfce: boolean;
   uses_nfe_issued: boolean;
   uses_nfe_received: boolean;
@@ -276,8 +282,13 @@ export interface NoteRow {
   dest_nome: string | null;
   dest_uf: string | null;
   cstat: string | null;
-  /** veio do ZIP de canceladas (o XML é o da nota autorizada) */
+  /** veio do ZIP de canceladas (o XML é o da nota autorizada); NFS-e: cancelada por evento */
   canceled: boolean;
+  /** só NFS-e: ISS retido, valor do ISS, município de incidência e descrição do serviço */
+  iss_retido?: boolean | null;
+  iss_valor?: string | number | null;
+  municipio?: string | null;
+  servico?: string | null;
   zip_path: string;
   xml_name: string;
   /** XML da nota, só depois que alguém pediu para ver */

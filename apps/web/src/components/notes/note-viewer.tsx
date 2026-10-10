@@ -5,8 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 
 import { requestNoteXml } from "@/app/actions/notes";
 import { DanfeView } from "@/components/notes/danfe-view";
+import { DanfseView } from "@/components/notes/danfse-view";
 import { parseDanfe } from "@/lib/danfe";
-import { createClient } from "@/lib/supabase/client";
+import { parseDanfse } from "@/lib/danfse";
+import { isNfse } from "@/lib/notes";
+import { createClient, subscribeWithAuth } from "@/lib/supabase/client";
 import type { NoteRow } from "@/lib/types";
 
 /** Quanto tempo esperar o robô antes de oferecer o ZIP. */
@@ -41,8 +44,8 @@ export function NoteViewer({ note, driveUrl }: { note: NoteRow; driveUrl: string
       .channel(`notes:${note.id}`)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "notes", filter: `id=eq.${note.id}` }, (payload) =>
         apply(payload.new as { xml?: string | null; xml_error?: string | null }),
-      )
-      .subscribe();
+      );
+    const closeChannel = subscribeWithAuth(channel);
     const poll = setInterval(async () => {
       setWaited(Math.round((Date.now() - begin) / 1000));
       const { data } = await supabase.from("notes").select("xml, xml_error").eq("id", note.id).maybeSingle();
@@ -51,11 +54,13 @@ export function NoteViewer({ note, driveUrl }: { note: NoteRow; driveUrl: string
     return () => {
       alive = false;
       clearInterval(poll);
-      void supabase.removeChannel(channel);
+      closeChannel();
     };
   }, [note.id, xml, error, attempt]);
 
-  const data = useMemo(() => (xml ? parseDanfe(xml) : null), [xml]);
+  const service = isNfse(note);
+  const data = useMemo(() => (xml && !service ? parseDanfe(xml) : null), [xml, service]);
+  const nfse = useMemo(() => (xml && service ? parseDanfse(xml) : null), [xml, service]);
 
   function downloadXml() {
     if (!xml) return;
@@ -98,7 +103,7 @@ export function NoteViewer({ note, driveUrl }: { note: NoteRow; driveUrl: string
         <button
           type="button"
           onClick={() => window.print()}
-          disabled={!data}
+          disabled={!data && !nfse}
           className="flex h-8 items-center gap-1.5 rounded-[7px] bg-primary px-3 text-[12.5px] font-medium text-white hover:bg-(--c-196640) disabled:cursor-not-allowed disabled:bg-(--c-a9cdb8)"
         >
           <Printer className="size-3.5" /> Imprimir
@@ -107,15 +112,18 @@ export function NoteViewer({ note, driveUrl }: { note: NoteRow; driveUrl: string
 
       <div className="flex items-center gap-2 rounded-lg bg-(--c-fdf4e3) px-3 py-2 text-xs text-(--c-9a6205) print:hidden">
         <TriangleAlert className="size-3.5 shrink-0" />
-        Visualização para conferência, montada a partir do XML. O documento fiscal é o XML; a DANFE oficial é a emitida pelo
-        contribuinte.
+        {service
+          ? "Visualização para conferência, montada a partir do XML. O documento fiscal é o XML; a DANFSe oficial é a do emissor da NFS-e."
+          : "Visualização para conferência, montada a partir do XML. O documento fiscal é o XML; a DANFE oficial é a emitida pelo contribuinte."}
       </div>
 
-      {data ? (
+      {nfse ? (
+        <DanfseView data={nfse} canceled={note.canceled} />
+      ) : data ? (
         <DanfeView data={data} />
-      ) : xml && !data ? (
+      ) : xml ? (
         <div className="rounded-lg border border-(--c-f0c9c9) bg-(--c-fdecec) px-4 py-3 text-[13px] text-(--c-b42323)">
-          O XML chegou, mas não está no formato de uma NF-e/NFC-e. Baixe o XML para conferir.
+          O XML chegou, mas não está no formato de uma {service ? "NFS-e Nacional" : "NF-e/NFC-e"}. Baixe o XML para conferir.
         </div>
       ) : error ? (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-(--c-f0c9c9) bg-(--c-fdecec) px-4 py-3 text-[13px] text-(--c-b42323)">

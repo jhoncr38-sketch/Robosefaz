@@ -66,7 +66,8 @@ export function parseNoteQuery(raw: string): NoteQuery {
   if (!q) return null;
   const digits = keyDigits(q);
   const onlyDigitsAndMarks = /^[\d.\-/\s]+$/.test(q);
-  if (onlyDigitsAndMarks && digits.length === 44) return { kind: "chave", value: digits };
+  // 44 números: NF-e/NFC-e; 50: NFS-e Nacional
+  if (onlyDigitsAndMarks && (digits.length === 44 || digits.length === 50)) return { kind: "chave", value: digits };
   if (onlyDigitsAndMarks && (digits.length === 14 || digits.length === 11)) return { kind: "documento", value: digits };
   if (onlyDigitsAndMarks && digits.length > 0 && digits.length <= 9) return { kind: "numero", value: Number(digits) };
   // nomes: sem os caracteres que o filtro do banco usa como separador

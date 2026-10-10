@@ -96,7 +96,8 @@ export default async function ClientDetailPage({ params }: PageProps<"/clients/[
           {can(profile.role, "clients:delete") ? (
             <DeleteClientDialog client={c} jobs={jobs.length} downloads={downloads.length} />
           ) : null}
-          {can(profile.role, "automation:run") ? (
+          {/* empresa só de serviço (sem SIAT): nada a agendar no SIAT; as notas vêm pela NFS-e Nacional */}
+          {can(profile.role, "automation:run") && c.uses_siat !== false ? (
             <RunAutomationDialog
               client={c}
               canForce={can(profile.role, "automation:force")}
@@ -128,7 +129,7 @@ export default async function ClientDetailPage({ params }: PageProps<"/clients/[
               <Field label="Razão social">{c.legal_name}</Field>
               <Field label="Nome fantasia">{c.trade_name}</Field>
               <Field label="CNPJ"><span className="font-mono">{formatCNPJ(c.cnpj)}</span></Field>
-              <Field label="Inscrição estadual">{c.state_registration}</Field>
+              <Field label="Inscrição estadual">{c.uses_siat === false ? "Não tem (só serviço: NFS-e Nacional)" : c.state_registration}</Field>
               <Field label="UF">{c.uf}</Field>
               <Field label="E-mail">{c.email}</Field>
               <Field label="Telefone">{c.phone}</Field>

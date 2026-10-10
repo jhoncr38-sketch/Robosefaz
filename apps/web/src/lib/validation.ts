@@ -10,7 +10,8 @@ const optionalText = z
   .optional()
   .transform((v) => (v ? v : null));
 
-export const clientSchema = z.object({
+export const clientSchema = z
+  .object({
   legal_name: z.string().trim().min(2, "Informe a razão social").max(255),
   trade_name: optionalText,
   cnpj: z
@@ -37,6 +38,7 @@ export const clientSchema = z.object({
     .transform((v) => (v ? v : null)),
   phone: optionalText,
   active: z.boolean(),
+  uses_siat: z.boolean().default(true),
   uses_nfce: z.boolean(),
   uses_nfe_issued: z.boolean(),
   uses_nfe_received: z.boolean(),
@@ -46,7 +48,9 @@ export const clientSchema = z.object({
     .max(2000)
     .optional()
     .transform((v) => (v ? v : null)),
-});
+  })
+  // empresa só de serviço (sem SIAT): nenhuma nota do SIAT é pedida para ela
+  .transform((c) => (c.uses_siat ? c : { ...c, uses_nfce: false, uses_nfe_issued: false, uses_nfe_received: false }));
 
 export type ClientInput = z.input<typeof clientSchema>;
 export type ClientOutput = z.output<typeof clientSchema>;
@@ -90,13 +94,21 @@ export const competenceSchema = z
   .refine((v) => toCompetenceKey(v) !== null, "Competência inválida (use MM/AAAA)")
   .transform((v) => toCompetenceKey(v) as string);
 
-export const automationRequestSchema = z.object({
-  client_ids: z.array(z.uuid()).min(1, "Selecione ao menos um cliente").max(500),
-  competence: competenceSchema,
-  operations: z.array(exportOperationSchema).min(1, "Selecione ao menos uma operação"),
-  force: z.boolean().default(false),
-  respect_client_flags: z.boolean().default(true),
-});
+export const automationRequestSchema = z
+  .object({
+    /** clientes do SIAT: recebem as exportações do mês */
+    client_ids: z.array(z.uuid()).max(500),
+    /** empresas só de serviço (sem SIAT): recebem só a busca de NFS-e */
+    nfse_client_ids: z.array(z.uuid()).max(500).default([]),
+    competence: competenceSchema,
+    operations: z.array(exportOperationSchema),
+    force: z.boolean().default(false),
+    respect_client_flags: z.boolean().default(true),
+    /** pede também a busca de NFS-e Nacional dos clientes que entraram na fila */
+    nfse: z.boolean().default(false),
+  })
+  .refine((v) => v.client_ids.length + v.nfse_client_ids.length > 0, "Selecione ao menos um cliente")
+  .refine((v) => v.client_ids.length === 0 || v.operations.length > 0, "Selecione ao menos uma operação");
 
 export const userCreateSchema = z.object({
   name: z.string().trim().min(2, "Informe o nome").max(120),

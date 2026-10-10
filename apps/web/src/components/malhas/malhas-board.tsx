@@ -24,7 +24,7 @@ import {
   type MalhaRowState,
   type MalhaTab,
 } from "@/lib/malhas";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, subscribeWithAuth } from "@/lib/supabase/client";
 import type { MalhaCheck, MalhaFinding } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -122,13 +122,22 @@ function CheckDetail({ check }: { check: MalhaCheck }) {
   );
 }
 
+/** Empresa só de serviço (sem SIAT): aparece só na lista dos que ficam fora, com o motivo. */
+export interface NoSiatClient {
+  id: string;
+  client_code: string;
+  name: string;
+}
+
 export function MalhasBoard({
   clients,
+  noSiat = [],
   checks,
   jobs,
   canRun,
 }: {
   clients: MalhaClient[];
+  noSiat?: NoSiatClient[];
   checks: MalhaCheck[];
   jobs: MalhaCheckJob[];
   canRun: boolean;
@@ -153,11 +162,11 @@ export function MalhasBoard({
         if (!row.operations?.includes("MALHA_CHECK")) return;
         if (refreshTimer.current) clearTimeout(refreshTimer.current);
         refreshTimer.current = setTimeout(() => router.refresh(), 800);
-      })
-      .subscribe();
+      });
+    const closeChannel = subscribeWithAuth(channel);
     return () => {
       if (refreshTimer.current) clearTimeout(refreshTimer.current);
-      void supabase.removeChannel(channel);
+      closeChannel();
     };
   }, [router]);
 
@@ -225,14 +234,27 @@ export function MalhasBoard({
     });
   }
 
-  const lockedRows: LockedRow[] = locked.map((r) => ({
-    id: r.client.id,
-    name: r.client.name,
-    code: r.client.client_code,
-    reason: "sem certificado válido",
-    danger: true,
-    action: { label: "Renovar certificado", href: `/clients/${r.client.id}` },
-  }));
+  const lockedRows: LockedRow[] = [
+    ...locked.map((r) => ({
+      id: r.client.id,
+      name: r.client.name,
+      code: r.client.client_code,
+      reason: "sem certificado válido",
+      danger: true,
+      action: { label: "Renovar certificado", href: `/clients/${r.client.id}` },
+    })),
+    // empresas só de serviço (sem SIAT): nunca entram nesta consulta
+    ...noSiat
+      .filter((c) => !term || `${c.client_code} ${c.name}`.toLowerCase().includes(term))
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        code: c.client_code,
+        reason: "sem inscrição estadual (só NFS-e)",
+        danger: false,
+        action: { label: "Ver cadastro", href: `/clients/${c.id}` },
+      })),
+  ];
 
   return (
     <section className="overflow-clip rounded-xl border bg-card shadow-card">
@@ -286,7 +308,7 @@ export function MalhasBoard({
         <span className="hidden md:block" />
       </div>
 
-      {visible.length === 0 && locked.length === 0 ? (
+      {visible.length === 0 && lockedRows.length === 0 ? (
         <ListEmptyText>Nenhum cliente encontrado.</ListEmptyText>
       ) : (
         visible.map((r) => {
@@ -395,7 +417,7 @@ export function MalhasBoard({
       )}
 
       <LockedGroup
-        title={`${lockedRows.length} sem certificado válido`}
+        title={`${lockedRows.length} ${lockedRows.length === 1 ? "fica" : "ficam"} fora desta consulta`}
         rows={lockedRows}
         open={showLocked}
         onToggle={() => setShowLocked((v) => !v)}

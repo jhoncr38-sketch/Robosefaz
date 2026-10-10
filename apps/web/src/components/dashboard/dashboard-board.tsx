@@ -44,6 +44,7 @@ const OP_TAG: Record<JobOperation, string> = {
   NFE_KEY_EXPORT: "Nota pela chave",
   EFD_CHECK: "EFD",
   MALHA_CHECK: "Malhas",
+  NFSE_FETCH: "NFS-e",
 };
 
 const EXEC_GRID =

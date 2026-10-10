@@ -24,6 +24,7 @@ export default async function ClientsPage({ searchParams }: PageProps<"/clients"
       trade_name: c.trade_name,
       cnpj: c.cnpj,
       state_registration: c.state_registration,
+      uses_siat: c.uses_siat !== false,
       active: c.active,
       certificate_status: cert ? certificateStatusFromDate(cert.valid_until) : null,
       certificate_valid_until: cert?.valid_until ?? null,

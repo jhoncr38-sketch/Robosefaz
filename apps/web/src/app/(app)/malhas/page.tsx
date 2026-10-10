@@ -26,7 +26,8 @@ export default async function MalhasPage() {
       .limit(5000),
   ]);
 
-  const active = new Set(clients.filter((c) => c.active).map((c) => c.id));
+  // empresas só de serviço (sem SIAT) ficam fora da consulta de malhas
+  const active = new Set(clients.filter((c) => c.active && c.uses_siat).map((c) => c.id));
   const checks = ((checksRes.data ?? []) as MalhaCheck[]).filter((c) => active.has(c.client_id));
   const totalIcms = checks.reduce((n, c) => n + (c.total > 0 ? Number(c.icms_total ?? 0) : 0), 0);
 
@@ -58,8 +59,11 @@ export default async function MalhasPage() {
       />
       <MalhasBoard
         canRun={can(profile.role, "automation:run")}
+        noSiat={clients
+          .filter((c) => c.active && !c.uses_siat)
+          .map((c) => ({ id: c.id, client_code: c.client_code, name: c.trade_name || c.legal_name }))}
         clients={clients
-          .filter((c) => c.active)
+          .filter((c) => c.active && c.uses_siat)
           .map((c) => ({
             id: c.id,
             client_code: c.client_code,
