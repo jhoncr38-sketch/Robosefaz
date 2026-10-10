@@ -264,11 +264,14 @@ class FakeRepo:
         return [d for d in self.downloads if d.get("notes_indexed_at") is None][:limit]
 
     async def upsert_notes(self, rows: list[dict[str, Any]]) -> None:
+        # como o PostgREST: colunas ausentes na linha nova ficam como estavam
         notes = self._notes()
         for row in rows:
             key = (row["client_id"], row["document_type"], row["chave"])
-            notes[:] = [n for n in notes if (n["client_id"], n["document_type"], n["chave"]) != key]
-            notes.append({"id": str(uuid.uuid4()), "xml": None, "xml_error": None, "xml_requested_at": None, **row})
+            old = next((n for n in notes if (n["client_id"], n["document_type"], n["chave"]) == key), None)
+            notes[:] = [n for n in notes if n is not old]
+            base = old or {"id": str(uuid.uuid4()), "xml": None, "xml_error": None, "xml_requested_at": None, "canceled": False}
+            notes.append({**base, **row})
 
     async def set_download_notes_indexed(self, download_id: str, count: int) -> None:
         for d in self.downloads:
@@ -287,6 +290,30 @@ class FakeRepo:
         for n in self._notes():
             if n["id"] == note_id:
                 n.update(xml=xml, xml_error=error, xml_at=now().isoformat() if xml else None)
+
+    # -- NFS-e Nacional ----------------------------------------------------------
+    nfse_cursors: dict[str, dict[str, Any]]
+
+    async def get_nfse_cursor(self, client_id: str) -> int:
+        return int(getattr(self, "nfse_cursors", {}).get(client_id, {}).get("last_nsu", 0))
+
+    async def save_nfse_cursor(self, client_id: str, last_nsu: int, documents: int) -> None:
+        if not hasattr(self, "nfse_cursors"):
+            self.nfse_cursors = {}
+        self.nfse_cursors[client_id] = {"last_nsu": last_nsu, "last_documents": documents}
+
+    async def latest_download(self, client_id: str, competence: str, document_type: str) -> dict[str, Any] | None:
+        rows = [
+            d for d in self.downloads
+            if d.get("client_id") == client_id and d.get("competence") == competence and str(d.get("document_type")) == document_type
+        ]
+        return max(rows, key=lambda d: str(d.get("downloaded_at") or ""), default=None)
+
+    async def mark_notes_canceled(self, client_id: str, chaves: list[str]) -> int:
+        hits = [n for n in self._notes() if n["client_id"] == client_id and n["chave"] in chaves]
+        for n in hits:
+            n["canceled"] = True
+        return len(hits)
 
     office = None  # escritório do computador (device_org); None = instalação antiga
 

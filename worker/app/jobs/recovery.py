@@ -160,9 +160,9 @@ async def recover_orphaned_jobs(
             if job.get("cancel_requested") and t.status in (_OPEN_EXPORT | _WAITING_SEFAZ):
                 await repo.update_task(t.id, status=TaskStatus.CANCELLED.value, finished_at=now)
             elif t.status == TaskStatus.RUNNING:
-                # exportação que não chegou a ser enviada (ou consulta de EFD, que só lê) volta a pendente;
-                # consulta/download interrompido falha
-                read_only = t.task_type in (TaskType.EFD_CHECK, TaskType.MALHA_CHECK)
+                # exportação que não chegou a ser enviada (ou consulta de EFD/malhas/NFS-e, que só lê) volta a
+                # pendente; consulta/download interrompido falha. A NFS-e só avança o NSU no fim: refazer é seguro
+                read_only = t.task_type in (TaskType.EFD_CHECK, TaskType.MALHA_CHECK, TaskType.NFSE_FETCH)
                 status = TaskStatus.PENDING if t.is_export or read_only else TaskStatus.FAILED
                 await repo.update_task(t.id, status=status.value)
         await repo.add_log(

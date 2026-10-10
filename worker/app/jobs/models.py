@@ -24,6 +24,9 @@ class TaskType(StrEnum):
     DOWNLOAD = "DOWNLOAD"
     EFD_CHECK = "EFD_CHECK"  # consulta do processamento da EFD (mensagens do DT-e)
     MALHA_CHECK = "MALHA_CHECK"  # Consulta de Malhas Fiscais (SIAT web, somente leitura)
+    # NFS-e Nacional (desde a 1.2.36): notas de serviço prestadas e tomadas, lidas da API do ADN
+    # com o certificado do cliente, sem navegador
+    NFSE_FETCH = "NFSE_FETCH"
 
 
 # ordem em que o robô agenda: cada tipo e logo depois as canceladas dele
@@ -77,6 +80,8 @@ class DocumentType(StrEnum):
     NFCE_CANCELADAS = "NFCE_CANCELADAS"
     NFE_EMITIDAS_CANCELADAS = "NFE_EMITIDAS_CANCELADAS"
     NFE_RECEBIDAS_CANCELADAS = "NFE_RECEBIDAS_CANCELADAS"
+    NFSE_PRESTADAS = "NFSE_PRESTADAS"
+    NFSE_TOMADAS = "NFSE_TOMADAS"
 
 
 TASK_DOCUMENT: dict[TaskType, DocumentType] = {
@@ -103,6 +108,8 @@ DOC_LABEL: dict[str, str] = {
     "NFCE_CANCELADAS": "NFC-e canceladas",
     "NFE_EMITIDAS_CANCELADAS": "NF-e emitidas canceladas",
     "NFE_RECEBIDAS_CANCELADAS": "NF-e recebidas canceladas",
+    "NFSE_PRESTADAS": "NFS-e prestadas",
+    "NFSE_TOMADAS": "NFS-e tomadas",
 }
 
 

@@ -147,6 +147,7 @@ def _allowed_targets(current: JobStatus) -> frozenset[JobStatus]:
                 JobStatus.CANCELLED,
                 JobStatus.QUEUED,
                 JobStatus.WAITING_SEFAZ,  # nada novo a agendar
+                JobStatus.CHECKING_PROCESSING,  # NFS-e Nacional: consulta a API direto, sem navegador
                 JobStatus.COMPLETED,
             }
         )

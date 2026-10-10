@@ -19,6 +19,7 @@ from app.jobs.collect import ExportCollection
 from app.jobs.dedup import DuplicateGuard
 from app.jobs.efd_check import run_efd_check
 from app.jobs.malha_check import run_malha_check
+from app.jobs.nfse_fetch import run_nfse_fetch
 from app.jobs.errors import AutomationError, ErrorCode, JobCancelled, TaxpayerMismatchError
 from app.jobs.models import EXPORT_TASK_TYPES, ExportRequestResult, Job, Task, TaskStatus, TaskType
 from app.jobs.reporter import JobReporter
@@ -107,6 +108,21 @@ class SchedulerRunner(ExportCollection, BaseRunner):
                 provider = self.deps.registry.get(job.provider)
                 ctx = self.build_context(job, client, certificate, reporter, logger)
                 await run_malha_check(self.repo, provider, ctx, job, malha_tasks, reporter, logger)
+                return
+
+            # NFS-e Nacional: API do ADN com o certificado do Windows, sem navegador; conclui na hora
+            nfse_tasks = [
+                t
+                for t in all_tasks
+                if t.task_type == TaskType.NFSE_FETCH
+                and not t.superseded
+                and t.status in (TaskStatus.PENDING, TaskStatus.RUNNING)
+            ]
+            if nfse_tasks:
+                tasks = nfse_tasks
+                await run_nfse_fetch(
+                    self.repo, self.deps.organizer, client, certificate, job, nfse_tasks, reporter, logger
+                )
                 return
 
             tasks = sorted(

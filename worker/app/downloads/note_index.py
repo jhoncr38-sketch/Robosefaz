@@ -21,6 +21,11 @@ from app.downloads.note_count import locate
 log = logging.getLogger(__name__)
 
 _KEY = re.compile(r"\d{44}")
+# NFS-e Nacional: Id="NFS" + 50 números
+_NFSE_KEY = re.compile(r"\d{50}")
+# tpRetISSQN: 1 = não retido; 2 = retido pelo tomador; 3 = retido pelo intermediário
+_ISS_RETIDO = {"1": False, "2": True, "3": True}
+_SERVICE_MAX = 300
 # XML maior que isso não é nota (uma NF-e grande tem ~100 KB)
 _MAX_XML_BYTES = 5 * 1024 * 1024
 
@@ -41,6 +46,13 @@ class NoteInfo:
     dest_uf: str | None
     cstat: str | None
     xml_name: str
+    # só NFS-e (nota de serviço): ISS, município de incidência e descrição do serviço
+    iss_retido: bool | None = None
+    iss_valor: str | None = None
+    municipio: str | None = None
+    servico: str | None = None
+    # AAAA-MM da competência informada na NFS-e (dCompet); fora do índice, só para separar por mês
+    competence: str | None = None
 
 
 def _text(el: ET.Element | None, path: str) -> str | None:
@@ -65,14 +77,16 @@ def _doc(el: ET.Element | None) -> str | None:
 
 
 def parse_note_xml(data: bytes, xml_name: str = "") -> NoteInfo | None:
-    """Dados principais de uma NF-e/NFC-e (nfeProc ou NFe solta). None se não for uma nota."""
+    """Dados principais de uma NF-e/NFC-e (nfeProc ou NFe solta) ou de uma NFS-e Nacional.
+    None se não for uma nota."""
     try:
         root = ET.fromstring(data)
     except ET.ParseError:
         return None
     inf = root.find(".//{*}infNFe")
     if inf is None:
-        return None
+        nfse = root.find(".//{*}infNFSe")
+        return _parse_nfse(nfse, xml_name) if nfse is not None else None
     chave = (inf.get("Id") or "")[-44:]
     if not _KEY.fullmatch(chave):
         m = _KEY.search(xml_name)
@@ -102,6 +116,45 @@ def parse_note_xml(data: bytes, xml_name: str = "") -> NoteInfo | None:
     )
 
 
+def _parse_nfse(inf: ET.Element, xml_name: str) -> NoteInfo | None:
+    """NFS-e Nacional (leiaute do ADN): prestador no lugar do emitente e tomador no do destinatário."""
+    chave = (inf.get("Id") or "")[-50:]
+    if not _NFSE_KEY.fullmatch(chave):
+        m = _NFSE_KEY.search(xml_name)
+        if not m:
+            return None
+        chave = m.group(0)
+    dps = inf.find("{*}DPS/{*}infDPS")
+    emit = inf.find("{*}emit")
+    prest = dps.find("{*}prest") if dps is not None else None
+    toma = dps.find("{*}toma") if dps is not None else None
+    prest_doc = _doc(prest) or _doc(emit)
+    emit_is_prest = _doc(emit) == prest_doc
+    competence = (_text(dps, "{*}dCompet") or "")[:7] or None
+    servico = _text(dps, "{*}serv/{*}cServ/{*}xDescServ")
+    return NoteInfo(
+        chave=chave,
+        modelo=None,
+        serie=_int(_text(dps, "{*}serie")),
+        numero=_int(_text(inf, "{*}nNFSe")),
+        emitida_em=_text(dps, "{*}dhEmi") or _text(inf, "{*}dhProc"),
+        valor=_text(dps, "{*}valores/{*}vServPrest/{*}vServ") or _text(inf, "{*}valores/{*}vLiq"),
+        emit_doc=prest_doc,
+        emit_nome=(_text(emit, "{*}xNome") if emit_is_prest else None) or _text(prest, "{*}xNome"),
+        emit_uf=_text(emit, ".//{*}UF") if emit_is_prest else None,
+        dest_doc=_doc(toma) or _text(toma, "{*}NIF"),
+        dest_nome=_text(toma, "{*}xNome"),
+        dest_uf=_text(toma, ".//{*}UF"),
+        cstat=_text(inf, "{*}cStat"),
+        xml_name=xml_name,
+        iss_retido=_ISS_RETIDO.get(_text(dps, "{*}valores/{*}trib/{*}tribMun/{*}tpRetISSQN") or ""),
+        iss_valor=_text(inf, "{*}valores/{*}vISSQN"),
+        municipio=_text(inf, "{*}xLocIncid") or _text(inf, "{*}xLocPrestacao"),
+        servico=servico[:_SERVICE_MAX] if servico else None,
+        competence=competence,
+    )
+
+
 def index_zip(path: Path) -> list[NoteInfo] | None:
     """Notas dentro do ZIP (uma por XML). None se o ZIP não puder ser lido."""
     notes: list[NoteInfo] = []
@@ -123,15 +176,22 @@ def note_rows(download: dict[str, Any], zip_path: Path, notes: list[NoteInfo]) -
     doc = str(download["document_type"])
     by_key: dict[str, dict[str, Any]] = {}
     for n in notes:
-        by_key[n.chave] = {
+        info = asdict(n)
+        info.pop("competence", None)  # a competência do índice é a do arquivo
+        row = {
             "client_id": download["client_id"],
             "download_id": download["id"],
             "document_type": doc,
             "competence": download["competence"],
             "canceled": doc.endswith("_CANCELADAS"),
             "zip_path": str(zip_path),
-            **asdict(n),
+            **info,
         }
+        if doc.startswith("NFSE_"):
+            # NFS-e: o cancelamento vem por evento depois da nota; reindexar uma versão nova do ZIP
+            # não pode desmarcar a nota cancelada
+            row.pop("canceled")
+        by_key[n.chave] = row
     return list(by_key.values())
 
 

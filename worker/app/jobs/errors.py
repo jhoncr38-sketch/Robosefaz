@@ -26,6 +26,7 @@ class ErrorCode(StrEnum):
     PROFILE_IN_USE = "PROFILE_IN_USE"
     BROWSER_ERROR = "BROWSER_ERROR"
     COLLECTOR_EXHAUSTED = "COLLECTOR_EXHAUSTED"
+    NFSE_UNAVAILABLE = "NFSE_UNAVAILABLE"  # API da NFS-e Nacional (ADN) fora do ar ou recusou a consulta
     UNEXPECTED = "UNEXPECTED"
 
 

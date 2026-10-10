@@ -74,6 +74,11 @@ class JobRepository(Protocol):
     async def set_download_notes_indexed(self, download_id: str, count: int) -> None: ...
     async def list_note_xml_requests(self, limit: int) -> list[dict[str, Any]]: ...
     async def set_note_xml(self, note_id: str, xml: str | None, error: str | None = None) -> None: ...
+    # -- NFS-e Nacional ----------------------------------------------------------
+    async def get_nfse_cursor(self, client_id: str) -> int: ...
+    async def save_nfse_cursor(self, client_id: str, last_nsu: int, documents: int) -> None: ...
+    async def latest_download(self, client_id: str, competence: str, document_type: str) -> dict[str, Any] | None: ...
+    async def mark_notes_canceled(self, client_id: str, chaves: list[str]) -> int: ...
     async def list_client_names(self) -> dict[str, str | None]: ...
     async def device_org(self) -> Office | None: ...
     async def rename_download(self, old_filename: str, new_filename: str, new_filepath: str, checksum: str) -> int: ...
@@ -415,6 +420,51 @@ class SupabaseJobRepository:
     async def set_note_xml(self, note_id: str, xml: str | None, error: str | None = None) -> None:
         fields = {"xml": xml, "xml_at": iso(utcnow()) if xml else None, "xml_error": error}
         await self._db.table("notes").update(fields).eq("id", note_id).execute()
+
+    # -- NFS-e Nacional ----------------------------------------------------------
+    @_transient
+    async def get_nfse_cursor(self, client_id: str) -> int:
+        res = await self._db.table("nfse_cursors").select("last_nsu").eq("client_id", client_id).limit(1).execute()
+        return int(res.data[0]["last_nsu"]) if res.data else 0
+
+    @_transient
+    async def save_nfse_cursor(self, client_id: str, last_nsu: int, documents: int) -> None:
+        await (
+            self._db.table("nfse_cursors")
+            .upsert(
+                {"client_id": client_id, "last_nsu": last_nsu, "fetched_at": iso(utcnow()), "last_documents": documents},
+                on_conflict="client_id",
+                returning=ReturnMethod.minimal,
+            )
+            .execute()
+        )
+
+    @_transient
+    async def latest_download(self, client_id: str, competence: str, document_type: str) -> dict[str, Any] | None:
+        res = (
+            await self._db.table("downloads")
+            .select("id, filename, filepath, competence, document_type, size, checksum")
+            .eq("client_id", client_id)
+            .eq("competence", competence)
+            .eq("document_type", document_type)
+            .order("downloaded_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        return res.data[0] if res.data else None
+
+    @_transient
+    async def mark_notes_canceled(self, client_id: str, chaves: list[str]) -> int:
+        if not chaves:
+            return 0
+        res = (
+            await self._db.table("notes")
+            .update({"canceled": True}, count=CountMethod.exact)
+            .eq("client_id", client_id)
+            .in_("chave", chaves)
+            .execute()
+        )
+        return int(res.count or 0)
 
     @_transient
     async def clear_download_drive_ids(self) -> int:
