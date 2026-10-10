@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { createClient } from "@/lib/supabase/client";
+import { createClient, subscribeWithAuth } from "@/lib/supabase/client";
 import type { AutomationJob } from "@/lib/types";
 
 const JOB_SELECT = "*, clients(client_code, legal_name, trade_name, cnpj)";
@@ -51,10 +51,10 @@ export function useRealtimeJobs(initial: AutomationJob[], filter?: (job: Automat
           if (filter && !filter(next[idx])) next.splice(idx, 1);
           return next;
         });
-      })
-      .subscribe((status) => setConnected(status === "SUBSCRIBED"));
+      });
+    const closeChannel = subscribeWithAuth(channel, (status) => setConnected(status === "SUBSCRIBED"));
     return () => {
-      void supabase.removeChannel(channel);
+      closeChannel();
     };
     // o filtro é estável por página; não reassinar a cada render
     // eslint-disable-next-line react-hooks/exhaustive-deps

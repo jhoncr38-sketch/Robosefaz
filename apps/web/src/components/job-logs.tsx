@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatTime } from "@/lib/format";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, subscribeWithAuth } from "@/lib/supabase/client";
 import type { AutomationLog } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -29,10 +29,10 @@ export function JobLogs({ jobId, initialLogs }: { jobId: string; initialLogs: Au
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "automation_logs", filter: `job_id=eq.${jobId}` },
         (payload) => setLogs((prev) => [...prev, payload.new as AutomationLog]),
-      )
-      .subscribe();
+      );
+    const closeChannel = subscribeWithAuth(channel);
     return () => {
-      void supabase.removeChannel(channel);
+      closeChannel();
     };
   }, [jobId]);
 

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { JOB_STATUS_LABEL } from "@/lib/status";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, subscribeWithAuth } from "@/lib/supabase/client";
 import type { JobStatus } from "@/lib/types";
 
 export interface NoteSearchJob {
@@ -50,8 +50,8 @@ export function NoteSearchProgress({ job, chave }: { job: NoteSearchJob; chave: 
       )
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notes", filter: `chave=eq.${chave}` }, () =>
         router.refresh(),
-      )
-      .subscribe();
+      );
+    const closeChannel = subscribeWithAuth(channel);
     const poll = setInterval(async () => {
       setWaited(Math.max(0, Math.round((Date.now() - begin) / 1000)));
       const [{ data: j }, { count }] = await Promise.all([
@@ -64,7 +64,7 @@ export function NoteSearchProgress({ job, chave }: { job: NoteSearchJob; chave: 
     return () => {
       alive = false;
       clearInterval(poll);
-      void supabase.removeChannel(channel);
+      closeChannel();
     };
   }, [job.id, job.created_at, chave, router]);
 

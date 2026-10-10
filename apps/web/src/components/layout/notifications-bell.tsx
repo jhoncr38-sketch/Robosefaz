@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatRelative } from "@/lib/format";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, subscribeWithAuth } from "@/lib/supabase/client";
 import type { NotificationRow } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -50,11 +50,11 @@ export function NotificationsBell({ userId }: { userId: string }) {
           const show = n.level === "error" ? toast.error : n.level === "success" ? toast.success : n.level === "warning" ? toast.warning : toast.info;
           show(n.title, { description: n.message });
         },
-      )
-      .subscribe();
+      );
+    const closeChannel = subscribeWithAuth(channel);
     return () => {
       clearTimeout(initial);
-      void supabase.removeChannel(channel);
+      closeChannel();
     };
   }, [userId, load]);
 
