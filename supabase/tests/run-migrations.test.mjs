@@ -1174,5 +1174,119 @@ await test("operação do dia: cada escritório vê só os próprios trabalhos; 
   await rejects(as("anon", (tx) => tx.query("select public.operation_report($1, $2)", [from, to])), /permission denied/);
 });
 
+await test("NFS-e: painel pede a busca; só robôs 1.2.36+ pegam; último NSU e índice com chave de 50 números", async () => {
+  // operador pede; visualizador não; pedido repetido enquanto está na fila é ignorado
+  const r1 = (await as(ADMIN_B, (tx) => tx.query("select public.create_nfse_fetch_jobs($1::uuid[], '2026-09') r", [[CLIENT_B1]]))).rows[0].r;
+  assert.equal(r1.created, 1);
+  const jobId = r1.results[0].job_id;
+  const job = (await db.query("select operations, status, org_id, competence from public.automation_jobs where id = $1", [jobId])).rows[0];
+  assert.match(String(job.operations), /NFSE_FETCH/);
+  assert.deepEqual([job.status, job.org_id, job.competence], ["queued", ORG_B, "2026-09"]);
+  const task = (await db.query("select task_type, status from public.automation_tasks where job_id = $1", [jobId])).rows[0];
+  assert.deepEqual([task.task_type, task.status], ["NFSE_FETCH", "pending"]);
+  const again = (await as(ADMIN_B, (tx) => tx.query("select public.create_nfse_fetch_jobs($1::uuid[], '2026-10') r", [[CLIENT_B1]]))).rows[0].r;
+  assert.deepEqual([again.created, again.skipped], [0, 1]);
+  await rejects(as(VIEWER, (tx) => tx.query("select public.create_nfse_fetch_jobs($1::uuid[], '2026-09')", [[CLIENT_A]])), /FORBIDDEN/);
+  await rejects(as(ADMIN, (tx) => tx.query("select public.create_nfse_fetch_jobs($1::uuid[], '2026-09')", [[CLIENT_B1]])), /FORBIDDEN|CLIENT/);
+  // fila: os outros trabalhos de B já foram resolvidos nos testes anteriores; robô 1.2.35 não pega, 1.2.36 pega
+  await db.query(
+    "update public.automation_jobs set status = 'completed', locked_by = null, locked_at = null where org_id = $1 and id <> $2 and (status = 'queued' or locked_by is not null)",
+    [ORG_B, jobId],
+  );
+  await as(DEVICE_B.authId, (tx) =>
+    tx.query(`insert into public.worker_heartbeats (worker_id, kind, meta) values
+      ('PC-B-1235', 'all', '{"version":"1.2.35"}'), ('PC-B-1236', 'all', '{"version":"1.2.36"}')`),
+  );
+  const old = await as(DEVICE_B.authId, (tx) => tx.query("select id from public.claim_next_job('PC-B-1235')"));
+  assert.equal(old.rows.length, 0, "robô antigo não pode pegar a busca de NFS-e");
+  const fresh = await as(DEVICE_B.authId, (tx) => tx.query("select id from public.claim_next_job('PC-B-1236')"));
+  assert.equal(fresh.rows[0]?.id, jobId);
+  // o robô guarda o último NSU do cliente (escritório preenchido pelo trigger); A não vê
+  const cur = await as(DEVICE_B.authId, (tx) =>
+    tx.query(
+      "insert into public.nfse_cursors (client_id, last_nsu, fetched_at, last_documents) values ($1, 14, now(), 13) on conflict (client_id) do update set last_nsu = excluded.last_nsu returning org_id",
+      [CLIENT_B1],
+    ),
+  );
+  assert.equal(cur.rows[0].org_id, ORG_B);
+  await as(DEVICE_B.authId, (tx) => tx.query("update public.nfse_cursors set last_nsu = 51 where client_id = $1", [CLIENT_B1]));
+  assert.equal(Number((await as(ADMIN_B, (tx) => tx.query("select last_nsu from public.nfse_cursors"))).rows[0].last_nsu), 51);
+  assert.equal((await as(ADMIN, (tx) => tx.query("select 1 from public.nfse_cursors"))).rows.length, 0);
+  await rejects(as(DEVICE_B.authId, (tx) => tx.query("update public.nfse_cursors set last_nsu = -1 where client_id = $1", [CLIENT_B1])), /nfse_cursors_nsu_positive/);
+  // índice: chave de 50 números (NFS-e) com o ISS; 45 números é recusado
+  const NFSE = "22110011211222333000181000000000000226040000000017";
+  await as(DEVICE_B.authId, (tx) =>
+    tx.query(
+      "insert into public.notes (client_id, document_type, competence, chave, numero, valor, iss_retido, iss_valor, municipio, servico, zip_path, xml_name) values ($1, 'NFSE_PRESTADAS', '2026-04', $2, 2, 8900, false, 445, 'Teresina', 'Consultoria', 'C:/s.zip', $3)",
+      [CLIENT_B1, NFSE, `NFSe ${NFSE}.xml`],
+    ),
+  );
+  const note = (await as(ADMIN_B, (tx) => tx.query("select document_type, iss_valor, municipio from public.notes where chave = $1", [NFSE]))).rows[0];
+  assert.deepEqual([note.document_type, Number(note.iss_valor), note.municipio], ["NFSE_PRESTADAS", 445, "Teresina"]);
+  await rejects(
+    as(DEVICE_B.authId, (tx) =>
+      tx.query(
+        "insert into public.notes (client_id, document_type, competence, chave, zip_path, xml_name) values ($1, 'NFSE_TOMADAS', '2026-04', $2, 'C:/s.zip', 'x.xml')",
+        [CLIENT_B1, NFSE + "1"],
+      ),
+    ),
+    /notes_chave_format/,
+  );
+  // conclusão com nota nova avisa e leva à tela NFS-e (um aviso só por lote de 10 minutos)
+  await db.query("update public.automation_jobs set status = 'completed', last_message = 'NFS-e: 2 tomada(s) nova(s).' where id = $1", [jobId]);
+  const notices = (await db.query("select title, link, message from public.notifications where dedup_key like 'nfse-done:%'")).rows;
+  assert.equal(notices.length, 1);
+  assert.deepEqual([notices[0].title, notices[0].link], ["Busca de NFS-e: há novidades.", "/nfse"]);
+  assert.match(notices[0].message, /2 tomada\(s\) nova\(s\)\. O resultado de cada cliente/);
+  // Reprocessar recoloca a busca na fila
+  await db.query("update public.automation_jobs set status = 'failed' where id = $1", [jobId]);
+  await db.query("update public.automation_tasks set status = 'failed' where job_id = $1", [jobId]);
+  await as(ADMIN_B, (tx) => tx.query("select public.retry_automation_job($1)", [jobId]));
+  const retried = (await db.query("select status from public.automation_tasks where job_id = $1", [jobId])).rows[0];
+  assert.equal(retried.status, "pending");
+  // a segunda busca do mesmo lote não repete o aviso; busca sem nota nova não avisa
+  await db.query("update public.automation_jobs set status = 'completed', last_message = 'NFS-e: 5 prestada(s) nova(s).' where id = $1", [jobId]);
+  assert.equal((await db.query("select 1 from public.notifications where dedup_key like 'nfse-done:%'")).rows.length, 1);
+  await db.query("delete from public.notifications where dedup_key like 'nfse-done:%'");
+  await db.query("update public.automation_jobs set status = 'failed' where id = $1", [jobId]);
+  await db.query("update public.automation_jobs set status = 'completed', last_message = 'NFS-e: nenhuma nota nova.' where id = $1", [jobId]);
+  assert.equal((await db.query("select 1 from public.notifications where dedup_key like 'nfse-done:%'")).rows.length, 0);
+});
+
+await test("empresa só de serviço (sem SIAT): fica fora dos pedidos do SIAT, mas a NFS-e continua", async () => {
+  // desligar o SIAT desliga as três marcações de nota
+  const off = (
+    await as(ADMIN_B, (tx) =>
+      tx.query("update public.clients set uses_siat = false where id = $1 returning uses_nfce, uses_nfe_issued, uses_nfe_received", [CLIENT_B1]),
+    )
+  ).rows[0];
+  assert.deepEqual([off.uses_nfce, off.uses_nfe_issued, off.uses_nfe_received], [false, false, false]);
+  // agendamento do mês: sem operação habilitada; mesmo ignorando o cadastro, o banco recusa
+  const batch = (
+    await as(ADMIN_B, (tx) =>
+      tx.query("select public.create_automation_jobs_batch($1::uuid[], '2026-06', array['NFCE_EXPORT']::public.task_type[], false, true) r", [[CLIENT_B1]]),
+    )
+  ).rows[0].r;
+  assert.equal(batch[0].error, "NO_OPERATIONS");
+  const forced = (
+    await as(ADMIN_B, (tx) =>
+      tx.query("select public.create_automation_jobs_batch($1::uuid[], '2026-06', array['NFCE_EXPORT']::public.task_type[], false, false) r", [[CLIENT_B1]]),
+    )
+  ).rows[0].r;
+  assert.equal(forced[0].job_id, null);
+  assert.match(forced[0].message, /NO_SIAT/);
+  // EFD e malhas também não entram
+  await rejects(as(ADMIN_B, (tx) => tx.query("select public.create_efd_check_jobs($1::uuid[], '2026-06')", [[CLIENT_B1]])), /NO_SIAT/);
+  await rejects(as(ADMIN_B, (tx) => tx.query("select public.create_malha_check_jobs($1::uuid[])", [[CLIENT_B1]])), /NO_SIAT/);
+  assert.equal((await db.query("select 1 from public.automation_jobs where client_id = $1 and competence = '2026-06'", [CLIENT_B1])).rows.length, 0);
+  // a busca de NFS-e continua valendo
+  await db.query("update public.automation_jobs set status = 'completed' where client_id = $1 and status not in ('completed', 'failed', 'cancelled')", [CLIENT_B1]);
+  const nfse = (await as(ADMIN_B, (tx) => tx.query("select public.create_nfse_fetch_jobs($1::uuid[], '2026-06') r", [[CLIENT_B1]]))).rows[0].r;
+  assert.equal(nfse.created, 1);
+  // voltar a usar o SIAT: as marcações são religadas no cadastro, não sozinhas
+  const on = (await as(ADMIN_B, (tx) => tx.query("update public.clients set uses_siat = true, uses_nfce = true where id = $1 returning uses_nfce, uses_nfe_issued", [CLIENT_B1]))).rows[0];
+  assert.deepEqual([on.uses_nfce, on.uses_nfe_issued], [true, false]);
+});
+
 console.log(`\n${passed} teste(s) de banco passaram${process.exitCode ? " (com falhas)" : ""}.`);
 await db.close();
