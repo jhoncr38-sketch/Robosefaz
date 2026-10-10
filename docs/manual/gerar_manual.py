@@ -461,8 +461,9 @@ def cap_painel_acesso() -> list:
             [
                 ["Tela", "Para que serve"],
                 ["Dashboard", "Situação da competência, o que o robô está fazendo agora e o que precisa de atenção."],
-                ["Automação SIAT", "Pedir agendamentos de uma competência para vários clientes."],
+                ["Executar automações", "Pedir agendamentos de uma competência para vários clientes (e a busca de NFS-e junto)."],
                 ["Consulta EFD", "Ver se a EFD de cada cliente foi processada (mensagens do DT-e)."],
+                ["NFS-e Nacional", "Buscar as notas de serviço (prestadas e tomadas) de cada cliente na NFS-e Nacional."],
                 ["Fila de processamento", "Acompanhar em tempo real o que o robô está fazendo."],
                 ["Clientes", "Cadastro das empresas."],
                 ["Certificados", "Certificado digital de cada cliente e sua validade."],
@@ -493,8 +494,13 @@ def cap_clientes_certificados() -> list:
                 ["CNPJ *", "O robô confere o CNPJ no SIAT antes de agendar."],
                 [
                     "Inscrição estadual",
-                    "<b>Obrigatória para o robô.</b> O SIAT web identifica o contribuinte pela IE, e o robô "
+                    "<b>Obrigatória para o robô no SIAT.</b> O SIAT web identifica o contribuinte pela IE, e o robô "
                     "confere a IE em cada linha antes de agendar ou baixar.",
+                ],
+                [
+                    "Usa o SIAT",
+                    "Ligado para quem tem inscrição estadual. <b>Desligue para empresa só de serviço:</b> ela fica "
+                    "fora de Executar automações (SIAT), Malhas e EFD, e as notas vêm só pela NFS-e Nacional.",
                 ],
                 ["UF *", "PI."],
                 [
@@ -540,7 +546,7 @@ def cap_automacao() -> list:
         H1("6. Agendar exportações (Automação)"),
         *steps(
             [
-                "Abra a tela <b>Automação SIAT</b> (ou, no Dashboard, <b>Processar competência</b> ou "
+                "Abra a tela <b>Robô › Executar automações</b> (ou, no Dashboard, <b>Processar competência</b> ou "
                 "<b>Agendar pendentes</b>).",
                 "<b>Competência:</b> use as setas ‹ › para escolher o mês. A tela abre no mês anterior, que "
                 "é o mais comum; meses futuros não aparecem.",
@@ -816,7 +822,8 @@ def cap_downloads() -> list:
         ),
         H2("Busca por chave de acesso (beta)"),
         P(
-            "Em <b>Resultados › Busca por chave de acesso</b>, cole os <b>44 números</b> da chave da DANFE. O robô "
+            "Em <b>Resultados › Busca por chave de acesso</b>, cole os <b>44 números</b> da chave da DANFE (ou os "
+            "<b>50 números</b> da chave de uma NFS-e). O robô "
             "lê cada XML dos ZIPs baixados e guarda chave, número, data, valor, emitente e destinatário; se a nota "
             "já foi baixada, ela abre na hora, montada no formato da DANFE, com os botões <b>Baixar XML desta "
             "nota</b> e <b>Imprimir</b>. A visualização serve para conferência: o documento fiscal é o XML."
@@ -838,6 +845,44 @@ def cap_downloads() -> list:
                 + code("NFE_EMITIDAS\\Avulsas") + "), fora da lista da tela Downloads. Quando o mês inteiro for "
                 "exportado depois, a mesma nota vem no ZIP do mês; na busca ela continua aparecendo uma vez só.",
                 "Ao terminar, chega um aviso no sino com o link para a nota.",
+            ]
+        ),
+        H2("NFS-e Nacional (notas de serviço)"),
+        P(
+            "O robô consulta a <b>NFS-e Nacional</b> (Ambiente de Dados Nacional) com o certificado de cada cliente "
+            "e traz as notas de serviço em que ele é <b>prestador</b> ou <b>tomador</b>. Não abre navegador e só "
+            "lê: nada é emitido, cancelado ou registrado em nome do cliente."
+        ),
+        *steps(
+            [
+                "Abra <b>Robô › NFS-e Nacional</b>.",
+                "Marque os clientes (ou <b>Selecionar todos com certificado</b>) e clique em <b>Buscar NFS-e</b>.",
+                "O robô busca cliente por cliente; a situação e o resultado (“2 tomada(s) nova(s)”) "
+                "aparecem sozinhos na tela.",
+            ]
+        ),
+        P(
+            "Em <b>Robô › Executar automações</b>, o botão <b>NFS-e</b> (ligado por padrão) pede a busca das notas de serviço "
+            "junto com o pedido do mês, para os clientes que entrarem na fila. As empresas só de serviço (cadastro "
+            "com <b>Usa o SIAT</b> desligado) aparecem nessa tela com a etiqueta <b>só NFS-e</b>: para elas vai "
+            "apenas a busca de NFS-e, nada do SIAT."
+        ),
+        *bullets(
+            [
+                "A primeira busca de cada cliente traz todo o histórico disponível na NFS-e Nacional; as seguintes "
+                "continuam de onde a anterior parou e trazem só o que é novo, de qualquer mês.",
+                "As notas ficam na pasta das notas, em ano/mês/empresa, nas pastas " + code("NFSE_PRESTADAS")
+                + " e " + code("NFSE_TOMADAS") + ", num ZIP por mês (ex.: "
+                + code("EMPRESA - NFS-e tomadas - 09-2026 - CLI000006.zip") + "). Se chegar nota nova de um mês "
+                "que já tem arquivo, o robô grava uma versão nova com todas as notas, ao lado da anterior.",
+                "Em <b>Downloads</b>, o filtro <b>NFS-e</b> mostra só as notas de serviço. Na busca por chave, a "
+                "nota abre no formato da DANFSe, com prestador, tomador, serviço e ISS.",
+                "Quando a nota é cancelada, o cancelamento chega na busca seguinte e a nota fica marcada como "
+                "cancelada.",
+                "O sino avisa uma vez por lote, quando chegam notas novas; busca sem novidade não gera aviso. O "
+                "resultado de cada cliente fica na tela NFS-e Nacional.",
+                "Precisa do robô 1.2.36 ou mais novo e do certificado A1 do cliente instalado no computador. Funciona "
+                "para as cidades que usam a NFS-e Nacional ou repassam as notas a ela (Teresina repassa).",
             ]
         ),
     ]
