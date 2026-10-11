@@ -15,8 +15,8 @@ const hb = (worker_id: string, last_seen_at: string, hostname: string | null = n
 
 // 01/10 à noite: este notebook ligado, o PC do Alex desligado desde 17:31
 const HEARTBEATS = [
-  hb("DESKTOP-74B4DAU-12656", "2026-10-01T22:44:40Z", "DESKTOP-74B4DAU"),
-  hb("DESKTOP-74B4DAU-11244", "2026-10-01T22:33:00Z", "DESKTOP-74B4DAU"),
+  hb("DESKTOP-TESTE01-12656", "2026-10-01T22:44:40Z", "DESKTOP-TESTE01"),
+  hb("DESKTOP-TESTE01-11244", "2026-10-01T22:33:00Z", "DESKTOP-TESTE01"),
   hb("Alex-17420", "2026-10-01T20:31:00Z"),
   hb("Alex-11200", "2026-10-01T15:08:00Z"),
 ];
@@ -27,22 +27,22 @@ describe("trabalho esperando computador", () => {
     assert.deepEqual(
       computersFrom(HEARTBEATS, NOW).map((c) => [c.hostname, c.online]),
       [
-        ["DESKTOP-74B4DAU", true],
+        ["DESKTOP-TESTE01", true],
         ["Alex", false],
       ],
     );
   });
 
   it("4N: este PC não tem o certificado e o do Alex está desligado", () => {
-    const wait = pcWait({ status: "waiting_sefaz", locked_by: null, skip_hosts: ["DESKTOP-74B4DAU"] }, computersFrom(HEARTBEATS, NOW));
+    const wait = pcWait({ status: "waiting_sefaz", locked_by: null, skip_hosts: ["DESKTOP-TESTE01"] }, computersFrom(HEARTBEATS, NOW));
     assert.equal(wait?.kind, "handover");
     const [group] = groupWaits([{ job: "4N", wait: wait! }]);
-    const text = groupText(group, new Date(NOW), "4N ENGENHARIA");
+    const text = groupText(group, new Date(NOW), "XY ENGENHARIA");
     assert.equal(text.title, "Aguardando o PC Alex");
     assert.equal(text.status, "desligado há 2h");
     assert.deepEqual(text.steps, [
       "Ligue o PC Alex: o trabalho continua sozinho.",
-      "Ou instale o certificado de 4N ENGENHARIA em DESKTOP-74B4DAU, cancele o trabalho na fila e clique em Reprocessar.",
+      "Ou instale o certificado de XY ENGENHARIA em DESKTOP-TESTE01, cancele o trabalho na fila e clique em Reprocessar.",
     ]);
     assert.equal(text.action, text.steps.join(" "));
   });
@@ -51,38 +51,38 @@ describe("trabalho esperando computador", () => {
     const pcs = computersFrom(HEARTBEATS, NOW);
     assert.equal(pcWait({ status: "queued", locked_by: null, skip_hosts: ["Alex"] }, pcs), null);
     assert.equal(pcWait({ status: "queued", locked_by: null, skip_hosts: [] }, pcs), null);
-    assert.equal(pcWait({ status: "downloading", locked_by: "Alex-17420", skip_hosts: ["DESKTOP-74B4DAU"] }, pcs), null);
-    assert.equal(pcWait({ status: "completed", locked_by: null, skip_hosts: ["DESKTOP-74B4DAU"] }, pcs), null);
+    assert.equal(pcWait({ status: "downloading", locked_by: "Alex-17420", skip_hosts: ["DESKTOP-TESTE01"] }, pcs), null);
+    assert.equal(pcWait({ status: "completed", locked_by: null, skip_hosts: ["DESKTOP-TESTE01"] }, pcs), null);
   });
 
   it("vários trabalhos esperando o mesmo PC viram um grupo só", () => {
     const pcs = computersFrom(HEARTBEATS, NOW);
     const w = (skip: string[]) => pcWait({ status: "queued", locked_by: null, skip_hosts: skip }, pcs)!;
     const groups = groupWaits([
-      { job: "a", wait: w(["DESKTOP-74B4DAU"]) },
-      { job: "b", wait: w(["DESKTOP-74B4DAU"]) },
-      { job: "c", wait: w(["DESKTOP-74B4DAU"]) },
+      { job: "a", wait: w(["DESKTOP-TESTE01"]) },
+      { job: "b", wait: w(["DESKTOP-TESTE01"]) },
+      { job: "c", wait: w(["DESKTOP-TESTE01"]) },
     ]);
     assert.equal(groups.length, 1);
     assert.deepEqual(groups[0].jobs, ["a", "b", "c"]);
-    assert.match(groupText(groups[0], new Date(NOW)).action, /os certificados destes clientes em DESKTOP-74B4DAU/);
+    assert.match(groupText(groups[0], new Date(NOW)).action, /os certificados destes clientes em DESKTOP-TESTE01/);
   });
 
   it("nenhum computador conhecido tem o certificado", () => {
-    const wait = pcWait({ status: "queued", locked_by: null, skip_hosts: ["DESKTOP-74B4DAU"] }, computersFrom([HEARTBEATS[0]], NOW));
-    assert.deepEqual(wait, { kind: "no_other_pc", without: ["DESKTOP-74B4DAU"] });
+    const wait = pcWait({ status: "queued", locked_by: null, skip_hosts: ["DESKTOP-TESTE01"] }, computersFrom([HEARTBEATS[0]], NOW));
+    assert.deepEqual(wait, { kind: "no_other_pc", without: ["DESKTOP-TESTE01"] });
   });
 
   it("nenhum robô ligado (ex.: o notebook suspenso das 13:47 às 17:47)", () => {
     const at = Date.parse("2026-10-01T18:00:00Z");
     const pcs = computersFrom(
-      [hb("DESKTOP-74B4DAU-18544", "2026-10-01T16:46:00Z", "DESKTOP-74B4DAU"), hb("Alex-1", "2026-10-01T15:00:00Z", null, "stopped")],
+      [hb("DESKTOP-TESTE01-18544", "2026-10-01T16:46:00Z", "DESKTOP-TESTE01"), hb("Alex-1", "2026-10-01T15:00:00Z", null, "stopped")],
       at,
     );
     const wait = pcWait({ status: "queued", locked_by: null, skip_hosts: [] }, pcs)!;
     assert.equal(wait.kind, "none_online");
     const text = groupText(groupWaits([{ job: "x", wait }])[0], new Date(at));
-    assert.equal(text.status, "último sinal de DESKTOP-74B4DAU há 1h");
+    assert.equal(text.status, "último sinal de DESKTOP-TESTE01 há 1h");
   });
 
   it("tempo desligado em minutos, horas ou data", () => {

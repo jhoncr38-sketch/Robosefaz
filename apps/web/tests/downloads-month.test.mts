@@ -7,7 +7,7 @@ import type { NoMovementRow } from "../src/lib/no-movement.ts";
 import type { DocumentType, DownloadRow } from "../src/lib/types.ts";
 
 const clients = [
-  { id: "lia", client_code: "CLI000001", legal_name: "LIA PAPELARIA", trade_name: null, cnpj: "11111111000111" },
+  { id: "lis", client_code: "CLI000001", legal_name: "LIS PAPELARIA", trade_name: null, cnpj: "11111111000111" },
   { id: "abc", client_code: "CLI000002", legal_name: "ABC COMERCIO", trade_name: null, cnpj: "22222222000122" },
   { id: "zed", client_code: "CLI000003", legal_name: "ZED LTDA", trade_name: null, cnpj: "33333333000133", active: false },
   { id: "nada", client_code: "CLI000004", legal_name: "NADA PEDIDO", trade_name: null, cnpj: "44444444000144" },
@@ -36,11 +36,11 @@ describe("uma linha por cliente", () => {
   it("blocos na ordem do tipo, o arquivo mais novo vale e a situação do cliente", () => {
     const rows = monthClients(
       [
-        file("old", "lia", "NFCE", { note_count: 3, downloaded_at: "2026-10-01T10:00:00Z" }),
-        file("new", "lia", "NFCE", { note_count: 7 }),
-        file("canc", "lia", "NFCE_CANCELADAS", { note_count: 2 }),
+        file("old", "lis", "NFCE", { note_count: 3, downloaded_at: "2026-10-01T10:00:00Z" }),
+        file("new", "lis", "NFCE", { note_count: 7 }),
+        file("canc", "lis", "NFCE_CANCELADAS", { note_count: 2 }),
       ],
-      [none("n1", "lia", "NFE_RECEBIDAS"), none("n2", "abc", "NFCE")],
+      [none("n1", "lis", "NFE_RECEBIDAS"), none("n2", "abc", "NFCE")],
       [
         { client_id: "abc", document_type: "NFE_EMITIDAS", status: "scheduled", created_at: "2026-10-01T00:00:00Z" },
         { client_id: "zed", document_type: "NFCE", status: "scheduled", created_at: "2026-10-01T00:00:00Z" },
@@ -49,24 +49,24 @@ describe("uma linha por cliente", () => {
     );
     // ordem alfabética; inativo sem resposta e cliente sem pedido não aparecem
     assert.deepEqual(rows.map((r) => r.code), ["CLI000002", "CLI000001"]);
-    const [abc, lia] = rows;
+    const [abc, lis] = rows;
     assert.deepEqual(
-      lia.blocks.map((b) => [b.doc, b.state, b.count]),
+      lis.blocks.map((b) => [b.doc, b.state, b.count]),
       [
         ["NFCE", "file", 7],
         ["NFE_RECEBIDAS", "empty", 0],
         ["NFCE_CANCELADAS", "file", 2],
       ],
     );
-    assert.equal(lia.situation, "com");
-    assert.deepEqual(lia.files.map((f) => f.id), ["new", "canc"]);
+    assert.equal(lis.situation, "com");
+    assert.deepEqual(lis.files.map((f) => f.id), ["new", "canc"]);
     assert.deepEqual(abc.blocks.map((b) => b.state), ["empty", "waiting"]);
     assert.equal(abc.situation, "resp"); // ainda falta a resposta das emitidas
   });
 
   it("ZIP vazio ou contado com 0 notas é sem movimento; sem movimento mais novo vale sobre o arquivo", () => {
     const rows = monthClients(
-      [file("z", "lia", "NFCE", { size: 22 }), file("e", "abc", "NFE_EMITIDAS", { downloaded_at: "2026-10-01T10:00:00Z" })],
+      [file("z", "lis", "NFCE", { size: 22 }), file("e", "abc", "NFE_EMITIDAS", { downloaded_at: "2026-10-01T10:00:00Z" })],
       [none("n", "abc", "NFE_EMITIDAS", "2026-10-02T10:00:00Z")],
       [],
       clients,
@@ -80,7 +80,7 @@ describe("uma linha por cliente", () => {
 
   it("aviso de mês para conferir marca o cliente", () => {
     const alert = { kind: "drop" as const, count: 38, average: 1200, months: 3, text: "Só 38 notas" };
-    const rows = monthClients([file("f", "lia", "NFCE", { note_count: 38 })], [], [], clients, { f: alert });
+    const rows = monthClients([file("f", "lis", "NFCE", { note_count: 38 })], [], [], clients, { f: alert });
     assert.equal(rows[0].toCheck, true);
     assert.equal(rows[0].blocks[0].alert?.average, 1200);
   });
@@ -89,7 +89,7 @@ describe("uma linha por cliente", () => {
 describe("chips de tipo", () => {
   it("filtra os blocos e some com quem fica sem nenhum", () => {
     const rows = monthClients(
-      [file("a", "lia", "NFCE"), file("b", "lia", "NFE_EMITIDAS_CANCELADAS"), file("c", "abc", "NFE_RECEBIDAS")],
+      [file("a", "lis", "NFCE"), file("b", "lis", "NFE_EMITIDAS_CANCELADAS"), file("c", "abc", "NFE_RECEBIDAS")],
       [],
       [],
       clients,
@@ -111,10 +111,10 @@ describe("versões do mesmo mês", () => {
   it("lista da mais nova para a mais antiga, com origem e diferença de notas", () => {
     const rows = monthClients(
       [
-        file("v1", "lia", "NFE_RECEBIDAS", { note_count: 6, downloaded_at: "2026-09-28T23:37:00Z", job_id: "j1" }),
-        file("v3", "lia", "NFE_RECEBIDAS", { note_count: 8, downloaded_at: "2026-10-06T19:51:00Z", job_id: "j3" }),
-        file("v2", "lia", "NFE_RECEBIDAS", { note_count: 7, downloaded_at: "2026-10-01T17:53:00Z", job_id: "j2" }),
-        file("only", "lia", "NFCE", { note_count: 1, job_id: "j4" }),
+        file("v1", "lis", "NFE_RECEBIDAS", { note_count: 6, downloaded_at: "2026-09-28T23:37:00Z", job_id: "j1" }),
+        file("v3", "lis", "NFE_RECEBIDAS", { note_count: 8, downloaded_at: "2026-10-06T19:51:00Z", job_id: "j3" }),
+        file("v2", "lis", "NFE_RECEBIDAS", { note_count: 7, downloaded_at: "2026-10-01T17:53:00Z", job_id: "j2" }),
+        file("only", "lis", "NFCE", { note_count: 1, job_id: "j4" }),
       ],
       [],
       [],
@@ -122,8 +122,8 @@ describe("versões do mesmo mês", () => {
       {},
       { j1: false, j2: true, j3: true }, // j4 já apagado pela limpeza: origem desconhecida
     );
-    const lia = rows.find((r) => r.code === "CLI000001")!;
-    const receb = lia.blocks.find((b) => b.doc === "NFE_RECEBIDAS")!;
+    const lis = rows.find((r) => r.code === "CLI000001")!;
+    const receb = lis.blocks.find((b) => b.doc === "NFE_RECEBIDAS")!;
     assert.equal(receb.id, "v3"); // o bloco continua mostrando o mais novo
     assert.deepEqual(
       receb.versions!.map((v) => [v.id, v.forced, v.note_count, v.delta]),
@@ -133,15 +133,15 @@ describe("versões do mesmo mês", () => {
         ["v1", false, 6, null],
       ],
     );
-    const nfce = lia.blocks.find((b) => b.doc === "NFCE")!;
+    const nfce = lis.blocks.find((b) => b.doc === "NFCE")!;
     assert.equal(nfce.versions!.length, 1); // uma versão só: o marcador não aparece
     assert.equal(nfce.versions![0].forced, null);
   });
 
   it("fileVersions aceita contagem ainda não feita", () => {
     const v = fileVersions([
-      file("a", "lia", "NFCE", { note_count: null, downloaded_at: "2026-10-02T00:00:00Z" }),
-      file("b", "lia", "NFCE", { note_count: 4, downloaded_at: "2026-10-01T00:00:00Z" }),
+      file("a", "lis", "NFCE", { note_count: null, downloaded_at: "2026-10-02T00:00:00Z" }),
+      file("b", "lis", "NFCE", { note_count: 4, downloaded_at: "2026-10-01T00:00:00Z" }),
     ]);
     assert.deepEqual(v.map((x) => [x.id, x.note_count, x.delta]), [["a", null, null], ["b", 4, null]]);
   });

@@ -21,7 +21,7 @@ def _zip(path: Path, names: list[str]) -> Path:
 
 
 def test_counts_xmls_inside_the_zip(tmp_path: Path) -> None:
-    keys = [f"TP-1/PI/2225103735486000013365002000000{i:04d}1257838449.xml" for i in range(3)]
+    keys = [f"TP-1/PI/2225104444444400019165002000000{i:04d}1257838449.xml" for i in range(3)]
     z = _zip(tmp_path / "a.zip", [*keys, "TP-1/PI/leia-me.txt"])
     before = z.read_bytes()
     assert count_notes(z) == 3
@@ -49,9 +49,9 @@ def test_locate_old_path_by_same_content(tmp_path: Path) -> None:
     """Caminho gravado antes de reorganizar a pasta (cliente/ano/mês, nome antigo): acha o arquivo
     do mesmo mês e tipo com o mesmo SHA-256; outro conteúdo com o mesmo tamanho não serve."""
     base = tmp_path / "JR Sistema - Notas"
-    folder = base / "2026" / "08" / "LOJA SANTA ZELIA E SAO LUIS" / "NFCE"
-    z = _zip(folder / "LOJA SANTA ZELIA E SAO LUIS - NFC-e - 08-2026 - CLI000003.zip", ["1.xml", "2.xml"])
-    twin = _zip(folder / "LOJA SANTA ZELIA E SAO LUIS - NFC-e - 08-2026 - CLI000003 (2).zip", ["3.xml", "4.xml"])
+    folder = base / "2026" / "08" / "LOJA SANTA CLARA E SAO JOSE" / "NFCE"
+    z = _zip(folder / "LOJA SANTA CLARA E SAO JOSE - NFC-e - 08-2026 - CLI000003.zip", ["1.xml", "2.xml"])
+    twin = _zip(folder / "LOJA SANTA CLARA E SAO JOSE - NFC-e - 08-2026 - CLI000003 (2).zip", ["3.xml", "4.xml"])
     assert twin.stat().st_size == z.stat().st_size
     row = {
         "filepath": r"C:\SIAT-Robo\storage\downloads\CLI000003 - LOJA\2026\08\NFCE\CLI000003_2026-08_NFCE.zip",

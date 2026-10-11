@@ -60,7 +60,7 @@ def ensure_same_taxpayer(ctx: AutomationContext, msg: EfdMessage) -> None:
             ErrorCode.SECURITY_CLIENT_MISMATCH,
             f"Mensagem da EFD {msg.epe_number} é de outra inscrição estadual ({msg.state_registration}).",
         )
-    # o SIAT às vezes omite o zero à esquerda do CNPJ (ex.: 5731045000150)
+    # o SIAT às vezes omite o zero à esquerda do CNPJ (ex.: 1234567000195)
     if client_cnpj.isdigit() and msg.cnpj and msg.cnpj.zfill(14) != client_cnpj.zfill(14):
         raise AutomationError(
             ErrorCode.SECURITY_CLIENT_MISMATCH,

@@ -33,7 +33,7 @@ TypeScript).
 
 ### Identificação do contribuinte
 
-- No painel: CNPJ no cabeçalho ("CONTRIBUINTE ... 36.145.344/0001-36").
+- No painel: CNPJ no cabeçalho ("CONTRIBUINTE ... 22.222.222/0001-91").
 - No SIAT web: **não há CNPJ**. O robô valida pela **Inscrição Estadual** do
   cadastro do cliente: a IE precisa existir no select "Inscrição" (senão
   `SECURITY_CLIENT_MISMATCH`) e cada linha baixada precisa ter a mesma IE na

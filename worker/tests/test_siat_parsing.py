@@ -88,8 +88,8 @@ class TestLegacyExportList:
 
     HEADERS = ["ID", "Situação", "Data de criação", "CNPJ\nSelecione...", "IE\nSelecione...", "Data processamento", "Ações"]
     ROWS = [
-        ["9237944", "Processado", "09/09/2026 11:39:43", "", "19662259-0", "09/09/2026 11:40:01", "Info Download Excluir"],
-        ["9237940", "Aguardando processamento", "09/09/2026 11:39:37", "", "19662259-0", "", "Info Excluir"],
+        ["9237944", "Processado", "09/09/2026 11:39:43", "", "19000001-0", "09/09/2026 11:40:01", "Info Download Excluir"],
+        ["9237940", "Aguardando processamento", "09/09/2026 11:39:37", "", "19000001-0", "", "Info Excluir"],
         ["Nenhum registro encontrado", "", "", "", "", "", ""],
     ]
 
@@ -112,24 +112,24 @@ class TestLegacyExportList:
     def test_parse_real_table(self) -> None:
         rows = parse_export_table(self.HEADERS, self.ROWS)
         assert [r.request_id for r in rows] == ["9237944", "9237940"]  # ignora "Nenhum registro"
-        assert rows[0].situacao == "Processado" and rows[0].ie == "196622590"
+        assert rows[0].situacao == "Processado" and rows[0].ie == "190000010"
         assert rows[1].index == 1
 
     def test_ie_comparison(self) -> None:
-        assert ie_matches("19662259-0", "196622590")
-        assert ie_matches("019.662.259-0", "196622590")
-        assert not ie_matches("19662259-1", "196622590")
+        assert ie_matches("19000001-0", "190000010")
+        assert ie_matches("019.000.001-0", "190000010")
+        assert not ie_matches("19000001-1", "190000010")
         assert not ie_matches("", "")
 
     def test_new_ids_after_scheduling(self) -> None:
         before = {"9237944", "9237940"}
-        after = parse_export_table(self.HEADERS, [["9237950", "Aguardando", "", "", "19662259-0", "", ""], *self.ROWS])
-        assert new_request_ids(before, after, "196622590") == ["9237950"]
+        after = parse_export_table(self.HEADERS, [["9237950", "Aguardando", "", "", "19000001-0", "", ""], *self.ROWS])
+        assert new_request_ids(before, after, "190000010") == ["9237950"]
         assert new_request_ids(before, after, "999999999") == []  # IE de outro contribuinte não conta
 
     def test_pick_inscricao(self) -> None:
-        assert pick_inscricao_option(["Selecione", "196622590", "987654321"], "196622590") == "196622590"
-        assert pick_inscricao_option(["Selecione", "987654321"], "196622590") is None
+        assert pick_inscricao_option(["Selecione", "190000010", "987654321"], "190000010") == "190000010"
+        assert pick_inscricao_option(["Selecione", "987654321"], "190000010") is None
 
     def test_family(self) -> None:
         assert family_of(DocumentType.NFCE) == "nfce"
@@ -144,8 +144,8 @@ class TestLegacyExportList:
         assert sel.rx("legacy_menu_nfe_export").search("Consultar/Exportar NF-e")
         assert not sel.rx("legacy_menu_nfe_export").search("Consultar/Exportar NF-e Detalhada")
         assert sel.rx("legacy_schedule_button").search("Agendar exportação")
-        m = sel.rx("legacy_user_label").search("Usuário: ALESSANDRO DE ARAUJO BARBOSA")
-        assert m and m.group(1) == "ALESSANDRO DE ARAUJO BARBOSA"
+        m = sel.rx("legacy_user_label").search("Usuário: FULANO DE TAL DA SILVA TESTE")
+        assert m and m.group(1) == "FULANO DE TAL DA SILVA TESTE"
 
 
 class TestSelectors:
@@ -207,12 +207,12 @@ class TestRecoverRequestId:
 
         clicked = datetime(2026, 9, 25, 9, 54, 20, tzinfo=timezone.utc)  # 06:54:20 no horário do SIAT (UTC-3)
         rows = self._rows(
-            ("9316160", "25/09/2026 06:54:21", "19662259-0"),  # o pedido certo
-            ("9237944", "09/09/2026 11:39:43", "19662259-0"),  # antigo
+            ("9316160", "25/09/2026 06:54:21", "19000001-0"),  # o pedido certo
+            ("9237944", "09/09/2026 11:39:43", "19000001-0"),  # antigo
             ("9316199", "25/09/2026 06:54:30", "98765432-1"),  # outra IE
         )
-        assert recover_request_id(rows, "196622590", clicked, set()) == "9316160"
-        assert recover_request_id(rows, "196622590", clicked, {"9316160"}) is None  # já usado por outra tarefa
+        assert recover_request_id(rows, "190000010", clicked, set()) == "9316160"
+        assert recover_request_id(rows, "190000010", clicked, {"9316160"}) is None  # já usado por outra tarefa
 
     def test_ambiguous_returns_none(self) -> None:
         from datetime import datetime, timezone
@@ -220,8 +220,8 @@ class TestRecoverRequestId:
         from app.automation.siat.siat_legacy import recover_request_id
 
         clicked = datetime(2026, 9, 25, 9, 54, 20, tzinfo=timezone.utc)
-        rows = self._rows(("1111111", "25/09/2026 06:54:21", "196622590"), ("2222222", "25/09/2026 06:55:00", "196622590"))
-        assert recover_request_id(rows, "196622590", clicked, set()) is None  # nunca adivinha
+        rows = self._rows(("1111111", "25/09/2026 06:54:21", "190000010"), ("2222222", "25/09/2026 06:55:00", "190000010"))
+        assert recover_request_id(rows, "190000010", clicked, set()) is None  # nunca adivinha
 
     def test_parse_siat_datetime(self) -> None:
         from app.automation.siat.siat_legacy import parse_siat_datetime
@@ -230,7 +230,7 @@ class TestRecoverRequestId:
         assert dt is not None and dt.utcoffset().total_seconds() == -3 * 3600
         assert parse_siat_datetime("") is None
 
-LIA_NFE = [  # lista de NF-e da Lia Papelaria em 30/09 (15 por página, mais novos primeiro)
+NFE_LISTA = [  # lista de NF-e da Lis Papelaria em 30/09 (15 por página, mais novos primeiro)
     ("9328521", "30/09/2026 14:31:58"),
     ("9328520", "30/09/2026 14:31:34"),
     ("9322190", "28/09/2026 20:20:59"),
@@ -239,10 +239,10 @@ LIA_NFE = [  # lista de NF-e da Lia Papelaria em 30/09 (15 por página, mais nov
 ]
 
 
-def _lia_rows(ids: list[tuple[str, str]]):  # noqa: ANN202
+def _nfe_rows(ids: list[tuple[str, str]]):  # noqa: ANN202
     from app.automation.siat.siat_legacy import LegacyRow
 
-    return [LegacyRow(i, rid, "Processado", "19662259-0", created, "", "") for i, (rid, created) in enumerate(ids)]
+    return [LegacyRow(i, rid, "Processado", "19000001-0", created, "", "") for i, (rid, created) in enumerate(ids)]
 
 
 def _pi(hms: str):  # noqa: ANN202
@@ -259,43 +259,43 @@ class TestNfeRequestIds:
         from app.automation.siat.siat_legacy import pick_new_request_id
 
         # 30/09: 15 IDs "novos" (a lista mudou de página) -> antes, o ID ficava sem identificar
-        emit = pick_new_request_id(set(), _lia_rows(LIA_NFE[1:]), "196622590", _pi("14:31:33"))
+        emit = pick_new_request_id(set(), _nfe_rows(NFE_LISTA[1:]), "190000010", _pi("14:31:33"))
         assert emit == "9328520"
-        receb = pick_new_request_id(set(), _lia_rows(LIA_NFE), "196622590", _pi("14:31:56"), {"9328520"})
+        receb = pick_new_request_id(set(), _nfe_rows(NFE_LISTA), "190000010", _pi("14:31:56"), {"9328520"})
         assert receb == "9328521"
 
     def test_newest_by_creation_time_not_by_biggest_id(self) -> None:
         """30/09 19:01: o SIAT deu 9329755 depois de já ter dado 9329768 (IDs não são sempre crescentes)."""
         from app.automation.siat.siat_legacy import pick_new_request_id
 
-        rows = _lia_rows([("9329768", "30/09/2026 19:01:10"), ("9329755", "30/09/2026 19:01:33")])
-        assert pick_new_request_id(set(), rows, "196622590", _pi("19:01:31")) == "9329755"
+        rows = _nfe_rows([("9329768", "30/09/2026 19:01:10"), ("9329755", "30/09/2026 19:01:33")])
+        assert pick_new_request_id(set(), rows, "190000010", _pi("19:01:31")) == "9329755"
 
     def test_never_takes_the_previous_task_id_when_the_new_row_is_not_listed_yet(self) -> None:
         from app.automation.siat.siat_legacy import pick_new_request_id
 
-        rows = _lia_rows(LIA_NFE[1:])  # a linha nova (9328521) ainda não apareceu
-        assert pick_new_request_id(set(), rows, "196622590", _pi("14:31:56"), {"9328520"}) is None
+        rows = _nfe_rows(NFE_LISTA[1:])  # a linha nova (9328521) ainda não apareceu
+        assert pick_new_request_id(set(), rows, "190000010", _pi("14:31:56"), {"9328520"}) is None
 
     def test_unique_new_row_still_wins(self) -> None:
         from app.automation.siat.siat_legacy import pick_new_request_id
 
-        before = {rid for rid, _ in LIA_NFE[1:]}
-        assert pick_new_request_id(before, _lia_rows(LIA_NFE), "196622590", _pi("14:31:56")) == "9328521"
-        assert pick_new_request_id(before, _lia_rows(LIA_NFE), "999999999", _pi("14:31:56")) is None  # outra IE
+        before = {rid for rid, _ in NFE_LISTA[1:]}
+        assert pick_new_request_id(before, _nfe_rows(NFE_LISTA), "190000010", _pi("14:31:56")) == "9328521"
+        assert pick_new_request_id(before, _nfe_rows(NFE_LISTA), "999999999", _pi("14:31:56")) is None  # outra IE
 
     def test_collector_pairs_issued_and_received_by_click_order(self) -> None:
         from app.automation.siat.siat_legacy import recover_request_ids
 
         pending = [("receb", _pi("14:31:59")), ("emit", _pi("14:31:36"))]
-        found = recover_request_ids(_lia_rows(LIA_NFE), "196622590", pending, set())
+        found = recover_request_ids(_nfe_rows(NFE_LISTA), "190000010", pending, set())
         assert found == {"emit": "9328520", "receb": "9328521"}
         # uma delas já tem ID: a outra fica com a que sobrou
-        assert recover_request_ids(_lia_rows(LIA_NFE), "196622590", pending[:1], {"9328520"}) == {"receb": "9328521"}
+        assert recover_request_ids(_nfe_rows(NFE_LISTA), "190000010", pending[:1], {"9328520"}) == {"receb": "9328521"}
 
     def test_collector_does_not_guess_a_request_that_was_never_created(self) -> None:
         from app.automation.siat.siat_legacy import recover_request_ids
 
-        # G Ribeiro 30/09: clique das 14:44 sem pedido criado; a única linha nova (17:03) já tem dono
-        rows = _lia_rows([("9329496", "30/09/2026 17:03:45"), ("9235108", "09/09/2026 10:06:10")])
-        assert recover_request_ids(rows, "196622590", [("emit", _pi("14:44:05"))], {"9329496"}) == {}
+        # um cliente, 30/09: clique das 14:44 sem pedido criado; a única linha nova (17:03) já tem dono
+        rows = _nfe_rows([("9329496", "30/09/2026 17:03:45"), ("9235108", "09/09/2026 10:06:10")])
+        assert recover_request_ids(rows, "190000010", [("emit", _pi("14:44:05"))], {"9329496"}) == {}

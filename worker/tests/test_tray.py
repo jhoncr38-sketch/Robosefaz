@@ -120,7 +120,7 @@ def test_show_hide_item_is_disabled_when_always_visible(settings) -> None:  # no
 def test_colors_and_text() -> None:
     assert TrayState("idle").color == "idle"
     assert TrayState("busy").color == "busy"
-    assert TrayState("idle", ["SELETO 08/2026: falhou"]).color == "attention"
+    assert TrayState("idle", ["MODELO 08/2026: falhou"]).color == "attention"
     # parado sempre cinza, mesmo com pendências
     assert TrayState("stopped", ["x"]).color == "stopped"
     assert "modo de teste" in TrayState("idle", dry_run=True).text
@@ -216,7 +216,7 @@ def test_refresh_rebuilds_menu_only_when_something_changes(settings, monkeypatch
     for _ in range(3):
         tray._refresh()
     assert len(rebuilt) == 1 and len(titles) == 1  # nada mudou: menu e texto do ícone ficam como estão
-    tray.state.attention = ["SELETO 08/2026: falhou"]
+    tray.state.attention = ["MODELO 08/2026: falhou"]
     tray._refresh()
     tray._refresh()
     assert len(rebuilt) == 2 and len(titles) == 2  # mudou uma vez: refeito uma vez

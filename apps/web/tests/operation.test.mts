@@ -154,12 +154,12 @@ describe("por que o trabalho demorou", () => {
   it("trabalho rápido e sem problema não ganha explicação", () => {
     const j = job({
       logs: [
-        log("16:57", "Job iniciado (tentativa 1) por DESKTOP-74B4DAU-924. Dry-run: não.", { step: "starting" }),
+        log("16:57", "Job iniciado (tentativa 1) por DESKTOP-TESTE01-924. Dry-run: não.", { step: "starting" }),
         log("17:00", "Concluído", { step: "completed" }),
       ],
     });
     assert.deepEqual(explainJob(j, [], at("18:00")), []);
-    assert.deepEqual(jobRobots(j), ["DESKTOP-74B4DAU"]);
+    assert.deepEqual(jobRobots(j), ["DESKTOP-TESTE01"]);
   });
 });
 

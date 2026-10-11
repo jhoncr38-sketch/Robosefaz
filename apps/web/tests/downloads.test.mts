@@ -47,18 +47,18 @@ describe("tela Downloads", () => {
   });
   it("Baixar todas: pasta do mês ou do cliente no mês", () => {
     const MONTH = "17sSm4IpL_iXnBG2hyRVQ6Kw_YUUVaCLX";
-    const LIA = "1DB4jzRLko3Xm3ZtWdC4235rCAf7v8-Xp";
+    const LIS = "1DB4jzRLko3Xm3ZtWdC4235rCAf7v8-Xp";
     const row = (client_id: string, filename: string, size = 5000, ids = true) => ({
       competence: "2026-09",
       client_id,
       filename,
       size,
-      drive_client_folder_id: ids ? (client_id === "lia" ? LIA : "1OutraPastaDeClienteNoDrive00000") : null,
+      drive_client_folder_id: ids ? (client_id === "lis" ? LIS : "1OutraPastaDeClienteNoDrive00000") : null,
       drive_month_folder_id: ids ? MONTH : null,
     });
     const rows = [
-      row("lia", "CLI000001_2026-09_NFCE.zip"),
-      row("lia", "CLI000001_2026-09_NFE_EMITIDAS.zip"),
+      row("lis", "CLI000001_2026-09_NFCE.zip"),
+      row("lis", "CLI000001_2026-09_NFE_EMITIDAS.zip"),
       row("bolo", "CLI000022_2026-09_NFE_EMITIDAS.zip", 22), // ZIP vazio não conta
       row("bolo", "CLI000022_2026-09_NFE_RECEBIDAS.zip"),
     ];
@@ -69,11 +69,11 @@ describe("tela Downloads", () => {
       files: 3,
       clients: 2,
     });
-    const lia = bulkTarget(rows, "2026-09", "lia");
-    assert.equal(lia?.folderUrl, `https://drive.google.com/drive/folders/${LIA}`);
-    assert.equal(lia?.files, 2);
+    const lis = bulkTarget(rows, "2026-09", "lis");
+    assert.equal(lis?.folderUrl, `https://drive.google.com/drive/folders/${LIS}`);
+    assert.equal(lis?.files, 2);
     // notas ainda subindo para o Drive: sem link
-    assert.equal(bulkTarget([row("lia", "CLI000001_2026-09_NFCE.zip", 5000, false)], "2026-09", "lia")?.folderUrl, null);
+    assert.equal(bulkTarget([row("lis", "CLI000001_2026-09_NFCE.zip", 5000, false)], "2026-09", "lis")?.folderUrl, null);
     assert.equal(driveFolderUrl("../x"), null);
   });
 });

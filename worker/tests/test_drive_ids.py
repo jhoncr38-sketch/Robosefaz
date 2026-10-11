@@ -37,7 +37,7 @@ def _drivefs(tmp_path: Path) -> Path:
     add(2, "1UN2gjMmtcDCqC2dmlOQsXylSp4xg5f4Y", "JR Sistema - Notas", 1, folder=True)
     add(3, "1thH4fp46jEKajr11bQi3G8-tRlhFsCxg", "2026", 2, folder=True)
     add(4, MONTH, "09", 3, folder=True)
-    add(5, CLIENT, "CLI000001 - LIA PAPELARIA", 4, folder=True)
+    add(5, CLIENT, "CLI000001 - LIS PAPELARIA", 4, folder=True)
     add(6, "1X6JppreqOf4oCV4xkwN8ChhH6PCKg_bN", "NFE_RECEBIDAS", 5, folder=True)
     add(7, CLOUD, NAME, 6)
     # cópia com o mesmo nome em outra pasta, uma na lixeira e uma nota ainda subindo
@@ -45,7 +45,7 @@ def _drivefs(tmp_path: Path) -> Path:
     add(9, "1RdAStReRY_0MAOmALg2BmeoM5JgxYx6A", "CLI000001_2026-09_NFCE.zip", 6, trashed=True)
     add(10, "local-1898", "CLI000001_2026-09_NFE_EMITIDAS.zip", 6)
     # formato com o nome da empresa (1.2.26): o código fica no fim
-    add(11, "1NovoNomeEmpresaAbcdefghijklmnopq", "LIA PAPELARIA - NF-e recebidas - 09-2026 - CLI000001 (2).zip", 6)
+    add(11, "1NovoNomeEmpresaAbcdefghijklmnopq", "LIS PAPELARIA - NF-e recebidas - 09-2026 - CLI000001 (2).zip", 6)
     con.commit()
     con.close()
     return tmp_path
@@ -58,7 +58,7 @@ def test_finds_id_by_name_and_folders(tmp_path: Path) -> None:
     assert lookup.find(NAME, "CLI000001", "2026-08", "NFE_RECEBIDAS") is None  # outra competência
     assert lookup.find("CLI000001_2026-09_NFCE.zip", "CLI000001", "2026-09", "NFE_RECEBIDAS") is None  # lixeira
     assert lookup.find("CLI000001_2026-09_NFE_EMITIDAS.zip", "CLI000001", "2026-09", "NFE_RECEBIDAS") is None  # subindo
-    company = "LIA PAPELARIA - NF-e recebidas - 09-2026 - CLI000001 (2).zip"
+    company = "LIS PAPELARIA - NF-e recebidas - 09-2026 - CLI000001 (2).zip"
     assert lookup.find(company, "CLI000001", "2026-09", "NFE_RECEBIDAS") == DriveIds("1NovoNomeEmpresaAbcdefghijklmnopq", CLIENT, MONTH)
     assert lookup.find(company, "CLI000002", "2026-09", "NFE_RECEBIDAS") is None  # o código no fim é de outro cliente
 

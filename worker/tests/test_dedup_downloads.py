@@ -170,15 +170,15 @@ class TestContentSniffing:
 
 
 class TestClientFolderName:
-    """Pasta do cliente com o nome da empresa: 'CLI000001 - LIA PAPELARIA'."""
+    """Pasta do cliente com o nome da empresa: 'CLI000001 - LIS PAPELARIA'."""
 
     def test_store_uses_code_and_name(self, tmp_path: Path) -> None:
         org = DownloadOrganizer(tmp_path)
         src = tmp_path / "a.zip"
         src.write_bytes(b"PK\x03\x04a")
-        stored = org.store(src, "CLI000001", "2026-06", DocumentType.NFCE, client_name="LIA PAPELARIA & VARIEDADE")
+        stored = org.store(src, "CLI000001", "2026-06", DocumentType.NFCE, client_name="LIS PAPELARIA & VARIEDADE")
         assert Path(stored.filepath).relative_to(tmp_path).parts == (
-            "2026", "06", "LIA PAPELARIA & VARIEDADE", "NFCE", "LIA PAPELARIA & VARIEDADE - NFC-e - 06-2026 - CLI000001.zip"
+            "2026", "06", "LIS PAPELARIA & VARIEDADE", "NFCE", "LIS PAPELARIA & VARIEDADE - NFC-e - 06-2026 - CLI000001.zip"
         )
 
     def test_old_code_only_folder_is_renamed_with_its_files(self, tmp_path: Path) -> None:
@@ -186,9 +186,9 @@ class TestClientFolderName:
         (month / "CLI000002" / "NFCE").mkdir(parents=True)
         (month / "CLI000002" / "NFCE" / "CLI000002_2026-08_NFCE.zip").write_bytes(b"PK\x03\x04old")
         org = DownloadOrganizer(tmp_path)
-        assert org.sync_client_dir("CLI000002", "SELETO PLANEJADOS") == [month / "SELETO PLANEJADOS"]
+        assert org.sync_client_dir("CLI000002", "MODELO PLANEJADOS") == [month / "MODELO PLANEJADOS"]
         assert not (month / "CLI000002").exists()
-        assert (month / "SELETO PLANEJADOS" / "NFCE" / "CLI000002_2026-08_NFCE.zip").is_file()
+        assert (month / "MODELO PLANEJADOS" / "NFCE" / "CLI000002_2026-08_NFCE.zip").is_file()
 
     def test_name_change_renames_and_old_paths_still_found(self, tmp_path: Path) -> None:
         org = DownloadOrganizer(tmp_path)
@@ -218,7 +218,7 @@ def test_empty_zip_is_not_stored(tmp_path) -> None:  # noqa: ANN001
     assert src.stat().st_size == 22
     org = DownloadOrganizer(tmp_path / "downloads")
     with pytest.raises(EmptyExportError):
-        org.store(src, "CLI000022", "2026-09", "NFE_EMITIDAS", "BOLO DO EDU")
+        org.store(src, "CLI000022", "2026-09", "NFE_EMITIDAS", "BOLO DA ANA")
     assert not (tmp_path / "downloads").exists() or not any((tmp_path / "downloads").rglob("*.zip"))
 
 
@@ -228,54 +228,54 @@ class TestMonthFirst:
     def test_parse_note_path_both_layouts(self) -> None:
         from app.downloads.organizer import parse_note_path
 
-        new = parse_note_path(("2026", "08", "CLI000001 - LIA", "NFCE", "CLI000001_2026-08_NFCE.zip"))
-        old = parse_note_path(("CLI000001 - LIA", "2026", "08", "NFCE", "CLI000001_2026-08_NFCE.zip"))
+        new = parse_note_path(("2026", "08", "CLI000001 - LIS", "NFCE", "CLI000001_2026-08_NFCE.zip"))
+        old = parse_note_path(("CLI000001 - LIS", "2026", "08", "NFCE", "CLI000001_2026-08_NFCE.zip"))
         assert new == old and new is not None
-        assert (new.client_code, new.client_name, new.competence) == ("CLI000001", "LIA", "2026-08")
-        assert new.parts == ("2026", "08", "CLI000001 - LIA", "NFCE", "CLI000001_2026-08_NFCE.zip")
+        assert (new.client_code, new.client_name, new.competence) == ("CLI000001", "LIS", "2026-08")
+        assert new.parts == ("2026", "08", "CLI000001 - LIS", "NFCE", "CLI000001_2026-08_NFCE.zip")
         assert parse_note_path(("2026", "08", "CLI000001", "NFCE", "desktop.ini")) is None
         assert parse_note_path(("2026", "13", "CLI000001", "NFCE", "CLI000001_2026-13_NFCE.zip")) is None
 
     def test_reorganize_moves_old_layout_only(self, tmp_path: Path) -> None:
-        old = tmp_path / "CLI000001 - LIA" / "2026" / "08"
+        old = tmp_path / "CLI000001 - LIS" / "2026" / "08"
         for doc, data in (("NFCE", b"PK1"), ("NFE_EMITIDAS", b"PK2")):
             (old / doc).mkdir(parents=True)
             (old / doc / f"CLI000001_2026-08_{doc}.zip").write_bytes(data)
         (old / "NFCE" / "desktop.ini").write_text("x", encoding="utf-8")
         # já existe no lugar novo, com outro conteúdo: nada é sobrescrito, a antiga ganha _2
-        new_nfe = tmp_path / "2026" / "08" / "CLI000001 - LIA" / "NFE_EMITIDAS" / "CLI000001_2026-08_NFE_EMITIDAS.zip"
+        new_nfe = tmp_path / "2026" / "08" / "CLI000001 - LIS" / "NFE_EMITIDAS" / "CLI000001_2026-08_NFE_EMITIDAS.zip"
         new_nfe.parent.mkdir(parents=True)
         new_nfe.write_bytes(b"ja estava")
         org = DownloadOrganizer(tmp_path)
         assert org.reorganize() == 2
-        assert (tmp_path / "2026" / "08" / "CLI000001 - LIA" / "NFCE" / "CLI000001_2026-08_NFCE.zip").read_bytes() == b"PK1"
+        assert (tmp_path / "2026" / "08" / "CLI000001 - LIS" / "NFCE" / "CLI000001_2026-08_NFCE.zip").read_bytes() == b"PK1"
         assert new_nfe.read_bytes() == b"ja estava"
         assert new_nfe.with_name("CLI000001_2026-08_NFE_EMITIDAS_2.zip").read_bytes() == b"PK2"
-        assert not (tmp_path / "CLI000001 - LIA").exists()  # vazia (só desktop.ini): removida
+        assert not (tmp_path / "CLI000001 - LIS").exists()  # vazia (só desktop.ini): removida
         assert org.reorganize() == 0
 
     def test_reorganize_takes_extracted_files_along(self, tmp_path: Path) -> None:
         # XMLs que alguém descompactou dentro da pasta do mês vão junto, com as subpastas
-        month = tmp_path / "CLI000002 - SELETO" / "2026" / "06" / "NFCE"
+        month = tmp_path / "CLI000002 - MODELO" / "2026" / "06" / "NFCE"
         (month / "TP-1" / "PI").mkdir(parents=True)
         (month / "CLI000002_2026-06_NFCE.zip").write_bytes(b"PK")
         (month / "TP-1" / "PI" / "2226.xml").write_text("<nfe/>", encoding="utf-8")
-        (tmp_path / "CLI000002 - SELETO" / "leia-me.txt").write_text("fora de ano/mês", encoding="utf-8")
+        (tmp_path / "CLI000002 - MODELO" / "leia-me.txt").write_text("fora de ano/mês", encoding="utf-8")
         assert DownloadOrganizer(tmp_path).reorganize() == 2
-        new = tmp_path / "2026" / "06" / "CLI000002 - SELETO" / "NFCE"
+        new = tmp_path / "2026" / "06" / "CLI000002 - MODELO" / "NFCE"
         assert (new / "CLI000002_2026-06_NFCE.zip").is_file()
         assert (new / "TP-1" / "PI" / "2226.xml").read_text(encoding="utf-8") == "<nfe/>"
-        assert (tmp_path / "CLI000002 - SELETO" / "leia-me.txt").is_file()  # não é do robô: fica
-        assert not (tmp_path / "CLI000002 - SELETO" / "2026").exists()
+        assert (tmp_path / "CLI000002 - MODELO" / "leia-me.txt").is_file()  # não é do robô: fica
+        assert not (tmp_path / "CLI000002 - MODELO" / "2026").exists()
 
     def test_locate_after_reorganize(self, tmp_path: Path) -> None:
-        old = tmp_path / "CLI000001 - LIA" / "2026" / "08" / "NFCE" / "CLI000001_2026-08_NFCE.zip"
+        old = tmp_path / "CLI000001 - LIS" / "2026" / "08" / "NFCE" / "CLI000001_2026-08_NFCE.zip"
         old.parent.mkdir(parents=True)
         old.write_bytes(b"PK")
         org = DownloadOrganizer(tmp_path)
         org.reorganize()
         found = org.locate(str(old), "CLI000001", "2026-08", "NFCE", old.name)
-        assert found.read_bytes() == b"PK" and found.parts[-4:-2] == ("08", "CLI000001 - LIA")
+        assert found.read_bytes() == b"PK" and found.parts[-4:-2] == ("08", "CLI000001 - LIS")
 
 
 class TestNameOnlyFolders:
@@ -293,50 +293,50 @@ class TestNameOnlyFolders:
         for code in ("CLI000013", "CLI000030"):
             src = tmp_path / f"{code}.zip"
             src.write_bytes(b"PK\x03\x04" + code.encode())
-            org.store(src, code, "2026-08", DocumentType.NFCE, client_name="SILVA VARIEDADES")
+            org.store(src, code, "2026-08", DocumentType.NFCE, client_name="TESTE VARIEDADES")
         month = tmp_path / "2026" / "08"
-        assert sorted(d.name for d in month.iterdir()) == ["SILVA VARIEDADES", "SILVA VARIEDADES (CLI000030)"]
-        assert (month / "SILVA VARIEDADES" / "NFCE" / "SILVA VARIEDADES - NFC-e - 08-2026 - CLI000013.zip").is_file()
-        assert (month / "SILVA VARIEDADES (CLI000030)" / "NFCE" / "SILVA VARIEDADES - NFC-e - 08-2026 - CLI000030.zip").is_file()
+        assert sorted(d.name for d in month.iterdir()) == ["TESTE VARIEDADES", "TESTE VARIEDADES (CLI000030)"]
+        assert (month / "TESTE VARIEDADES" / "NFCE" / "TESTE VARIEDADES - NFC-e - 08-2026 - CLI000013.zip").is_file()
+        assert (month / "TESTE VARIEDADES (CLI000030)" / "NFCE" / "TESTE VARIEDADES - NFC-e - 08-2026 - CLI000030.zip").is_file()
         # a 1ª continua achando a pasta dela, a 2ª também (pelas notas dentro)
-        assert org.client_dir("CLI000030", "SILVA VARIEDADES", "2026-08").name == "SILVA VARIEDADES (CLI000030)"
-        assert org.client_dir("CLI000030", None, "2026-08").name == "SILVA VARIEDADES (CLI000030)"
+        assert org.client_dir("CLI000030", "TESTE VARIEDADES", "2026-08").name == "TESTE VARIEDADES (CLI000030)"
+        assert org.client_dir("CLI000030", None, "2026-08").name == "TESTE VARIEDADES (CLI000030)"
 
     def test_name_change_found_by_the_notes_inside(self, tmp_path: Path) -> None:
         month = tmp_path / "2026" / "08"
         self._note(month / "NOME ANTIGO", "CLI000004")
         self._note(month / "OUTRA EMPRESA", "CLI000005")
         org = DownloadOrganizer(tmp_path)
-        assert org.sync_client_names({"CLI000004": "CRISTALIZE", "CLI000005": "OUTRA EMPRESA"}) == 1
-        assert sorted(d.name for d in month.iterdir()) == ["CRISTALIZE", "OUTRA EMPRESA"]
+        assert org.sync_client_names({"CLI000004": "CRISTALINA", "CLI000005": "OUTRA EMPRESA"}) == 1
+        assert sorted(d.name for d in month.iterdir()) == ["CRISTALINA", "OUTRA EMPRESA"]
 
     def test_old_code_folders_are_renamed_and_merged(self, tmp_path: Path) -> None:
         month = tmp_path / "2026" / "08"
-        self._note(month / "CLI000004 - CRISTALIZE", "CLI000004", "NFCE")
+        self._note(month / "CLI000004 - CRISTALINA", "CLI000004", "NFCE")
         # outro computador (versão nova) já criou a pasta só com o nome: junta, sem sobrescrever
-        self._note(month / "CRISTALIZE", "CLI000004", "NFE_EMITIDAS")
-        self._note(month / "CLI000004 - CRISTALIZE", "CLI000004", "NFE_EMITIDAS").write_bytes(b"PKoutra")
+        self._note(month / "CRISTALINA", "CLI000004", "NFE_EMITIDAS")
+        self._note(month / "CLI000004 - CRISTALINA", "CLI000004", "NFE_EMITIDAS").write_bytes(b"PKoutra")
         org = DownloadOrganizer(tmp_path)
-        org.sync_client_names({"CLI000004": "CRISTALIZE"})
-        assert (month / "CRISTALIZE" / "NFCE" / "CLI000004_2026-08_NFCE.zip").is_file()
-        assert (month / "CRISTALIZE" / "NFE_EMITIDAS" / "CLI000004_2026-08_NFE_EMITIDAS.zip").read_bytes() == b"PKCLI000004"
+        org.sync_client_names({"CLI000004": "CRISTALINA"})
+        assert (month / "CRISTALINA" / "NFCE" / "CLI000004_2026-08_NFCE.zip").is_file()
+        assert (month / "CRISTALINA" / "NFE_EMITIDAS" / "CLI000004_2026-08_NFE_EMITIDAS.zip").read_bytes() == b"PKCLI000004"
         # a da pasta antiga tinha outro conteúdo: vem junto com _2 (nada é sobrescrito)
-        assert (month / "CRISTALIZE" / "NFE_EMITIDAS" / "CLI000004_2026-08_NFE_EMITIDAS_2.zip").read_bytes() == b"PKoutra"
-        assert not (month / "CLI000004 - CRISTALIZE").exists()
+        assert (month / "CRISTALINA" / "NFE_EMITIDAS" / "CLI000004_2026-08_NFE_EMITIDAS_2.zip").read_bytes() == b"PKoutra"
+        assert not (month / "CLI000004 - CRISTALINA").exists()
 
     def test_identical_copy_goes_to_duplicates_folder(self, tmp_path: Path) -> None:
         month = tmp_path / "2026" / "08"
-        self._note(month / "CLI000001 - LIA", "CLI000001")
-        self._note(month / "LIA", "CLI000001")  # mesma nota, mesmo conteúdo
-        DownloadOrganizer(tmp_path).sync_client_names({"CLI000001": "LIA"})
-        assert sorted(d.name for d in month.iterdir()) == ["LIA"]
-        dup = tmp_path / "_Duplicadas" / "2026" / "08" / "CLI000001 - LIA" / "NFCE" / "CLI000001_2026-08_NFCE.zip"
+        self._note(month / "CLI000001 - LIS", "CLI000001")
+        self._note(month / "LIS", "CLI000001")  # mesma nota, mesmo conteúdo
+        DownloadOrganizer(tmp_path).sync_client_names({"CLI000001": "LIS"})
+        assert sorted(d.name for d in month.iterdir()) == ["LIS"]
+        dup = tmp_path / "_Duplicadas" / "2026" / "08" / "CLI000001 - LIS" / "NFCE" / "CLI000001_2026-08_NFCE.zip"
         assert dup.read_bytes() == b"PKCLI000001"  # guardada, não apagada
 
     def test_parse_note_path_takes_code_from_file(self) -> None:
         from app.downloads.organizer import parse_note_path
 
-        n = parse_note_path(("2026", "08", "SILVA VARIEDADES (CLI000030)", "NFCE", "CLI000030_2026-08_NFCE.zip"))
-        assert n is not None and (n.client_code, n.client_name) == ("CLI000030", "SILVA VARIEDADES")
-        n = parse_note_path(("2026", "08", "CRISTALIZE", "NFCE", "CLI000004_2026-08_NFCE.zip"))
-        assert n is not None and (n.client_code, n.client_name) == ("CLI000004", "CRISTALIZE")
+        n = parse_note_path(("2026", "08", "TESTE VARIEDADES (CLI000030)", "NFCE", "CLI000030_2026-08_NFCE.zip"))
+        assert n is not None and (n.client_code, n.client_name) == ("CLI000030", "TESTE VARIEDADES")
+        n = parse_note_path(("2026", "08", "CRISTALINA", "NFCE", "CLI000004_2026-08_NFCE.zip"))
+        assert n is not None and (n.client_code, n.client_name) == ("CLI000004", "CRISTALINA")

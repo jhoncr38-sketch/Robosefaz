@@ -39,11 +39,11 @@ function job(status: EfdCheckJob["status"], created: string): EfdCheckJob {
 }
 
 describe("Consulta EFD", () => {
-  const original = decl("93104780277", "not_processed", "2026-08-10T18:20:49Z");
-  const retificadora = decl("93104801993", "processed", "2026-08-12T18:29:39Z", "RETIFICADORA");
+  const original = decl("93100000004", "not_processed", "2026-08-10T18:20:49Z");
+  const retificadora = decl("93100000003", "processed", "2026-08-12T18:29:39Z", "RETIFICADORA");
 
   it("vale a declaração processada por último (retificadora substitui a original)", () => {
-    assert.equal(latestDeclaration([original, retificadora])?.epe_number, "93104801993");
+    assert.equal(latestDeclaration([original, retificadora])?.epe_number, "93100000003");
     assert.equal(efdRowState([original, retificadora], [job("completed", "2026-09-27T01:00:00Z")]), "processed");
   });
 

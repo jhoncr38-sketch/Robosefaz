@@ -8,7 +8,7 @@ from app.jobs.models import TaskStatus, TaskType
 from app.jobs.scheduler_runner import SchedulerRunner
 from fakes import FakeProvider, FakeRepo, make_certificate, make_client
 
-CONSULT = {"cnpj": "44752321000118", "state_registration": "197381820"}
+CONSULT = {"cnpj": "66666666000191", "state_registration": "190000060"}
 ENTRADAS = MalhaFinding(
     source="EFD_OIE",
     identification="[EFD][NFe] Entradas Não Registradas",
@@ -28,7 +28,7 @@ def _setup(repo: FakeRepo, **client_kw):  # noqa: ANN003, ANN202
 
 async def test_findings_are_saved_and_job_completes(repo: FakeRepo, provider: FakeProvider, deps) -> None:  # noqa: ANN001
     client, job = _setup(repo, **CONSULT)
-    provider.malha_result = MalhaResult("197381820", "CONSULT RL SERVICOS LTDA", [ENTRADAS], "texto da página")
+    provider.malha_result = MalhaResult("190000060", "CONSULT XY SERVICOS LTDA", [ENTRADAS], "texto da página")
     assert await SchedulerRunner(deps).run_once()
 
     assert "read_malhas" in provider.calls
@@ -41,7 +41,7 @@ async def test_findings_are_saved_and_job_completes(repo: FakeRepo, provider: Fa
     check = repo.malhas[client.id]
     assert (check["total"], check["icms_total"], check["nfe_total"]) == (1, 110.07, 13)
     assert check["findings"][0]["identification"] == "[EFD][NFe] Entradas Não Registradas"
-    assert check["legal_name"] == "CONSULT RL SERVICOS LTDA" and check["job_id"] == job.id
+    assert check["legal_name"] == "CONSULT XY SERVICOS LTDA" and check["job_id"] == job.id
     (task,) = repo.tasks_of(job.id)
     assert task["status"] == TaskStatus.COMPLETED
     assert task["result"] == {"total": 1, "icms_total": 110.07, "nfe_total": 13, "sources": ["EFD_OIE"]}
@@ -49,7 +49,7 @@ async def test_findings_are_saved_and_job_completes(repo: FakeRepo, provider: Fa
 
 async def test_no_findings(repo: FakeRepo, provider: FakeProvider, deps) -> None:  # noqa: ANN001
     client, job = _setup(repo, **CONSULT)
-    provider.malha_result = MalhaResult("197381820", "CONSULT RL SERVICOS LTDA")
+    provider.malha_result = MalhaResult("190000060", "CONSULT XY SERVICOS LTDA")
     await SchedulerRunner(deps).run_once()
     assert repo.job(job.id)["last_message"] == "Malhas fiscais: nenhuma malha em aberto."
     assert repo.malhas[client.id]["total"] == 0

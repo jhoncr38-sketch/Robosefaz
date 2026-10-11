@@ -48,7 +48,7 @@ export function keyParts(input: string): KeyParts | null {
   };
 }
 
-/** "2226 0837 3548 ..." (grupos de 4, como na DANFE). */
+/** "2226 0844 4444 ..." (grupos de 4, como na DANFE). */
 export function formatKey(input: string): string {
   return keyDigits(input).replace(/(\d{4})(?=\d)/g, "$1 ");
 }

@@ -15,12 +15,12 @@ import type { DownloadRow } from "../src/lib/types.ts";
 
 const file = (over: Partial<DownloadRow> = {}): DownloadRow => ({
   id: "f1",
-  client_id: "lia",
+  client_id: "lis",
   job_id: "j1",
   automation_task_id: null,
   document_type: "NFCE",
   competence: "2026-09",
-  filename: "LIA - NFC-e - 09-2026 - CLI000001.zip",
+  filename: "LIS - NFC-e - 09-2026 - CLI000001.zip",
   filepath: "H:/x.zip",
   size: 6_108_535,
   checksum: "a".repeat(64),
@@ -105,9 +105,9 @@ describe("sem movimento", () => {
     });
     const summary = monthSummary(
       [file(), file({ id: "f2" }), file({ id: "z", client_id: "silva", size: 22, note_count: 0 })],
-      [empty(), empty({ id: "t2", client_id: "lia", document_type: "NFCE" })], // lia NFC-e tem arquivo: vale "com notas"
+      [empty(), empty({ id: "t2", client_id: "lis", document_type: "NFCE" })], // lis NFC-e tem arquivo: vale "com notas"
       [
-        t("lia", "NFCE", "completed"),
+        t("lis", "NFCE", "completed"),
         t("metro", "NFE_EMITIDAS", "completed"),
         t("4n", "NFCE", "scheduled"), // aguardando o PC com o certificado
         t("ml", "NFCE", "failed"), // inativo: não conta

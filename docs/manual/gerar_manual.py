@@ -688,9 +688,9 @@ def cap_downloads() -> list:
                 "Ano e mês primeiro: todas as notas de uma competência ficam numa pasta só.",
                 "Dentro do mês, uma pasta por empresa, só com o nome dela. Se o nome mudar no painel, as pastas "
                 "são renomeadas sozinhas. Se duas empresas tiverem o mesmo nome, a segunda ganha o código no fim, "
-                "por exemplo " + code("SILVA VARIEDADES (CLI000013)") + ".",
+                "por exemplo " + code("TESTE VARIEDADES (CLI000013)") + ".",
                 "O nome de cada arquivo traz a empresa, o tipo, o mês e, no fim, o código do cliente ("
-                + code("LIA PAPELARIA - NFC-e - 08-2026 - CLI000001.zip") + "). Baixada pelo painel, a nota já "
+                + code("LIS PAPELARIA - NFC-e - 08-2026 - CLI000001.zip") + "). Baixada pelo painel, a nota já "
                 "chega identificada. O código é o que o robô e o painel usam para saber de quem é a nota: não o "
                 "apague do nome. Uma segunda versão diferente do mesmo mês fica ao lado, com " + code("(2)") + ".",
                 "Dentro da empresa, o tipo (" + code("NFCE") + ", " + code("NFE_EMITIDAS") + ", "

@@ -424,7 +424,7 @@ async def test_user_type_dialog_tries_options_until_the_client_opens(repo: FakeR
 async def test_user_type_waits_for_the_portal_to_show_the_client(repo: FakeRepo, integration_settings: Settings) -> None:
     """Visto no SIAT real (01/10): o cabeçalho demora a mostrar o contribuinte depois do clique.
     Conferir cedo dava "Opção 1 abriu <o CNPJ do próprio cliente>; tentando a próxima" e o trabalho
-    parava com falso TAXPAYER_MISMATCH (METRO, ARRUMADINHO, FENIX ARTEFATOS, M L)."""
+    parava com falso TAXPAYER_MISMATCH (quatro clientes de uma vez)."""
     state = MockState(
         user_types=[("CONTRIBUINTE", "11.222.333/0001-81"), ("CONTRIBUINTE", "11.444.777/0001-61")],
         user_type_delay_ms=2500,

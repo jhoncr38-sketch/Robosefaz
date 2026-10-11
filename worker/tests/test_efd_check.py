@@ -10,8 +10,8 @@ from app.jobs.scheduler_runner import SchedulerRunner
 from fakes import FakeProvider, FakeRepo, make_certificate, make_client
 from test_efd_parser import ALERT, NOT_PROCESSED, PROCESSED, RETIFICADORA
 
-BEZERRA = {"cnpj": "28100366000151", "state_registration": "196034990"}
-SETEL = {"cnpj": "05731045000150", "state_registration": "194558231"}
+EXEMPLO = {"cnpj": "33333333000191", "state_registration": "190000020"}
+OUTRA = {"cnpj": "01234567000195", "state_registration": "190000051"}
 
 
 def _setup(repo: FakeRepo, competence: str, **client_kw):  # noqa: ANN003, ANN202
@@ -22,8 +22,8 @@ def _setup(repo: FakeRepo, competence: str, **client_kw):  # noqa: ANN003, ANN20
 
 
 async def test_processed_declaration_is_saved_and_job_completes(repo: FakeRepo, provider: FakeProvider, deps) -> None:  # noqa: ANN001
-    _, job = _setup(repo, "2026-08", **BEZERRA)
-    provider.efd_messages = [DteMessage(subject="EPE - EFD - Período 202608 - 93104981381", text=PROCESSED)]
+    _, job = _setup(repo, "2026-08", **EXEMPLO)
+    provider.efd_messages = [DteMessage(subject="EPE - EFD - Período 202608 - 93100000001", text=PROCESSED)]
     assert await SchedulerRunner(deps).run_once()
 
     assert "read_efd:2026-08" in provider.calls
@@ -32,7 +32,7 @@ async def test_processed_declaration_is_saved_and_job_completes(repo: FakeRepo, 
     assert j["status"] == "completed"
     assert j["last_message"] == "EFD 08/2026: processada (original)."
     (decl,) = repo.efd
-    assert decl["epe_number"] == "93104981381"
+    assert decl["epe_number"] == "93100000001"
     assert decl["situation"] == "processed"
     assert decl["finalidade"] == "ORIGINAL"
     (task,) = repo.tasks_of(job.id)
@@ -41,21 +41,21 @@ async def test_processed_declaration_is_saved_and_job_completes(repo: FakeRepo, 
 
 
 async def test_retificadora_wins_over_rejected_original(repo: FakeRepo, provider: FakeProvider, deps) -> None:  # noqa: ANN001
-    _, job = _setup(repo, "2026-07", **SETEL)
+    _, job = _setup(repo, "2026-07", **OUTRA)
     provider.efd_messages = [
-        DteMessage(subject="EPE - EFD - Período 202607 - 93104801993", text=RETIFICADORA),
-        DteMessage(subject="EPE - EFD - Período 202607 - 93104780277", text=NOT_PROCESSED),
+        DteMessage(subject="EPE - EFD - Período 202607 - 93100000003", text=RETIFICADORA),
+        DteMessage(subject="EPE - EFD - Período 202607 - 93100000004", text=NOT_PROCESSED),
     ]
     await SchedulerRunner(deps).run_once()
     assert repo.job(job.id)["last_message"] == "EFD 07/2026: processada (retificadora)."
     assert {d["epe_number"]: d["situation"] for d in repo.efd} == {
-        "93104801993": "processed",
-        "93104780277": "not_processed",
+        "93100000003": "processed",
+        "93100000004": "not_processed",
     }
 
 
 async def test_nothing_found(repo: FakeRepo, provider: FakeProvider, deps) -> None:  # noqa: ANN001
-    _, job = _setup(repo, "2026-09", **BEZERRA)
+    _, job = _setup(repo, "2026-09", **EXEMPLO)
     await SchedulerRunner(deps).run_once()
     j = repo.job(job.id)
     assert j["status"] == "completed"
@@ -64,9 +64,9 @@ async def test_nothing_found(repo: FakeRepo, provider: FakeProvider, deps) -> No
 
 
 async def test_message_of_other_taxpayer_is_never_saved(repo: FakeRepo, provider: FakeProvider, deps) -> None:  # noqa: ANN001
-    # cliente é a SETEL, mas a caixa mostrou mensagem da C BEZERRA
-    _, job = _setup(repo, "2026-08", **SETEL)
-    provider.efd_messages = [DteMessage(subject="EPE - EFD - Período 202608 - 93104981381", text=PROCESSED)]
+    # cliente é a OUTRA, mas a caixa mostrou mensagem da F EXEMPLO
+    _, job = _setup(repo, "2026-08", **OUTRA)
+    provider.efd_messages = [DteMessage(subject="EPE - EFD - Período 202608 - 93100000001", text=PROCESSED)]
     await SchedulerRunner(deps).run_once()
     j = repo.job(job.id)
     assert j["status"] == "failed"

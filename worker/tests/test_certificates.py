@@ -250,17 +250,17 @@ class TestChromePolicy:
         """Sobra de um robô interrompido não pode fazer o Chrome escolher o certificado de outro cliente."""
         registry = _FakeWinreg()
         pattern = "https://[*.]sefaz.pi.gov.br"
-        stale = PolicyEntry(pattern, subject_cn="OUTRO CLIENTE:28100366000151").to_policy_json()
+        stale = PolicyEntry(pattern, subject_cn="OUTRO CLIENTE:33333333000191").to_policy_json()
         other_site = PolicyEntry("https://outro.site.com.br", subject_cn="NAO MEXER").to_policy_json()
         registry.values.update({"1": stale, "7": other_site})
         svc = ChromeCertificatePolicyService(allow_write=True, state_file=tmp_path / "s.json")
         monkeypatch.setattr(svc, "_winreg", lambda: registry)
-        cert = make_certificate(make_client(), subject_name="ALESSANDRO DE ARAUJO BARBOSA:36145344000136")
+        cert = make_certificate(make_client(), subject_name="FULANO DE TAL DA SILVA TESTE:22222222000191")
 
         async with svc.applied_for_job(cert, pattern):
             during = [json.loads(v) for n, v in registry.values.items() if n != "7"]
             assert len(during) == 1  # só a entrada do cliente do job
-            assert during[0]["filter"]["SUBJECT"]["CN"] == "ALESSANDRO DE ARAUJO BARBOSA:36145344000136"
+            assert during[0]["filter"]["SUBJECT"]["CN"] == "FULANO DE TAL DA SILVA TESTE:22222222000191"
         assert registry.values == {"7": other_site}  # outros endereços ficam intactos
 
     def test_write_requires_confirmation_and_flag(self, tmp_path: Path) -> None:

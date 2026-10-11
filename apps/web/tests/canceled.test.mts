@@ -37,7 +37,7 @@ describe("notas canceladas", () => {
     // baixadas no dia 2 do mês seguinte (mês completo); se fossem notas ativas, agosto zerado avisaria
     const dl = (competence: string, downloaded: string, note_count: number) => ({
       id: competence,
-      client_id: "lia",
+      client_id: "lis",
       document_type: "NFE_EMITIDAS_CANCELADAS" as const,
       competence,
       note_count,
@@ -48,8 +48,8 @@ describe("notas canceladas", () => {
 
     const summary = monthSummary(
       [
-        { client_id: "lia", document_type: "NFE_EMITIDAS", filename: "a.zip", size: 9000, note_count: 3 },
-        { client_id: "lia", document_type: "NFE_EMITIDAS_CANCELADAS", filename: "b.zip", size: 9000, note_count: 1 },
+        { client_id: "lis", document_type: "NFE_EMITIDAS", filename: "a.zip", size: 9000, note_count: 3 },
+        { client_id: "lis", document_type: "NFE_EMITIDAS_CANCELADAS", filename: "b.zip", size: 9000, note_count: 1 },
       ],
       [],
       [],

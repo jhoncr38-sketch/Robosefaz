@@ -15,17 +15,17 @@ from app.downloads.note_index import (
 )
 from fakes import FakeRepo
 
-KEY = "22260837354860000133552260000000031820244645"
-OTHER = "22260837354860000133552260000000021198885940"
+KEY = "22260844444444000191552260000000031820244640"
+OTHER = "22260844444444000191552260000000021198885945"
 
 NFE = """<?xml version="1.0" encoding="UTF-8"?>
 <nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
   <NFe xmlns="http://www.portalfiscal.inf.br/nfe">
     <infNFe Id="NFe{key}" versao="4.00">
       <ide><cUF>22</cUF><mod>55</mod><serie>226</serie><nNF>3</nNF><dhEmi>2026-08-03T08:08:48-03:00</dhEmi></ide>
-      <emit><CNPJ>37354860000133</CNPJ><xNome>Ana Maria de Moura Fernandes</xNome>
-        <enderEmit><xMun>Teresina</xMun><UF>PI</UF></enderEmit><IE>196677149</IE></emit>
-      <dest><CPF>03077247437</CPF><xNome>Henrique Diniz</xNome><enderDest><UF>PB</UF></enderDest></dest>
+      <emit><CNPJ>44444444000191</CNPJ><xNome>Maria Exemplo da Silva Teste</xNome>
+        <enderEmit><xMun>Teresina</xMun><UF>PI</UF></enderEmit><IE>190000039</IE></emit>
+      <dest><CPF>12345678909</CPF><xNome>Fulano Exemplo</xNome><enderDest><UF>PB</UF></enderDest></dest>
       <total><ICMSTot><vProd>21.14</vProd><vNF>21.14</vNF></ICMSTot></total>
     </infNFe>
   </NFe>
@@ -46,8 +46,8 @@ def test_parse_reads_the_main_fields() -> None:
     assert n is not None
     assert (n.chave, n.modelo, n.serie, n.numero) == (KEY, 55, 226, 3)
     assert n.emitida_em == "2026-08-03T08:08:48-03:00" and n.valor == "21.14"
-    assert (n.emit_doc, n.emit_nome, n.emit_uf) == ("37354860000133", "Ana Maria de Moura Fernandes", "PI")
-    assert (n.dest_doc, n.dest_nome, n.dest_uf) == ("03077247437", "Henrique Diniz", "PB")
+    assert (n.emit_doc, n.emit_nome, n.emit_uf) == ("44444444000191", "Maria Exemplo da Silva Teste", "PI")
+    assert (n.dest_doc, n.dest_nome, n.dest_uf) == ("12345678909", "Fulano Exemplo", "PB")
     assert n.cstat == "100" and n.xml_name == f"{KEY}.xml"
 
 

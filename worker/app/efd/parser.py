@@ -2,12 +2,12 @@
 
 A SEFAZ-PI envia uma NOTIFICAÇÃO para cada EFD recebida da Receita Federal:
 
-    Número do EPE: 93104981381
+    Número do EPE: 93100000001
     Data Processamento: 11/09/2026 18:09:48
     Tipo de Arquivo: EFD
-    Inscrição Estadual: 19.603.499-0
-    CNPJ/CPF: 28100366000151
-    Razão Social: C BEZERRA MARCENARIA LTDA
+    Inscrição Estadual: 19.000.002-0
+    CNPJ/CPF: 33333333000191
+    Razão Social: F EXEMPLO MARCENARIA LTDA
     Período de Referência: 08/2026
     Finalidade: ORIGINAL | RETIFICADORA
     Data Recebimento: 11/09/2026 17:19:31
@@ -103,7 +103,7 @@ class EfdMessage(BaseModel):
 
 
 def parse_subject(subject: str) -> tuple[str, str] | None:
-    """"EPE - EFD - Período 202608 - 93104981381" -> ("2026-08", "93104981381")."""
+    """"EPE - EFD - Período 202608 - 93100000001" -> ("2026-08", "93100000001")."""
     m = SUBJECT_RE.search(subject or "")
     if not m:
         return None

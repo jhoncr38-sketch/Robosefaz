@@ -13,7 +13,7 @@ const row = (over: Partial<PlatformHealthRow> = {}): PlatformHealthRow => ({
   clients: 22,
   max_clients: null,
   latest_version: "1.2.25",
-  robots: [{ name: "DESKTOP-74B4DAU", version: "1.2.25", last_seen_at: "2026-09-30T23:00:00Z", online: true, outdated: false }],
+  robots: [{ name: "DESKTOP-TESTE01", version: "1.2.25", last_seen_at: "2026-09-30T23:00:00Z", online: true, outdated: false }],
   hours_since_signal: "0.1",
   completed_7d: 111,
   failed_7d: 0,
@@ -39,7 +39,7 @@ describe("saúde da plataforma", () => {
       row({
         robots: [
           { name: "Alex", version: "1.2.23", last_seen_at: null, online: false, outdated: true },
-          { name: "DESKTOP-74B4DAU", version: "1.2.25", last_seen_at: null, online: false, outdated: false },
+          { name: "DESKTOP-TESTE01", version: "1.2.25", last_seen_at: null, online: false, outdated: false },
         ],
         hours_since_signal: "2.7",
       }),

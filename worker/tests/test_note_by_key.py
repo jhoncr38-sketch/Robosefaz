@@ -30,7 +30,7 @@ from fakes import FakeProvider, FakeRepo, make_certificate, make_client
 from mock_siat.site import EMPTY_ZIP, MockState, nfe_zip
 from test_siat_integration import _context, _open, integration_settings  # noqa: F401 - fixture reaproveitada
 
-KEY = "22260806057223046163553000001722801561303961"  # NF-e do Assaí (emitente de fora), 08/2026
+KEY = "22260877777777046183553000001722801561303961"  # NF-e de um emitente de fora, 08/2026
 
 
 # -- organizer -----------------------------------------------------------------
@@ -40,24 +40,24 @@ def test_avulsa_has_its_own_subfolder_and_name(tmp_path: Path) -> None:
     org = DownloadOrganizer(tmp_path / "notas")
     src = tmp_path / "a.zip"
     src.write_bytes(nfe_zip(KEY))
-    stored = org.store(src, "CLI000036", "2026-08", DocumentType.NFE_RECEBIDAS, "BOLITOS CONFEITARIA", note_key=KEY)
+    stored = org.store(src, "CLI000036", "2026-08", DocumentType.NFE_RECEBIDAS, "DOCURAS CONFEITARIA", note_key=KEY)
     p = Path(stored.filepath)
     assert p.name == f"NFe {KEY} - CLI000036.zip"
     assert p.parent.name == "Avulsas" and p.parent.parent.name == "NFE_RECEBIDAS"
-    assert p.parent.parent.parent.name.startswith("BOLITOS CONFEITARIA")
+    assert p.parent.parent.parent.name.startswith("DOCURAS CONFEITARIA")
     assert p.is_file() and not src.exists()
     # não é um ZIP do mês: fica fora das renomeações e da tela Downloads
     assert not is_note_file(p.name)
     assert AVULSA_FILE.match(p.name)["key"] == KEY
     # a mesma nota de novo (conteúdo igual): reaproveita o arquivo
     src.write_bytes(nfe_zip(KEY))
-    again = org.store(src, "CLI000036", "2026-08", DocumentType.NFE_RECEBIDAS, "BOLITOS CONFEITARIA", note_key=KEY)
+    again = org.store(src, "CLI000036", "2026-08", DocumentType.NFE_RECEBIDAS, "DOCURAS CONFEITARIA", note_key=KEY)
     assert again.filepath == stored.filepath
     # conteúdo diferente com a mesma chave: versão (2)
     other = tmp_path / "b.zip"
     with zipfile.ZipFile(other, "w") as z:
         z.writestr(f"{KEY}.xml", "<nfeProc/>")
-    second = org.store(other, "CLI000036", "2026-08", DocumentType.NFE_RECEBIDAS, "BOLITOS CONFEITARIA", note_key=KEY)
+    second = org.store(other, "CLI000036", "2026-08", DocumentType.NFE_RECEBIDAS, "DOCURAS CONFEITARIA", note_key=KEY)
     assert Path(second.filepath).name == avulsa_filename(KEY, "CLI000036", sequence=2)
     # plano B: o nome avulso guardado (keep_name) volta para a pasta Avulsas
     src.write_bytes(nfe_zip(KEY))
@@ -108,7 +108,7 @@ async def test_scheduler_completes_key_job_when_siat_hands_the_file_at_once(
     # indexada na hora: a tela Notas já encontra a chave
     notes = repo._notes()
     assert [n["chave"] for n in notes] == [KEY]
-    assert notes[0]["numero"] == 172280 and notes[0]["emit_nome"] == "SENDAS DISTRIBUIDORA S/A"
+    assert notes[0]["numero"] == 172280 and notes[0]["emit_nome"] == "ATACADO DE EXEMPLO S/A"
     assert d.get("notes_indexed_at") and d.get("note_count") == 1
     types = [t["task_type"] for t in repo.tasks_of(job.id)]
     assert types.count(TaskType.DOWNLOAD) == 1

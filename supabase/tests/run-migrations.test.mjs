@@ -747,7 +747,7 @@ await test("EFD: robô antigo não pega a consulta; robô 1.2.0 pega", async () 
 
 await test("EFD: robô grava declarações com upsert pelo EPE; painel lê só o próprio escritório", async () => {
   const sql = `insert into public.efd_declarations (client_id, job_id, competence, epe_number, finalidade, processed, situation, inconsistencies)
-               values ($1, $2, '2026-08', '93104981381', 'ORIGINAL', true, $3, $4)
+               values ($1, $2, '2026-08', '93100000001', 'ORIGINAL', true, $3, $4)
                on conflict (org_id, epe_number) do update set situation = excluded.situation, inconsistencies = excluded.inconsistencies
                returning *`;
   for (const situation of ["processed", "alert"]) {
@@ -1037,7 +1037,7 @@ await test("canceladas: pedido próprio, respeita o cadastro, duplicidade separa
 });
 
 await test("notas: índice gravado pelo robô, lido só pelo escritório, XML pedido pelo painel", async () => {
-  const KEY = "22260837354860000133552260000000031820244645";
+  const KEY = "22260844444444000191552260000000031820244640";
   const dl = (
     await db.query(
       "insert into public.downloads (client_id, document_type, competence, filename, filepath, checksum) values ($1, 'NFE_EMITIDAS', '2026-08', 'n.zip', 'C:/n.zip', repeat('c', 64)) returning id",
@@ -1080,30 +1080,30 @@ await test("notas: índice gravado pelo robô, lido só pelo escritório, XML pe
 });
 
 await test("nota pela chave: pedido do painel vira trabalho do robô; só robôs 1.2.34+ pegam; emitente decide o tipo", async () => {
-  const ASSAI = "22260806057223046163553000001722801561303961"; // emitente de fora: nota recebida
+  const DE_FORA = "22260877777777046183553000001722801561303961"; // emitente de fora: nota recebida
   // operador do escritório B pede a nota com o certificado do cliente B1
-  const r1 = (await as(ADMIN_B, (tx) => tx.query("select public.request_note_from_siat($1, $2) r", [CLIENT_B1, ASSAI]))).rows[0].r;
+  const r1 = (await as(ADMIN_B, (tx) => tx.query("select public.request_note_from_siat($1, $2) r", [CLIENT_B1, DE_FORA]))).rows[0].r;
   assert.ok(r1.job_id);
   assert.equal(r1.document_type, "NFE_RECEBIDAS");
   assert.equal(r1.competence, "2026-08");
   const job = (await db.query("select note_key, competence, operations, status, org_id from public.automation_jobs where id = $1", [r1.job_id])).rows[0];
-  assert.equal(job.note_key, ASSAI);
+  assert.equal(job.note_key, DE_FORA);
   assert.deepEqual([job.competence, job.status, job.org_id], ["2026-08", "queued", ORG_B]);
   assert.match(String(job.operations), /NFE_KEY_EXPORT/); // PGlite devolve o array de enum como texto
   const task = (await db.query("select task_type, document_type, dedup_key from public.automation_tasks where job_id = $1", [r1.job_id])).rows[0];
   assert.equal(task.task_type, "NFE_KEY_EXPORT");
   assert.equal(task.document_type, "NFE_RECEBIDAS");
-  assert.ok(task.dedup_key.endsWith(`|KEY:${ASSAI}`));
+  assert.ok(task.dedup_key.endsWith(`|KEY:${DE_FORA}`));
   // pedir de novo enquanto está em andamento: devolve o mesmo trabalho
-  const r2 = (await as(ADMIN_B, (tx) => tx.query("select public.request_note_from_siat($1, $2) r", [CLIENT_B1, ASSAI]))).rows[0].r;
+  const r2 = (await as(ADMIN_B, (tx) => tx.query("select public.request_note_from_siat($1, $2) r", [CLIENT_B1, DE_FORA]))).rows[0].r;
   assert.deepEqual([r2.job_id, r2.duplicate], [r1.job_id, true]);
   // chave curta, NFC-e e cliente de outro escritório: recusados
   await rejects(as(ADMIN_B, (tx) => tx.query("select public.request_note_from_siat($1, '123')", [CLIENT_B1])), /INVALID_KEY/);
   await rejects(
-    as(ADMIN_B, (tx) => tx.query("select public.request_note_from_siat($1, $2)", [CLIENT_B1, ASSAI.slice(0, 20) + "65" + ASSAI.slice(22)])),
+    as(ADMIN_B, (tx) => tx.query("select public.request_note_from_siat($1, $2)", [CLIENT_B1, DE_FORA.slice(0, 20) + "65" + DE_FORA.slice(22)])),
     /INVALID_KEY/,
   );
-  await rejects(as(ADMIN, (tx) => tx.query("select public.request_note_from_siat($1, $2)", [CLIENT_B1, ASSAI])), /FORBIDDEN|CLIENT/);
+  await rejects(as(ADMIN, (tx) => tx.query("select public.request_note_from_siat($1, $2)", [CLIENT_B1, DE_FORA])), /FORBIDDEN|CLIENT/);
   // fila: robô 1.2.33 não pega; 1.2.34 pega
   await as(DEVICE_B.authId, (tx) =>
     tx.query(`insert into public.worker_heartbeats (worker_id, kind, meta) values
@@ -1113,26 +1113,26 @@ await test("nota pela chave: pedido do painel vira trabalho do robô; só robôs
   assert.ok(!old.rows.some((r) => r.id === r1.job_id), "robô antigo não pode pegar a nota pela chave");
   const fresh = await as(DEVICE_B.authId, (tx) => tx.query("select id, note_key from public.claim_next_job('PC-B-1234')"));
   assert.equal(fresh.rows[0]?.id, r1.job_id);
-  assert.equal(fresh.rows[0]?.note_key, ASSAI);
+  assert.equal(fresh.rows[0]?.note_key, DE_FORA);
   // o robô grava o ZIP da nota (fora da tela Downloads) e, ao concluir, o aviso aponta para a tela Notas
   await as(DEVICE_B.authId, (tx) =>
     tx.query(
       "insert into public.downloads (client_id, job_id, document_type, competence, filename, filepath, checksum, note_key) values ($1, $2, 'NFE_RECEBIDAS', '2026-08', 'NFe.zip', 'C:/NFe.zip', repeat('d', 64), $3)",
-      [CLIENT_B1, r1.job_id, ASSAI],
+      [CLIENT_B1, r1.job_id, DE_FORA],
     ),
   );
   await db.query("update public.automation_jobs set status = 'completed', last_message = 'Nota exportada' where id = $1", [r1.job_id]);
   const notice = (await db.query("select title, link from public.notifications where dedup_key = $1", ["job-completed:" + r1.job_id])).rows[0];
   assert.equal(notice.title, "Nota encontrada no SIAT.");
-  assert.equal(notice.link, "/notes?q=" + ASSAI);
+  assert.equal(notice.link, "/notes?q=" + DE_FORA);
   // já indexada: não cria trabalho novo
   await as(DEVICE_B.authId, (tx) =>
     tx.query(
       "insert into public.notes (client_id, document_type, competence, chave, numero, zip_path, xml_name) values ($1, 'NFE_RECEBIDAS', '2026-08', $2, 172280, 'C:/NFe.zip', $3)",
-      [CLIENT_B1, ASSAI, `${ASSAI}.xml`],
+      [CLIENT_B1, DE_FORA, `${DE_FORA}.xml`],
     ),
   );
-  const r3 = (await as(ADMIN_B, (tx) => tx.query("select public.request_note_from_siat($1, $2) r", [CLIENT_B1, ASSAI]))).rows[0].r;
+  const r3 = (await as(ADMIN_B, (tx) => tx.query("select public.request_note_from_siat($1, $2) r", [CLIENT_B1, DE_FORA]))).rows[0].r;
   assert.equal(r3.already_indexed, true);
   assert.ok(r3.note_id);
   // emitente é o próprio cliente: nota emitida

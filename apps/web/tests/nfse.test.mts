@@ -74,9 +74,9 @@ describe("DANFSe", () => {
 describe("busca e índice com NFS-e", () => {
   it("chave de 50 números é chave; 44 continua valendo", () => {
     assert.deepEqual(parseNoteQuery(KEY), { kind: "chave", value: KEY });
-    assert.deepEqual(parseNoteQuery("2226 0837 3548 6000 0133 5522 6000 0000 0318 2024 4645"), {
+    assert.deepEqual(parseNoteQuery("2226 0844 4444 4400 0191 5522 6000 0000 0318 2024 4640"), {
       kind: "chave",
-      value: "22260837354860000133552260000000031820244645",
+      value: "22260844444444000191552260000000031820244640",
     });
     assert.equal(parseNoteQuery("1".repeat(47))?.kind, "nome");
   });

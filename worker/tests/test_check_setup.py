@@ -68,8 +68,8 @@ def activated(settings: Settings, monkeypatch: pytest.MonkeyPatch) -> Settings:
     valid = (datetime.now(timezone.utc) + timedelta(days=200)).isoformat()
     expired = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
     clients = [
-        {"id": "c1", "client_code": "CLI000001", "legal_name": "LIA"},
-        {"id": "c2", "client_code": "CLI000002", "legal_name": "SELETO"},
+        {"id": "c1", "client_code": "CLI000001", "legal_name": "LIS"},
+        {"id": "c2", "client_code": "CLI000002", "legal_name": "MODELO"},
         {"id": "c3", "client_code": "CLI000003", "legal_name": "BOLO"},
         {"id": "c4", "client_code": "CLI000004", "legal_name": "SEM CERT"},
     ]

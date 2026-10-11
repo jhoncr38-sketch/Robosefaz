@@ -61,7 +61,7 @@ def test_missing_file_returns_none(tmp_path: Path) -> None:
 
 
 def test_explorer_command_quotes_only_the_path(tmp_path: Path) -> None:
-    path = tmp_path / "CLI000002 - SELETO PLANEJADOS" / "2026" / "05" / "NFCE" / "CLI000002_2026-05_NFCE.zip"
+    path = tmp_path / "CLI000002 - MODELO PLANEJADOS" / "2026" / "05" / "NFCE" / "CLI000002_2026-05_NFCE.zip"
     assert explorer_select_command(path) == f'explorer.exe /select,"{path}"'
 
 

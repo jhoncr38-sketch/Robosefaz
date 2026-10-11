@@ -10,8 +10,8 @@ from app.config import Settings
 from app.tools import google_drive as gd
 
 # formato antigo (até a 1.2.7) e atual: a cópia já grava em ano/mês/cliente
-NOTE = Path("CLI000001 - LIA") / "2026" / "08" / "NFCE" / "CLI000001_2026-08_NFCE.zip"
-NEW = Path("2026") / "08" / "CLI000001 - LIA" / "NFCE" / "CLI000001_2026-08_NFCE.zip"
+NOTE = Path("CLI000001 - LIS") / "2026" / "08" / "NFCE" / "CLI000001_2026-08_NFCE.zip"
+NEW = Path("2026") / "08" / "CLI000001 - LIS" / "NFCE" / "CLI000001_2026-08_NFCE.zip"
 
 
 def test_find_drive_roots(tmp_path: Path) -> None:

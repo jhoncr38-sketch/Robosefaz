@@ -20,12 +20,12 @@ Tipo 3 - Alerta - EFD processada, podendo incorrer em posterior análise a ser r
 1. As regras completas podem ser consultadas no documento "Regras de Pós-validação da EFD ICMS IPI do Estado do Piauí".
 """
 
-PROCESSED = HEAD + """Número do EPE: 93104981381
+PROCESSED = HEAD + """Número do EPE: 93100000001
 Data Processamento: 11/09/2026 18:09:48
 Tipo de Arquivo: EFD
-Inscrição Estadual: 19.603.499-0
-CNPJ/CPF: 28100366000151
-Razão Social: C BEZERRA MARCENARIA LTDA
+Inscrição Estadual: 19.000.002-0
+CNPJ/CPF: 33333333000191
+Razão Social: F EXEMPLO MARCENARIA LTDA
 Período de Referência: 08/2026
 Finalidade: ORIGINAL
 Data Recebimento: 11/09/2026 17:19:31
@@ -34,12 +34,12 @@ Informamos que a sua declaração, transmitida através da Receita Federal e com
 
 """ + LEGEND
 
-ALERT = HEAD + """Número do EPE: 93104686412
+ALERT = HEAD + """Número do EPE: 93100000002
 Data Processamento: 17/07/2026 15:35:32
 Tipo de Arquivo: EFD
-Inscrição Estadual: 19.603.499-0
-CNPJ/CPF: 28100366000151
-Razão Social: C BEZERRA MARCENARIA LTDA
+Inscrição Estadual: 19.000.002-0
+CNPJ/CPF: 33333333000191
+Razão Social: F EXEMPLO MARCENARIA LTDA
 Período de Referência: 06/2026
 Finalidade: ORIGINAL
 Data Recebimento: 17/07/2026 14:48:14
@@ -53,12 +53,12 @@ Inconsistência Tipo 3 - Alerta
 5371
 """ + LEGEND
 
-RETIFICADORA = HEAD + """Número do EPE: 93104801993
+RETIFICADORA = HEAD + """Número do EPE: 93100000003
 Data Processamento: 12/08/2026 15:29:39
 Tipo de Arquivo: EFD
-Inscrição Estadual: 19.455.823-1
-CNPJ/CPF: 5731045000150
-Razão Social: SETEL- SERVIÇOS TÉCNICOS DE ENGENHARIA LTDA - EPP
+Inscrição Estadual: 19.000.005-1
+CNPJ/CPF: 1234567000195
+Razão Social: OUTRA- SERVIÇOS TÉCNICOS DE ENGENHARIA LTDA - EPP
 Período de Referência: 07/2026
 Finalidade: RETIFICADORA
 Data Recebimento: 12/08/2026 11:56:04
@@ -67,12 +67,12 @@ Informamos que a sua declaração, transmitida através da Receita Federal e com
 
 """ + LEGEND
 
-NOT_PROCESSED = HEAD + """Número do EPE: 93104780277
+NOT_PROCESSED = HEAD + """Número do EPE: 93100000004
 Data Processamento: 10/08/2026 15:20:49
 Tipo de Arquivo: EFD
-Inscrição Estadual: 19.455.823-1
-CNPJ/CPF: 5731045000150
-Razão Social: SETEL- SERVIÇOS TÉCNICOS DE ENGENHARIA LTDA - EPP
+Inscrição Estadual: 19.000.005-1
+CNPJ/CPF: 1234567000195
+Razão Social: OUTRA- SERVIÇOS TÉCNICOS DE ENGENHARIA LTDA - EPP
 Período de Referência: 07/2026
 Finalidade: ORIGINAL
 Data Recebimento: 10/08/2026 15:01:36
@@ -87,19 +87,19 @@ Inconsistência Tipo 1 - Impeditiva
 
 
 def test_subject():
-    assert parse_subject("EPE - EFD - Período 202608 - 93104981381") == ("2026-08", "93104981381")
-    assert parse_subject("EPE - EFD - Periodo 202607 - 93104780277") == ("2026-07", "93104780277")
+    assert parse_subject("EPE - EFD - Período 202608 - 93100000001") == ("2026-08", "93100000001")
+    assert parse_subject("EPE - EFD - Periodo 202607 - 93100000004") == ("2026-07", "93100000004")
     assert parse_subject("Aviso de cobrança") is None
 
 
 def test_processed_original():
     msg = parse_message(PROCESSED)
     assert msg is not None
-    assert msg.epe_number == "93104981381"
+    assert msg.epe_number == "93100000001"
     assert msg.competence == "2026-08"
     assert msg.finalidade == "ORIGINAL"
-    assert msg.state_registration == "196034990"
-    assert msg.cnpj == "28100366000151"
+    assert msg.state_registration == "190000020"
+    assert msg.cnpj == "33333333000191"
     assert msg.processed is True
     assert msg.processed_at is not None and msg.processed_at.strftime("%d/%m/%Y %H:%M:%S") == "11/09/2026 18:09:48"
     assert msg.received_at is not None and msg.received_at.hour == 17

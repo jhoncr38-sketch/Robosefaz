@@ -484,7 +484,7 @@ def nfe_zip(chave: str, *, dest_cnpj: str = "11222333000181") -> bytes:
         '<?xml version="1.0" encoding="UTF-8"?><nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">'
         f'<NFe><infNFe Id="NFe{chave}" versao="4.00"><ide><cUF>{chave[:2]}</cUF><mod>{chave[20:22]}</mod>'
         f"<serie>{int(chave[22:25])}</serie><nNF>{int(chave[25:34])}</nNF><dhEmi>20{chave[2:4]}-{chave[4:6]}-15T10:00:00-03:00</dhEmi></ide>"
-        f"<emit><CNPJ>{chave[6:20]}</CNPJ><xNome>SENDAS DISTRIBUIDORA S/A</xNome><enderEmit><UF>PI</UF></enderEmit></emit>"
+        f"<emit><CNPJ>{chave[6:20]}</CNPJ><xNome>ATACADO DE EXEMPLO S/A</xNome><enderEmit><UF>PI</UF></enderEmit></emit>"
         f"<dest><CNPJ>{dest_cnpj}</CNPJ><xNome>Empresa A LTDA</xNome><enderDest><UF>PI</UF></enderDest></dest>"
         "<total><ICMSTot><vNF>1234.56</vNF></ICMSTot></total></infNFe></NFe>"
         "<protNFe><infProt><cStat>100</cStat></infProt></protNFe></nfeProc>"

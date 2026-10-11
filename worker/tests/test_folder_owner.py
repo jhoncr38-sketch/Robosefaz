@@ -39,7 +39,7 @@ def _zip(path: Path) -> Path:
 def test_first_office_marks_the_folder_others_are_refused(tmp_path: Path) -> None:
     folder = tmp_path / "JR Sistema - Notas"
     folder.mkdir()
-    assert claim_or_check(folder, A, "DESKTOP-74B4DAU") is None  # sem dono: marca
+    assert claim_or_check(folder, A, "DESKTOP-TESTE01") is None  # sem dono: marca
     assert read_owner(folder) == A
     assert claim_or_check(folder, A) is None  # o mesmo escritório (outro PC dele também)
     assert claim_or_check(folder, B) == A  # outro escritório: recusado
@@ -75,7 +75,7 @@ def test_own_office_stores_and_marks(tmp_path: Path) -> None:
     drive = tmp_path / "drive"
     org = DownloadOrganizer(drive)
     org.office = A
-    stored = org.store(_zip(tmp_path / "tmp" / "a.zip"), "CLI000001", "2026-09", "NFCE", client_name="LIA")
+    stored = org.store(_zip(tmp_path / "tmp" / "a.zip"), "CLI000001", "2026-09", "NFCE", client_name="LIS")
     assert not stored.saved_locally and Path(stored.filepath).is_relative_to(drive)
     assert read_owner(drive) == A
     assert org.foreign_owner is None
@@ -84,7 +84,7 @@ def test_own_office_stores_and_marks(tmp_path: Path) -> None:
 def test_old_installation_without_office_does_not_mark(tmp_path: Path) -> None:
     drive = tmp_path / "drive"
     org = DownloadOrganizer(drive)  # instalação antiga (chave-mestra): não sabe o escritório
-    org.store(_zip(tmp_path / "tmp" / "a.zip"), "CLI000001", "2026-09", "NFCE", client_name="LIA")
+    org.store(_zip(tmp_path / "tmp" / "a.zip"), "CLI000001", "2026-09", "NFCE", client_name="LIS")
     assert not (drive / MARKER).exists()
 
 
@@ -139,7 +139,7 @@ def test_tool_run_on_a_shared_account(settings: Settings, tmp_path: Path, monkey
     copia as notas da pasta do escritório A."""
     root = tmp_path / "G" / "Meu Drive"
     plain = root / gd.NOTES_FOLDER
-    _zip(plain / "2026" / "08" / "LIA" / "NFCE" / "LIA - NFC-e - 08-2026 - CLI000001.zip")
+    _zip(plain / "2026" / "08" / "LIS" / "NFCE" / "LIS - NFC-e - 08-2026 - CLI000001.zip")
     write_owner(plain, A)
     s = settings.model_copy(update={"download_base_path": str(plain)})  # apontado para a pasta de A
     save_office(s.office_file, B)
