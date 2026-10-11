@@ -1,4 +1,4 @@
-import { Lock } from "lucide-react";
+import { FlaskConical, Lock } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -83,20 +83,30 @@ export default async function EmissaoPage({ searchParams }: PageProps<"/emissao"
               <b>Teresina</b> no <b>Simples Nacional</b>, e para serviços sem retenção de imposto federal. A numeração é
               própria (série 10001) e não se mistura com a das notas emitidas no site da prefeitura.
             </p>
+            <p>
+              Em <b>outra atividade</b>, o código complementar é o do cadastro da empresa na prefeitura: aqui aparecem os que
+              já saíram em nota. Se o código não constar no cadastro, a prefeitura recusa a nota e nada é emitido. As listas
+              de NBS, classificação tributária e indicador da operação vêm das tabelas oficiais da NFS-e nacional.
+            </p>
           </HelpTip>
         }
       />
 
       {access === "testing" ? (
-        <div className="mb-3 flex items-start gap-2 rounded-[9px] border border-(--c-f3dfb4) bg-(--c-fdf4e3) px-3 py-2 text-[12.5px] text-(--c-9a6205)">
-          <Lock className="mt-0.5 size-3.5 shrink-0" />
-          <p>
-            <b>Função travada, em teste.</b> Para os escritórios, esta aba aparece no menu com cadeado e abre só o aviso “Em breve”. Só você, dono da
-            plataforma, entra aqui.{" "}
-            <Link href="/emissao?ver=escritorio" className="font-medium underline underline-offset-2">
-              Ver como os escritórios veem
-            </Link>
-          </p>
+        <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-(--c-f0d9a8) bg-(--c-fdf4e3) py-3.5 pr-3.5 pl-4 shadow-[0_1px_2px_rgba(154,98,5,0.08)]">
+          <span className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-(--c-e0a019) text-white shadow-[0_2px_6px_rgba(224,160,25,0.35)]">
+            <FlaskConical className="size-[19px]" />
+          </span>
+          <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-0.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <b className="text-[14.5px] font-semibold text-(--c-6b4204)">Modo de teste</b>
+              {/* bg-card e text-card em vez de branco fixo: no modo noturno o fundo e o texto invertem juntos */}
+              <span className="inline-flex items-center gap-1 rounded-full border border-(--c-f0d9a8) bg-card px-2 py-px text-[11.5px] font-medium whitespace-nowrap text-(--c-8a5a06)">
+                <Lock className="size-[11px]" /> Só você vê esta tela
+              </span>
+            </div>
+            <p className="text-[13px] leading-[1.45] text-(--c-7a5410)">Para os escritórios, a aba aparece com cadeado e mostra o aviso “Em breve”.</p>
+          </div>
         </div>
       ) : null}
 
@@ -119,7 +129,8 @@ export default async function EmissaoPage({ searchParams }: PageProps<"/emissao"
               certificate_ok: c.certificate_status === "valid" || c.certificate_status === "expiring",
               notas: eligible.get(c.id) ?? 0,
             }))
-            .sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }))}
+            // com certificado válido primeiro (são as que emitem); dentro de cada grupo, por nome
+            .sort((a, b) => Number(b.certificate_ok) - Number(a.certificate_ok) || a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }))}
         />
       ) : (
         <section className="rounded-xl border bg-card p-6 shadow-card">

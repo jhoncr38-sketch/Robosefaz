@@ -94,7 +94,7 @@ export function SearchSelect({
           />
         </div>
         {/* a lista encolhe para caber no espaço que sobra na janela (a busca nunca fica fora da tela) */}
-        <div ref={list} role="listbox" aria-label={label} className="max-h-[min(260px,calc(var(--radix-popover-content-available-height)-56px))] overflow-y-auto">
+        <div ref={list} role="listbox" aria-label={label} className="thin-scrollbar max-h-[min(260px,calc(var(--radix-popover-content-available-height)-56px))] overflow-y-auto">
           {rows.length ? (
             rows.map((o, i) => (
               <div key={o.value || "__empty"}>
