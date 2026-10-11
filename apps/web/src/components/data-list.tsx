@@ -120,6 +120,8 @@ const OP_TAG: Record<JobOperation, string> = {
   EFD_CHECK: "EFD",
   MALHA_CHECK: "Malhas",
   NFSE_FETCH: "NFS-e",
+  NFSE_EMIT: "Emitir NFS-e",
+  NFSE_CANCEL: "Cancelar NFS-e",
 };
 
 export function OpTags({ ops }: { ops: JobOperation[] }) {

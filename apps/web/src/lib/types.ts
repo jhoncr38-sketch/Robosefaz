@@ -36,7 +36,9 @@ export type TaskType =
   | "DOWNLOAD"
   | "EFD_CHECK"
   | "MALHA_CHECK"
-  | "NFSE_FETCH";
+  | "NFSE_FETCH"
+  | "NFSE_EMIT"
+  | "NFSE_CANCEL";
 
 /** pedidos normais (só as notas ativas) */
 export type RegularExportTaskType = Extract<TaskType, "NFCE_EXPORT" | "NFE_ISSUED_EXPORT" | "NFE_RECEIVED_EXPORT">;
@@ -46,8 +48,9 @@ export type CanceledExportTaskType = Extract<
   "NFCE_CANCELED_EXPORT" | "NFE_ISSUED_CANCELED_EXPORT" | "NFE_RECEIVED_CANCELED_EXPORT"
 >;
 export type ExportTaskType = RegularExportTaskType | CanceledExportTaskType;
-/** o que um trabalho do robô pode conter: exportações do mês, uma nota pela chave, EFD, malhas ou NFS-e */
-export type JobOperation = ExportTaskType | "NFE_KEY_EXPORT" | "EFD_CHECK" | "MALHA_CHECK" | "NFSE_FETCH";
+/** o que um trabalho do robô pode conter: exportações do mês, uma nota pela chave, EFD, malhas, busca de
+ *  NFS-e ou a emissão/cancelamento de uma NFS-e */
+export type JobOperation = ExportTaskType | "NFE_KEY_EXPORT" | "EFD_CHECK" | "MALHA_CHECK" | "NFSE_FETCH" | "NFSE_EMIT" | "NFSE_CANCEL";
 
 export type TaskStatus =
   | "pending"

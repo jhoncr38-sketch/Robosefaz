@@ -86,6 +86,13 @@ export default async function JobDetailPage({ params }: PageProps<"/history/[id]
               </Link>
             </Button>
           ) : null}
+          {job.operations.includes("NFSE_EMIT") || job.operations.includes("NFSE_CANCEL") ? (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/emissao" className="text-foreground hover:no-underline">
+                Ver em Emitir NFS-e
+              </Link>
+            </Button>
+          ) : null}
           {job.operations.includes("NFSE_FETCH") ? (
             <Button asChild variant="outline" size="sm">
               <Link href="/nfse" className="text-foreground hover:no-underline">

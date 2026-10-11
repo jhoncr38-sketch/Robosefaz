@@ -13,6 +13,7 @@ import {
   ListOrdered,
   Play,
   Receipt,
+  ReceiptText,
   ScanSearch,
   Settings,
   ShieldCheck,
@@ -31,16 +32,27 @@ export interface NavCounts {
   clients: number;
 }
 
+/** Situação de uma função para quem vê o menu: "on" (liberada), "testing" (ainda travada, mas quem vê é
+ *  o dono da plataforma e entra) ou "locked" (travada). Fora de "on", o item aparece com cadeado. */
+export type FeatureState = "on" | "testing" | "locked";
+
+export interface NavFeatures {
+  nfseEmit: FeatureState;
+}
+
 export interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
   permission?: Permission;
+  feature?: keyof NavFeatures;
   /** só o dono da plataforma vê */
   ownerOnly?: boolean;
   badge?: keyof NavCounts;
   /** contador em amarelo (pede atenção) */
   badgeWarn?: boolean;
+  /** etiqueta "Novo" ao lado do nome: mostra ao cliente que é novidade */
+  isNew?: boolean;
 }
 
 /** Item que abre e fecha um submenu (ex.: SIAT). */
@@ -73,7 +85,8 @@ export const NAV_GROUPS: NavGroup[] = [
           { href: "/automation", label: "Executar automações", icon: Play, permission: "automation:run" },
           { href: "/malhas", label: "Consulta de Malhas", icon: ScanSearch },
           { href: "/efd", label: "Consulta EFD", icon: FileSearch },
-          { href: "/nfse", label: "NFS-e Nacional", icon: BriefcaseBusiness },
+          { href: "/nfse", label: "NFS-e Nacional", icon: BriefcaseBusiness, isNew: true },
+          { href: "/emissao", label: "Emitir NFS-e", icon: ReceiptText, permission: "automation:run", feature: "nfseEmit" },
           { href: "/queue", label: "Fila de processamento", icon: ListOrdered, badge: "queue", badgeWarn: true },
         ],
       },
@@ -121,6 +134,11 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
 ];
+
+/** O item aparece com cadeado: a função dele ainda não foi liberada. */
+export function navLocked(item: NavItem, features?: NavFeatures): boolean {
+  return item.feature !== undefined && features?.[item.feature] !== "on";
+}
 
 export function isFolder(entry: NavEntry): entry is NavFolder {
   return "children" in entry;

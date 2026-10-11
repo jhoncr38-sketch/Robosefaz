@@ -9,6 +9,7 @@ import {
   isActive,
   isFolder,
   navLocation,
+  navLocked,
   parseFolderState,
   serializeFolderState,
   type NavFolder,
@@ -22,8 +23,22 @@ describe("menu lateral", () => {
     assert.equal(siat.label, "Robô");
     assert.deepEqual(
       siat.children.map((c) => c.href),
-      ["/automation", "/malhas", "/efd", "/nfse", "/queue"],
+      ["/automation", "/malhas", "/efd", "/nfse", "/emissao", "/queue"],
     );
+  });
+
+  it("função ainda não liberada aparece no menu com cadeado; só a liberada fica sem", () => {
+    const emitir = siat.children.find((c) => c.href === "/emissao")!;
+    const fila = siat.children.find((c) => c.href === "/queue")!;
+    assert.equal(navLocked(emitir, { nfseEmit: "locked" }), true);
+    assert.equal(navLocked(emitir, { nfseEmit: "testing" }), true, "o dono entra, mas vê o cadeado como os demais");
+    assert.equal(navLocked(emitir, { nfseEmit: "on" }), false);
+    assert.equal(navLocked(emitir, undefined), true);
+    assert.equal(navLocked(fila, { nfseEmit: "locked" }), false, "item sem função própria nunca tem cadeado");
+  });
+
+  it("a NFS-e Nacional leva a etiqueta Novo (e só ela)", () => {
+    assert.deepEqual(NAV_ITEMS.filter((i) => i.isNew).map((i) => i.href), ["/nfse"]);
   });
 
   it("Resultados, Empresas e Administração também recolhem, como o SIAT", () => {
@@ -36,7 +51,7 @@ describe("menu lateral", () => {
 
   it("todas as páginas continuam no menu (inclusive as de dentro do SIAT)", () => {
     const hrefs = NAV_ITEMS.map((i) => i.href);
-    for (const href of ["/dashboard", "/operation", "/automation", "/malhas", "/efd", "/nfse", "/queue", "/downloads", "/notes", "/history", "/errors", "/clients", "/certificates", "/organizations", "/users", "/devices", "/settings"]) {
+    for (const href of ["/dashboard", "/operation", "/automation", "/malhas", "/efd", "/nfse", "/emissao", "/queue", "/downloads", "/notes", "/history", "/errors", "/clients", "/certificates", "/organizations", "/users", "/devices", "/settings"]) {
       assert.ok(hrefs.includes(href), href);
     }
     assert.equal(new Set(hrefs).size, hrefs.length);

@@ -111,6 +111,8 @@ export const TASK_TYPE_LABEL: Record<TaskType, string> = {
   EFD_CHECK: "Consulta EFD",
   MALHA_CHECK: "Consulta de malhas",
   NFSE_FETCH: "NFS-e Nacional",
+  NFSE_EMIT: "Emissão de NFS-e",
+  NFSE_CANCEL: "Cancelamento de NFS-e",
 };
 
 export const EXPORT_OPERATIONS: {

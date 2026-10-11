@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, ChevronsUpDown, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ChevronRight, ChevronsUpDown, Lock, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -11,7 +11,9 @@ import {
   folderBadge,
   isActive,
   isFolder,
+  navLocked,
   type NavCounts,
+  type NavFeatures,
   type NavEntry,
   type NavFolder,
   type NavFolderState,
@@ -43,6 +45,25 @@ function Count({ value, warn, className }: { value: number; warn?: boolean; clas
       )}
     >
       {value}
+    </span>
+  );
+}
+
+/** Novidade: etiqueta ao lado do nome do item. */
+function NewTag() {
+  return (
+    <span className="ml-1.5 inline-block rounded-full bg-(--sb-bar) px-1.5 align-[1px] text-[9.5px] leading-[15px] font-semibold tracking-[0.04em] text-(--sb-bg) uppercase">
+      Novo
+    </span>
+  );
+}
+
+/** Função ainda não liberada: cadeado no lugar do contador. */
+function LockMark() {
+  return (
+    <span title="Em breve" className="shrink-0 text-(--sb-muted)">
+      <Lock aria-hidden className="size-3" />
+      <span className="sr-only">(em breve)</span>
     </span>
   );
 }
@@ -81,12 +102,14 @@ function NavLink({
   active,
   counts,
   collapsed,
+  locked = false,
   onNavigate,
 }: {
   item: NavItem;
   active: boolean;
   counts?: NavCounts;
   collapsed: boolean;
+  locked?: boolean;
   onNavigate?: () => void;
 }) {
   const Icon = item.icon;
@@ -120,8 +143,9 @@ function NavLink({
             )}
           >
             {item.label}
+            {item.isNew ? <NewTag /> : null}
           </span>
-          {badge > 0 ? <Count value={badge} warn={item.badgeWarn} /> : null}
+          {locked ? <LockMark /> : badge > 0 ? <Count value={badge} warn={item.badgeWarn} /> : null}
         </>
       )}
     </Link>
@@ -134,11 +158,13 @@ function FolderFlyout({
   items,
   pathname,
   counts,
+  features,
 }: {
   folder: NavFolder;
   items: NavItem[];
   pathname: string;
   counts?: NavCounts;
+  features?: NavFeatures;
 }) {
   const [open, setOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -193,6 +219,7 @@ function FolderFlyout({
         {items.map((item) => {
           const active = isActive(item.href, pathname);
           const badge = item.badge && counts ? counts[item.badge] : 0;
+          const locked = navLocked(item, features);
           return (
             <Link
               key={item.href}
@@ -205,8 +232,11 @@ function FolderFlyout({
               )}
             >
               <item.icon className="size-[14px] shrink-0" />
-              <span className="min-w-0 flex-1 truncate">{item.label}</span>
-              {badge > 0 ? <Count value={badge} warn={item.badgeWarn} /> : null}
+              <span className="min-w-0 flex-1 truncate">
+                {item.label}
+                {item.isNew ? <NewTag /> : null}
+              </span>
+              {locked ? <LockMark /> : badge > 0 ? <Count value={badge} warn={item.badgeWarn} /> : null}
             </Link>
           );
         })}
@@ -220,6 +250,7 @@ function NavFolderEntry({
   items,
   pathname,
   counts,
+  features,
   folderState,
   onNavigate,
 }: {
@@ -227,6 +258,7 @@ function NavFolderEntry({
   items: NavItem[];
   pathname: string;
   counts?: NavCounts;
+  features?: NavFeatures;
   folderState: NavFolderState;
   onNavigate?: () => void;
 }) {
@@ -302,6 +334,7 @@ function NavFolderEntry({
           {items.map((item, i) => {
             const active = isActive(item.href, pathname);
             const badge = item.badge && counts ? counts[item.badge] : 0;
+            const locked = navLocked(item, features);
             return (
               <li
                 key={item.href}
@@ -334,8 +367,9 @@ function NavFolderEntry({
                     )}
                   >
                     {item.label}
+                    {item.isNew ? <NewTag /> : null}
                   </span>
-                  {badge > 0 ? <Count value={badge} warn={item.badgeWarn} /> : null}
+                  {locked ? <LockMark /> : badge > 0 ? <Count value={badge} warn={item.badgeWarn} /> : null}
                 </Link>
               </li>
             );
@@ -350,6 +384,7 @@ export function SidebarNav({
   role,
   isOwner = false,
   counts,
+  features,
   folderState = {},
   collapsed = false,
   onNavigate,
@@ -357,12 +392,14 @@ export function SidebarNav({
   role: UserRole;
   isOwner?: boolean;
   counts?: NavCounts;
+  features?: NavFeatures;
   folderState?: NavFolderState;
   collapsed?: boolean;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const visible = (item: NavItem) => (!item.permission || can(role, item.permission)) && (!item.ownerOnly || isOwner);
+  const visible = (item: NavItem) =>
+    (!item.permission || can(role, item.permission)) && (!item.ownerOnly || isOwner);
   return (
     <nav data-nav className="flex flex-col gap-2 px-2.5">
       {NAV_GROUPS.map((group, gi) => {
@@ -384,7 +421,7 @@ export function SidebarNav({
             {entries.map(({ entry, items }) =>
               isFolder(entry) ? (
                 collapsed ? (
-                  <FolderFlyout key={entry.key} folder={entry} items={items} pathname={pathname} counts={counts} />
+                  <FolderFlyout key={entry.key} folder={entry} items={items} pathname={pathname} counts={counts} features={features} />
                 ) : (
                   <NavFolderEntry
                     key={entry.key}
@@ -392,6 +429,7 @@ export function SidebarNav({
                     items={items}
                     pathname={pathname}
                     counts={counts}
+                    features={features}
                     folderState={folderState}
                     onNavigate={onNavigate}
                   />
@@ -403,6 +441,7 @@ export function SidebarNav({
                   active={isActive(entry.href, pathname)}
                   counts={counts}
                   collapsed={collapsed}
+                  locked={navLocked(entry, features)}
                   onNavigate={onNavigate}
                 />
               ),
@@ -511,12 +550,14 @@ export function Sidebar({
   isOwner,
   orgName,
   counts,
+  features,
   folderState,
 }: {
   role: UserRole;
   isOwner: boolean;
   orgName: string | null;
   counts: NavCounts;
+  features?: NavFeatures;
   folderState: NavFolderState;
 }) {
   const { collapsed, toggle } = useSidebar();
@@ -532,7 +573,7 @@ export function Sidebar({
         <Brand compact={collapsed} />
       </div>
       <div className="no-scrollbar flex-1 overflow-x-hidden overflow-y-auto py-2">
-        <SidebarNav role={role} isOwner={isOwner} counts={counts} folderState={folderState} collapsed={collapsed} />
+        <SidebarNav role={role} isOwner={isOwner} counts={counts} features={features} folderState={folderState} collapsed={collapsed} />
       </div>
       <CollapseToggle collapsed={collapsed} onToggle={toggle} />
       <OfficeFooter orgName={orgName} isOwner={isOwner} collapsed={collapsed} />
