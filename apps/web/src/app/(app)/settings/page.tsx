@@ -14,7 +14,8 @@ import { WORKER_API_URL, workerHealth } from "@/lib/worker-api";
 export const metadata: Metadata = { title: "Configurações" };
 
 // Versão publicada mais recente do robô (aba Releases do GitHub), revalidada a cada hora.
-const RELEASES_REPO = process.env.ROBOT_RELEASES_REPO || "jhoncr38-sketch/Robosefaz";
+// O repositório de instaladores é o mesmo de onde os robôs se atualizam; o do código não precisa ser público.
+const RELEASES_REPO = process.env.ROBOT_RELEASES_REPO || "jhoncr38-sketch/siat-robo-releases";
 
 async function latestRobotVersion(): Promise<string | null> {
   try {
