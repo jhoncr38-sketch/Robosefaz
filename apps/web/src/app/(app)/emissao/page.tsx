@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { requireSession } from "@/lib/auth";
 import { currentCompetence } from "@/lib/competence";
 import { emitAccess, EMISSION_COLUMNS, NFSE_EMIT_RELEASED, type Emission, type EmitActivity } from "@/lib/nfse-emit";
+import { DEMO_CLIENT, DEMO_NOTES } from "@/lib/nfse-emit-demo";
 import { can } from "@/lib/permissions";
 import { loadPlannerClients } from "@/lib/queries";
 import { createClient } from "@/lib/supabase/server";
@@ -26,22 +27,36 @@ export default async function EmissaoPage({ searchParams }: PageProps<"/emissao"
   // o dono da plataforma pode abrir a tela como os escritórios a veem (?ver=escritorio)
   const preview = access === "testing" && ver === "escritorio";
 
-  // função travada para quem está vendo: só o aviso, sem carregar nada da emissão
+  // função travada para quem está vendo: o aviso de bloqueado e uma amostra da tela, com dados de exemplo.
+  // Nada da emissão é carregado, a amostra não deixa clicar e as ações continuam recusando no servidor
   if (access === "locked" || preview) {
     return (
       <>
         <PageHeader title="Emitir NFS-e" description="Emita a nota de serviço do cliente sem entrar no site da prefeitura." />
-        <section className="flex flex-col items-center gap-3 rounded-xl border bg-card px-6 py-12 text-center shadow-card">
-          <span className="grid size-12 place-items-center rounded-full bg-(--c-f5f5f2) text-(--c-6b6c66)">
-            <Lock className="size-5" />
+        <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-(--c-f0d9a8) bg-(--c-fdf4e3) py-3.5 pr-3.5 pl-4 shadow-[0_1px_2px_rgba(154,98,5,0.08)]">
+          <span className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-(--c-e0a019) text-white shadow-[0_2px_6px_rgba(224,160,25,0.35)]">
+            <Lock className="size-[19px]" />
           </span>
-          <h2 className="text-[16px] font-semibold">{NFSE_EMIT_RELEASED ? "Função não ligada para este escritório" : "Em breve"}</h2>
-          <p className="max-w-xl text-[13.5px] text-muted-foreground">
-            {NFSE_EMIT_RELEASED
-              ? "A emissão de NFS-e é uma função à parte do JR Sistema. Fale com o suporte para ligar a emissão no seu escritório."
-              : "A emissão de NFS-e pelo JR Sistema está em preparação. Quando for liberada, você vai emitir a nota de serviço do cliente por aqui, sem entrar no site da prefeitura."}
-          </p>
-        </section>
+          <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-0.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <b className="text-[14.5px] font-semibold text-(--c-6b4204)">Bloqueado</b>
+              <span className="inline-flex items-center rounded-full border border-(--c-f0d9a8) bg-card px-2 py-px text-[11.5px] font-medium whitespace-nowrap text-(--c-8a5a06)">
+                {NFSE_EMIT_RELEASED ? "Não ligado para este escritório" : "Em breve"}
+              </span>
+            </div>
+            <p className="text-[13px] leading-[1.45] text-(--c-7a5410)">
+              {NFSE_EMIT_RELEASED
+                ? "A emissão de NFS-e é uma função à parte do JR Sistema. Fale com o suporte para ligar no seu escritório. "
+                : "Novidade a caminho: em breve você vai emitir a nota de serviço do cliente por aqui, sem entrar no site da prefeitura. "}
+              A tela abaixo é uma amostra, com dados de exemplo.
+            </p>
+          </div>
+        </div>
+        <div className="relative select-none" title="Bloqueado: esta tela é uma amostra">
+          <EmitBoard canRun isOwner={false} aiReady month={currentCompetence()} activities={[]} userNames={{}} initialEmissions={[]} clients={[DEMO_CLIENT]} demoNotes={DEMO_NOTES} />
+          {/* por cima da amostra: nada embaixo recebe clique */}
+          <div aria-hidden className="absolute inset-0 cursor-not-allowed" />
+        </div>
         {preview ? (
           <p className="mt-3 text-center text-[13px] text-muted-foreground">
             É assim que os escritórios veem esta aba.{" "}
@@ -105,7 +120,7 @@ export default async function EmissaoPage({ searchParams }: PageProps<"/emissao"
                 <Lock className="size-[11px]" /> Só você vê esta tela
               </span>
             </div>
-            <p className="text-[13px] leading-[1.45] text-(--c-7a5410)">Para os escritórios, a aba aparece com cadeado e mostra o aviso “Em breve”.</p>
+            <p className="text-[13px] leading-[1.45] text-(--c-7a5410)">Para os escritórios, a aba aparece com cadeado e mostra uma amostra bloqueada da tela.</p>
           </div>
         </div>
       ) : null}

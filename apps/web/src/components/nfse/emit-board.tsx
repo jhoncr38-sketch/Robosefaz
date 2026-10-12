@@ -326,6 +326,7 @@ export function EmitBoard({
   aiReady,
   month,
   activities,
+  demoNotes,
 }: {
   clients: EmitClient[];
   initialEmissions: Emission[];
@@ -335,11 +336,14 @@ export function EmitBoard({
   aiReady: boolean;
   month: string;
   activities: EmitActivity[];
+  /** amostra para quem ainda não tem a função: a tela abre com a primeira empresa e estas notas, sem deixar usar */
+  demoNotes?: EmitNote[];
 }) {
+  const showcase = Boolean(demoNotes);
   const robot = useRobotState();
   const [tab, setTab] = useState<"emit" | "list">("emit");
-  const [clientId, setClientId] = useState("");
-  const [notes, setNotes] = useState<EmitNote[] | null>(null);
+  const [clientId, setClientId] = useState(demoNotes ? (clients[0]?.id ?? "") : "");
+  const [notes, setNotes] = useState<EmitNote[] | null>(demoNotes ?? null);
   const [mode, setMode] = useState<Mode>(aiReady ? "ai" : "repeat");
   const [request, setRequest] = useState("");
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -402,6 +406,7 @@ export function EmitBoard({
 
   // o robô grava o andamento na linha da nota: a tela acompanha em tempo real
   useEffect(() => {
+    if (showcase) return; // a amostra não acompanha nada
     const supabase = createClient();
     const channel = supabase.channel("nfse-emissions").on("postgres_changes", { event: "*", schema: "public", table: "nfse_emissions" }, (payload) => {
       const row = payload.new as (Emission & { nfse_xml?: string }) | null;
@@ -412,7 +417,7 @@ export function EmitBoard({
       setEmissions((prev) => (prev.some((e) => e.id === clean.id) ? prev.map((e) => (e.id === clean.id ? { ...e, ...clean } : e)) : [clean as Emission, ...prev]));
     });
     return subscribeWithAuth(channel);
-  }, []);
+  }, [showcase]);
 
   // reserva: enquanto a nota em andamento não termina, confere a linha a cada 4 s
   const activeRunning = Boolean(activeState?.running);
@@ -787,7 +792,8 @@ export function EmitBoard({
   const shownTakers = (profile?.takers ?? []).filter((t) => !takerFilter.trim() || `${t.nome} ${t.doc}`.toLowerCase().includes(takerFilter.trim().toLowerCase())).slice(0, 300);
 
   return (
-    <div className="flex flex-col gap-4">
+    // na amostra nada recebe foco nem clique
+    <div className="flex flex-col gap-4" inert={showcase}>
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex rounded-[9px] bg-(--c-ecece8) p-[3px] text-[13px]">
           {(["emit", "list"] as const).map((t) => (

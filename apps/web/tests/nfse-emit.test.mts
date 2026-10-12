@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { danfseNacionalHtml } from "../src/lib/danfse-nacional.ts";
+import { DEMO_CLIENT, DEMO_NOTES } from "../src/lib/nfse-emit-demo.ts";
 import {
   buildEmitProfile,
   checkDraft,
@@ -72,6 +73,17 @@ describe("emissão de NFS-e: o que a tela tira do índice", () => {
     ]);
     assert.deepEqual(p.recent.map((n) => n.numero), [7, 5, 3, 1]);
     assert.equal(buildEmitProfile([note(1, { emit_model: "fora_simples" })]).blocked, "a empresa está fora do Simples Nacional (ME/EPP)");
+  });
+
+  it("a amostra da aba bloqueada (empresa e notas inventadas) monta a tela até o passo do pedido", () => {
+    const p = buildEmitProfile(DEMO_NOTES);
+    assert.equal(p.usable, DEMO_NOTES.length, "sem nota que sirva de modelo a amostra mostraria um aviso em vez da tela");
+    assert.deepEqual(p.takers.map((t) => [t.nome, t.notas]), [
+      ["CONDOMINIO SOL", 2],
+      ["CLINICA EXEMPLO", 1],
+    ]);
+    assert.ok(DEMO_NOTES.every((n) => /^\d{50}$/.test(n.chave)));
+    assert.equal(DEMO_CLIENT.certificate_ok, true);
   });
 
   it("escolhe a nota-modelo: a do mesmo tomador; senão, uma que valha para qualquer tomador", () => {
