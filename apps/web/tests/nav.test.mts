@@ -41,6 +41,10 @@ describe("menu lateral", () => {
     assert.deepEqual(NAV_ITEMS.filter((i) => i.isNew).map((i) => i.href), ["/nfse"]);
   });
 
+  it("Operação do dia e Escritórios são só do dono da plataforma", () => {
+    assert.deepEqual(NAV_ITEMS.filter((i) => i.ownerOnly).map((i) => i.href), ["/operation", "/organizations"]);
+  });
+
   it("Resultados, Empresas e Administração também recolhem, como o SIAT", () => {
     const byKey = Object.fromEntries(folders.map((f) => [f.key, f.children.map((c) => c.href)]));
     assert.deepEqual(byKey.resultados, ["/downloads", "/notes", "/history", "/errors"]);

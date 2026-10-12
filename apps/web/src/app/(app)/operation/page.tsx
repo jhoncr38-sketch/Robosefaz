@@ -5,7 +5,7 @@ import Link from "next/link";
 import { HelpTip } from "@/components/list-extras";
 import { OperationView } from "@/components/operation/operation-view";
 import { PageHeader } from "@/components/page-header";
-import { requireSession } from "@/lib/auth";
+import { requirePlatformOwner } from "@/lib/auth";
 import {
   type OperationReport,
   PERIODS,
@@ -26,7 +26,8 @@ function dayLabel(day: string): string {
 }
 
 export default async function OperationPage({ searchParams }: PageProps<"/operation">) {
-  await requireSession();
+  // tela só do dono da plataforma: fora do menu dos escritórios e fechada também pelo endereço
+  await requirePlatformOwner();
   const params = await searchParams;
   const today = todayLocal();
   const day = parseDay(params.dia);
@@ -50,8 +51,8 @@ export default async function OperationPage({ searchParams }: PageProps<"/operat
               que demoraram, o motivo, e os acontecimentos (computador ativado, cliente novo...).
             </p>
             <p>
-              Cada escritório vê só os próprios trabalhos e computadores. O dono da plataforma vê também um resumo em números
-              dos outros escritórios, sem clientes nem notas.
+              Só o dono da plataforma abre esta tela. Dos outros escritórios aparece apenas um resumo em números, sem
+              clientes nem notas.
             </p>
           </HelpTip>
         }

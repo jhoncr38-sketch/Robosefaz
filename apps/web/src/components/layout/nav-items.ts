@@ -75,7 +75,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Operação",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/operation", label: "Operação do dia", icon: Activity },
+      { href: "/operation", label: "Operação do dia", icon: Activity, ownerOnly: true },
       {
         // tudo o que o robô faz: SIAT e NFS-e Nacional (a chave "siat" fica: é ela que lembra a pasta aberta)
         key: "siat",
