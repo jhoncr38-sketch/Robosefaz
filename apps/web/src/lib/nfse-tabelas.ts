@@ -99,6 +99,37 @@ export function onlyIndOp(t: NfseTables, nac: string, nbs: string): string {
   return first.length === 1 ? first[0] : "";
 }
 
+/** O IBS/CBS que a tabela oficial resolve sozinha: a classificação quando só indica uma para o serviço (com a
+ *  situação tributária dela) e o indicador quando também é único. Com mais de uma classificação possível, ou
+ *  serviço fora da tabela, null: quem escolhe é a pessoa. */
+export function defaultIbs(t: NfseTables, nac: string, nbs: string): { classTrib: string; cst: string; indOp: string } | null {
+  const classes = suggested(t, nac, nbs, 2);
+  if (classes.length !== 1) return null;
+  return { classTrib: classes[0], cst: cstOf(classes[0]), indOp: onlyIndOp(t, nac, nbs) };
+}
+
+/** Os códigos de IBS/CBS no rascunho de uma nota. */
+export interface IbsDraft {
+  nbs: string;
+  cst: string;
+  classTrib: string;
+  indOp: string;
+  /** a pessoa está digitando os códigos em vez de escolher nas listas */
+  typed: boolean;
+  /** a classificação veio da tabela oficial (a única indicada para o serviço), e não de uma nota anterior */
+  ibsAuto: boolean;
+  /** a pessoa escolheu não informar IBS/CBS: a tela não volta a preencher sozinha */
+  ibsOff: boolean;
+}
+
+/** Sem IBS/CBS vindo de uma nota anterior, usa o que a tabela oficial resolve sozinha (defaultIbs). Não mexe no que
+ *  já está preenchido, em quem está digitando os códigos nem em quem escolheu não informar. */
+export function fillIbs<D extends IbsDraft>(d: D, t: NfseTables | null, nac: string): D {
+  if (!t || d.typed || d.ibsOff || d.classTrib || d.cst || d.indOp) return d;
+  const found = /^\d{6}$/.test(nac) ? defaultIbs(t, nac, d.nbs.replace(/\D/g, "")) : null;
+  return found ? { ...d, ...found, ibsAuto: true } : d;
+}
+
 /** Mantém na lista um valor que não está nela (ex.: copiado da última nota), para a tela não escondê-lo. */
 export function withCurrent(options: CodeOption[], value: string, label: string): CodeOption[] {
   return !value || options.some((o) => o.value === value) ? options : [{ value, label, group: options[0]?.group ? "Da última nota" : undefined }, ...options];

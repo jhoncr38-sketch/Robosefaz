@@ -10,13 +10,13 @@ import {
   FileText,
   FlaskConical,
   History,
+  ListChecks,
   ListPlus,
   Loader2,
   Lock,
   type LucideIcon,
   PenLine,
   Plus,
-  ReceiptText,
   Repeat2,
   RotateCw,
   Search,
@@ -43,7 +43,8 @@ import {
 import { useRobotState } from "@/components/layout/robot-status-pill";
 import { SearchSelect } from "@/components/nfse/search-select";
 import { ToneBadge } from "@/components/status-badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { HelpTip } from "@/components/list-extras";
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { formatDate, formatDateTime, formatTime } from "@/lib/format";
@@ -76,6 +77,8 @@ import {
   classTribOptions,
   cstLabel,
   cstOf,
+  fillIbs,
+  type IbsDraft,
   indOpLabel,
   indOpOptions,
   nationalOptions,
@@ -113,7 +116,7 @@ interface NewTaker {
   bairro: string;
 }
 
-interface Draft {
+interface Draft extends IbsDraft {
   source: Mode;
   takerKind: TakerKind;
   takerDoc: string;
@@ -125,12 +128,6 @@ interface Draft {
   customName: string;
   /** o código municipal não está entre os já usados: a pessoa digita */
   munOther: boolean;
-  /** digitar os códigos em vez de escolher nas listas oficiais */
-  typed: boolean;
-  nbs: string;
-  cst: string;
-  classTrib: string;
-  indOp: string;
   description: string;
   amount: string;
   /** de onde veio a descrição e o valor, para a etiqueta do campo */
@@ -140,7 +137,21 @@ interface Draft {
 }
 
 const CUSTOM = "__custom";
+
+/** campo da nota que ainda falta preencher */
+type GapField = "taker" | "codes" | "amount" | "description";
+
+/** "a, b e c" */
+const listOf = (items: string[]) => (items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} e ${items.at(-1)}`);
 const onlyDigits = (v: string) => v.replace(/\D/g, "");
+
+/** Serviço ou tomador novo: os códigos recomeçam (os da nota anterior ou, sem eles, os da tabela oficial). */
+const FRESH = { ibsAuto: false, ibsOff: false };
+
+/** O rascunho com o IBS/CBS que a tabela oficial resolve sozinha para o serviço dele (ver fillIbs). */
+function settle(d: Draft, t: NfseTables | null): Draft {
+  return fillIbs(d, t, d.service === CUSTOM ? onlyDigits(d.customNac) : (d.service.split("|")[0] ?? ""));
+}
 
 const EMPTY_TAKER: NewTaker = { doc: "", nome: "", cmun: "2211001", cidade: "Teresina/PI", cep: "", logradouro: "", numero: "", complemento: "", bairro: "" };
 
@@ -348,6 +359,8 @@ export function EmitBoard({
   /** null = abre sozinho (outra atividade, código fora da tabela ou código incompleto); depois vale o clique */
   const [codesOpen, setCodesOpen] = useState<boolean | null>(null);
   const [copied, setCopied] = useState(false);
+  /** já clicou em Emitir com algo faltando: só aí os campos que faltam ficam marcados */
+  const [tried, setTried] = useState(false);
   /** tomador novo: campos de nome e endereço abertos para editar */
   const [takerEdit, setTakerEdit] = useState(false);
   /** situação do CNPJ do tomador novo na Receita, como veio da busca */
@@ -368,7 +381,11 @@ export function EmitBoard({
     if (!drafting || tables) return;
     let alive = true;
     import("@/lib/nfse-tabelas-data").then(
-      (data) => alive && setTables(data),
+      (data) => {
+        if (!alive) return;
+        setTables(data);
+        setDraft((d) => (d ? settle(d, data) : d));
+      },
       () => alive && setTablesFailed(true),
     );
     return () => {
@@ -436,16 +453,16 @@ export function EmitBoard({
 
   function openDraft(next: Partial<Draft> & { source: Mode }) {
     setActiveId(null);
-    // com o tomador já escolhido a lista começa fechada; sem tomador (à mão, ou pedido sem tomador achado), aberta
-    setTakerOpen((next.takerKind ?? "known") === "known" && !next.takerDoc);
+    setTakerOpen(false);
     setTakerFilter("");
     setServiceOpen(false);
     setCodesOpen(null);
     setTakerEdit(false);
     setTakerStatus(null);
     setCopied(false);
+    setTried(false);
     const service = next.service ?? profile?.services[0]?.id ?? "";
-    setDraft({
+    setDraft(settle({
       takerKind: "known",
       takerDoc: "",
       newTaker: EMPTY_TAKER,
@@ -455,6 +472,8 @@ export function EmitBoard({
       munOther: false,
       typed: false,
       ...codesOf(profile?.services.find((s) => s.id === service)),
+      ibsAuto: false,
+      ibsOff: false,
       description: "",
       amount: "",
       origin: "",
@@ -462,7 +481,7 @@ export function EmitBoard({
       read: false,
       ...next,
       service,
-    });
+    }, tables));
   }
 
   function repeat(n: EmitNoteRef) {
@@ -507,7 +526,7 @@ export function EmitBoard({
   }
 
   function patch(next: Partial<Draft>) {
-    setDraft((d) => (d ? { ...d, ...next } : d));
+    setDraft((d) => (d ? settle({ ...d, ...next }, tables) : d));
   }
 
   function chooseTaker(value: string) {
@@ -515,20 +534,20 @@ export function EmitBoard({
     if (value === "__none") return patch({ takerKind: "none", takerDoc: "" });
     const taker = profile?.takers.find((t) => t.doc === value);
     // o serviço (com o NBS e o IBS/CBS) acompanha a última nota para o tomador escolhido
-    patch({ takerKind: "known", takerDoc: value, ...(taker ? { service: taker.ultima.servico, ...codesOf(taker.ultima) } : {}) });
+    patch({ takerKind: "known", takerDoc: value, ...(taker ? { service: taker.ultima.servico, ...codesOf(taker.ultima), ...FRESH } : {}) });
   }
 
   function chooseService(value: string) {
     // ao abrir "outra atividade" sem código escolhido, os códigos do serviço anterior não valem mais
-    if (value === CUSTOM) return patch({ service: CUSTOM, ...(draft?.customNac ? {} : codesOf(null)) });
-    patch({ service: value, ...codesOf(profile?.services.find((s) => s.id === value)) });
+    if (value === CUSTOM) return patch({ service: CUSTOM, ...(draft?.customNac ? {} : { ...codesOf(null), ...FRESH }) });
+    patch({ service: value, ...codesOf(profile?.services.find((s) => s.id === value)), ...FRESH });
   }
 
   function chooseActivity(value: string) {
     const a = activities.find((x) => `${x.c_trib_nac}|${x.c_trib_mun}` === value);
     if (!a) return;
     const name = a.servico_nome ?? tables?.TRIB_NACIONAL[a.c_trib_nac] ?? "";
-    patch({ customNac: a.c_trib_nac, customMun: a.c_trib_mun, customName: name.slice(0, 300), munOther: false, ...codesOf(null), nbs: a.c_nbs ?? "" });
+    patch({ customNac: a.c_trib_nac, customMun: a.c_trib_mun, customName: name.slice(0, 300), munOther: false, ...codesOf(null), ...FRESH, nbs: a.c_nbs ?? "" });
   }
 
   /** Códigos municipais já vistos com este código nacional: os da própria empresa primeiro, depois os do escritório. */
@@ -554,13 +573,13 @@ export function EmitBoard({
     const known = knownMunicipal(nac);
     // o NBS sugerido é o da última nota do escritório com este código, quando há
     const nbs = activities.find((a) => a.c_trib_nac === nac && a.c_nbs)?.c_nbs ?? "";
-    patch({ customNac: nac, customName: (tables?.TRIB_NACIONAL[nac] ?? "").slice(0, 300), customMun: known.length === 1 ? known[0].code : "", munOther: false, ...codesOf(null), nbs });
+    patch({ customNac: nac, customName: (tables?.TRIB_NACIONAL[nac] ?? "").slice(0, 300), customMun: known.length === 1 ? known[0].code : "", munOther: false, ...codesOf(null), ...FRESH, nbs });
   }
 
   /** IBS/CBS vai inteiro ou não vai: sem classificação, saem também a situação tributária e o indicador. */
   function chooseClassTrib(value: string, nac: string) {
-    if (!value) return patch({ classTrib: "", cst: "", indOp: "" });
-    patch({ classTrib: value, cst: cstOf(value), indOp: draft?.indOp || (tables ? onlyIndOp(tables, nac, onlyDigits(draft?.nbs ?? "")) : "") });
+    if (!value) return patch({ classTrib: "", cst: "", indOp: "", ibsAuto: false, ibsOff: true });
+    patch({ classTrib: value, cst: cstOf(value), ibsAuto: false, ibsOff: false, indOp: draft?.indOp || (tables ? onlyIndOp(tables, nac, onlyDigits(draft?.nbs ?? "")) : "") });
   }
 
   function lookup() {
@@ -601,20 +620,31 @@ export function EmitBoard({
   const takerDocForModel = draft?.takerKind === "known" ? draft.takerDoc : draft?.takerKind === "new" ? draft.newTaker.doc.replace(/\D/g, "") : null;
   const model = draft && notes ? (custom ? pickBaseModel(notes) : draft.service ? pickModel(notes, draft.service, takerDocForModel || null) : null) : null;
   const codeLine = (nbs?: string | null, classTrib?: string | null) => [nbs ? `NBS ${formatNbs(nbs)}` : "", classTrib ? `cClassTrib ${classTrib}` : ""].filter(Boolean).join(" · ");
+  /** só falta o indicador da operação: a tabela oficial dá mais de um para o serviço */
+  const indMissing = Boolean(draft) && !typing && classCode.length === 6 && !indCode;
   const missing: string[] = [];
+  /** o que falta preencher, pelo nome curto do campo (linha perto do botão e marca no próprio campo) */
+  const gaps: { field: GapField; short: string }[] = [];
   if (draft) {
-    if (draft.takerKind === "known" && !taker) missing.push("Escolha o tomador.");
-    missing.push(...checkCodes({ custom, nac: draft.customNac, mun: draft.customMun, nbs: draft.nbs, cst: draft.cst, classTrib: draft.classTrib, indOp: draft.indOp, lists: !typing }));
+    const lack = (field: GapField, short: string, text: string) => {
+      missing.push(text);
+      gaps.push({ field, short });
+    };
+    if (draft.takerKind === "known" && !taker) lack("taker", "tomador", "Escolha o tomador.");
+    for (const text of checkCodes({ custom, nac: draft.customNac, mun: draft.customMun, nbs: draft.nbs, cst: draft.cst, classTrib: draft.classTrib, indOp: draft.indOp, lists: !typing })) {
+      lack("codes", text.startsWith("Atividade") ? "atividade" : text.includes("NBS") ? "NBS" : indMissing ? "indicador da operação" : "códigos de IBS/CBS", text);
+    }
     if (draft.takerKind === "new") {
       const t = draft.newTaker;
       if (![11, 14].includes(t.doc.replace(/\D/g, "").length) || !t.nome.trim() || t.cep.replace(/\D/g, "").length !== 8 || !t.logradouro.trim() || !t.numero.trim() || !t.bairro.trim()) {
-        missing.push("Complete os dados do tomador novo.");
+        lack("taker", "dados do tomador novo", "Complete os dados do tomador novo.");
       }
     }
-    if (!amount) missing.push("Informe o valor.");
-    if (draft.description.trim().length < 3) missing.push("Escreva a descrição do serviço.");
+    if (!amount) lack("amount", "valor", "Informe o valor.");
+    if (draft.description.trim().length < 3) lack("description", "descrição", "Escreva a descrição do serviço.");
     if (model && !model.ok) missing.push(model.error);
   }
+  const mark = (field: GapField) => tried && gaps.some((g) => g.field === field);
   const ready = Boolean(draft && client && canRun && client.certificate_ok && missing.length === 0 && model?.ok);
 
   function emit() {
@@ -724,7 +754,6 @@ export function EmitBoard({
     (c) => !companyTerm || fold(`${c.name} ${c.client_code}`).includes(companyTerm) || (companyDigits.length >= 3 && c.cnpj.replace(/\D/g, "").includes(companyDigits)),
   );
 
-  const takerListOpen = Boolean(draft) && (takerOpen || (draft?.takerKind === "known" && !taker));
   // dúvidas da leitura do pedido: as do valor ficam embaixo do valor; as demais, embaixo do tomador
   const valueDoubts = (draft?.doubts ?? []).filter((d) => /\bvalor\b/i.test(d));
   const otherDoubts = (draft?.doubts ?? []).filter((d) => !/\bvalor\b/i.test(d));
@@ -740,7 +769,8 @@ export function EmitBoard({
     tables && nac.length === 6 && ((nbsCode && !nbsOptions(tables, nac).some((o) => o.value === nbsCode)) || (classCode && !tables.CLASS_TRIB[classCode]) || (indCode && !tables.IND_OP[indCode])),
   );
   const codeIssues = draft ? checkCodes({ custom: false, nac: "", mun: "", nbs: draft.nbs, cst: draft.cst, classTrib: draft.classTrib, indOp: draft.indOp, lists: !typing }).length > 0 : false;
-  const codesShown = codesOpen ?? (custom || offTable || codeIssues);
+  // faltando só o indicador, os códigos continuam fechados: o campo dele aparece sozinho, logo abaixo do resumo
+  const codesShown = codesOpen ?? (custom || offTable || (codeIssues && !indMissing));
 
   // a nota de onde saem o imposto e a retenção (o painel não guarda a alíquota: só sabe de qual nota ela vem)
   const modelNote = model?.ok && notes ? (notes.find((n) => n.chave === model.chave) ?? null) : null;
@@ -749,7 +779,8 @@ export function EmitBoard({
   if (draft && !active) {
     if (client && !client.certificate_ok) problems.push({ text: "Sem certificado válido: renove o certificado da empresa", red: true });
     if (robot.state === "offline") problems.push({ text: "Robô desligado: a nota fica na fila e sai quando ele ligar" });
-    for (const text of new Set([...(check?.warnings ?? []), ...missing])) problems.push({ text });
+    // campo que falta não é problema: vira a linha "Faltam: ..."; aqui fica só o que pede atenção
+    for (const text of new Set([...(check?.warnings ?? []), ...(model && !model.ok ? [model.error] : [])])) problems.push({ text });
   }
   const allClear = ready && problems.length === 0;
 
@@ -780,7 +811,8 @@ export function EmitBoard({
       </div>
 
       {tab === "emit" ? (
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,1fr)]">
+        // uma coluna só: campos, depois a nota como vai sair e o botão (a folga embaixo livra o aviso flutuante)
+        <div className="max-w-[820px] pb-14">
           <section className="min-w-0 overflow-clip rounded-xl border bg-card shadow-card">
             {/* 1. empresa */}
             <div className="flex flex-col gap-3 px-4 py-3.5">
@@ -1027,10 +1059,10 @@ export function EmitBoard({
 
             {/* 3. campos */}
             {draft && profile ? (
-              <div className={cn("flex flex-col gap-3.5 border-t border-(--c-efefeb) py-3.5 pr-4 pb-[18px] pl-11", active && "pointer-events-none opacity-60")} inert={Boolean(active)}>
+              <div className="flex flex-col gap-3.5 border-t border-(--c-efefeb) py-3.5 pr-4 pb-[18px] pl-11">
                 <h3 className={cn(STEP_TITLE, "-ml-7")}>
-                  <StepDot n={3} done={false} />
-                  Confira os campos
+                  <StepDot n={3} done={Boolean(active) || missing.length === 0} />
+                  Dados da nota
                   {active ? (
                     <span className="ml-auto flex items-center gap-1.5 text-[12px] font-normal text-(--c-6b6c66)">
                       <Lock className="size-3" /> travado enquanto está com o robô
@@ -1038,422 +1070,493 @@ export function EmitBoard({
                   ) : null}
                 </h3>
 
-                <Group
-                  label="Tomador"
-                  tag={
-                    taker ? (
-                      <Origin icon={History}>
-                        do histórico · {taker.notas} nota{taker.notas === 1 ? "" : "s"}
-                      </Origin>
-                    ) : draft.takerKind === "new" ? (
-                      <Tag tone="amber">tomador novo</Tag>
-                    ) : null
-                  }
-                >
-                  {takerListOpen ? (
-                    <div className="overflow-clip rounded-[9px] border border-(--c-9fd3b5) shadow-[0_0_0_3px_rgba(31,122,77,0.10)]">
-                      <div className="flex h-9 items-center gap-2 border-b border-(--c-efefeb) px-3">
-                        <Search className="size-3.5 shrink-0 text-(--c-6b6c66)" />
-                        <input
-                          className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-(--c-6b6c66)"
-                          placeholder="Filtrar pelo nome ou CNPJ"
-                          aria-label="Filtrar tomadores"
-                          value={takerFilter}
-                          onChange={(e) => setTakerFilter(e.target.value)}
-                        />
-                      </div>
-                      <div className="thin-scrollbar max-h-[300px] overflow-y-auto">
-                        {shownTakers.map((t) => (
-                          <button
-                            key={t.doc}
-                            type="button"
-                            onClick={() => pickTaker(t.doc)}
-                            className={cn(ROW, "py-2", draft.takerKind === "known" && t.doc === draft.takerDoc && "bg-(--c-f3faf6)")}
-                          >
-                            <span className="flex min-w-0 flex-col gap-px">
-                              <span className="truncate text-[13px] font-medium">{t.nome}</span>
-                              <span className="font-mono text-[11.5px] text-(--c-6b6c66)">{formatDoc(t.doc)}</span>
-                            </span>
-                            <span className="text-[11.5px] whitespace-nowrap text-(--c-6b6c66)">
-                              {t.notas} nota{t.notas === 1 ? "" : "s"} · última {formatDate(t.ultima.data)}
-                            </span>
-                          </button>
-                        ))}
-                        {shownTakers.length === 0 && takerFilter.trim() ? (
-                          <p className="border-b border-(--c-f2f2ef) px-3 py-2.5 text-[12.5px] text-(--c-6b6c66)">Nenhum tomador com esse texto.</p>
-                        ) : null}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => pickTaker("__new")}
-                        className="flex w-full items-center gap-2 border-b border-(--c-f2f2ef) px-3 py-2.5 text-left text-[13px] font-medium text-primary transition-colors hover:bg-(--c-fafaf8)"
+                {active ? null : (
+                  <>
+                    <Group
+                      label="Tomador"
+                      tag={
+                        mark("taker") ? (
+                          <Tag tone="amber">{draft.takerKind === "new" ? "faltam dados do tomador" : "falta escolher"}</Tag>
+                        ) : taker ? (
+                          <Origin icon={History}>
+                            do histórico · {taker.notas} nota{taker.notas === 1 ? "" : "s"}
+                          </Origin>
+                        ) : draft.takerKind === "new" ? (
+                          <Tag tone="amber">tomador novo</Tag>
+                        ) : null
+                      }
+                    >
+                      {/* a lista de tomadores abre ao clicar, como a de empresas; fechada, mostra só o escolhido */}
+                      <Popover
+                        open={takerOpen}
+                        onOpenChange={(open) => {
+                          setTakerOpen(open);
+                          if (open) setTakerFilter("");
+                        }}
                       >
-                        <Plus className="size-3.5" /> Novo tomador (busca pelo CNPJ)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => pickTaker("__none")}
-                        className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-(--c-4a4b46) transition-colors hover:bg-(--c-fafaf8)"
-                      >
-                        <UserX className="size-3.5 text-(--c-6b6c66)" /> Sem tomador identificado
-                      </button>
-                    </div>
-                  ) : draft.takerKind === "new" ? (
-                    <div className="flex flex-col gap-2 rounded-[9px] border border-(--c-e6e6e1) bg-(--c-fafaf8) px-3 py-2.5">
-                      <div className="flex gap-2">
-                        <input
-                          className={cn(INPUT, "min-w-0 flex-1 font-mono")}
-                          inputMode="numeric"
-                          placeholder="CNPJ ou CPF"
-                          aria-label="CNPJ ou CPF do tomador"
-                          value={draft.newTaker.doc}
-                          onChange={(e) => {
-                            setTakerStatus(null);
-                            patch({ newTaker: { ...draft.newTaker, doc: e.target.value } });
-                          }}
-                        />
-                        <button type="button" className={BTN_OUTLINE} onClick={lookup} disabled={looking || draft.newTaker.doc.replace(/\D/g, "").length !== 14}>
-                          {looking ? <Loader2 className="size-3.5 animate-spin" /> : <Search className="size-3.5" />} Buscar dados
-                        </button>
-                        <button type="button" className="px-1.5 text-[12.5px] whitespace-nowrap text-(--c-6b6c66) hover:text-foreground" onClick={() => setTakerOpen(true)}>
-                          Voltar
-                        </button>
-                      </div>
-                      {takerEdit ? (
-                        <>
-                          <Field label="Nome / razão social">
-                            <input className={INPUT} value={draft.newTaker.nome} onChange={(e) => patch({ newTaker: { ...draft.newTaker, nome: e.target.value } })} />
-                          </Field>
-                          <div className="grid gap-2.5 sm:grid-cols-[2fr_1fr_1.3fr]">
-                            <Field label="Logradouro">
-                              <input className={INPUT} value={draft.newTaker.logradouro} onChange={(e) => patch({ newTaker: { ...draft.newTaker, logradouro: e.target.value } })} />
-                            </Field>
-                            <Field label="Número">
-                              <input className={INPUT} value={draft.newTaker.numero} onChange={(e) => patch({ newTaker: { ...draft.newTaker, numero: e.target.value } })} />
-                            </Field>
-                            <Field label="Bairro">
-                              <input className={INPUT} value={draft.newTaker.bairro} onChange={(e) => patch({ newTaker: { ...draft.newTaker, bairro: e.target.value } })} />
-                            </Field>
-                          </div>
-                          <div className="grid gap-2.5 sm:grid-cols-3">
-                            <Field label="CEP">
-                              <input className={INPUT} inputMode="numeric" value={draft.newTaker.cep} onChange={(e) => patch({ newTaker: { ...draft.newTaker, cep: e.target.value } })} />
-                            </Field>
-                            <Field label="Código IBGE do município">
-                              <input
-                                className={INPUT}
-                                inputMode="numeric"
-                                value={draft.newTaker.cmun}
-                                onChange={(e) => patch({ newTaker: { ...draft.newTaker, cmun: e.target.value.replace(/\D/g, "").slice(0, 7), cidade: "" } })}
-                              />
-                            </Field>
-                            <Field label="Cidade">
-                              <input className={INPUT} value={draft.newTaker.cidade || "—"} disabled />
-                            </Field>
-                          </div>
-                          <button type="button" className={cn(LINK, "self-start")} onClick={() => setTakerEdit(false)}>
-                            Fechar a edição
-                          </button>
-                        </>
-                      ) : draft.newTaker.nome.trim() ? (
-                        <div className="flex flex-col gap-px text-[12.5px]">
-                          <b className="font-semibold">{draft.newTaker.nome}</b>
-                          <span className="text-(--c-6b6c66)">{newTakerAddress || "Endereço ainda não informado: use Buscar dados ou Editar dados."}</span>
-                          {takerStatus ? (
-                            takerStatus.toUpperCase() === "ATIVA" ? (
-                              <span className="text-(--c-1c7a47)">Ativa na Receita Federal</span>
+                        <PopoverAnchor asChild>
+                          <div>
+                            {draft.takerKind === "new" ? (
+                              <div className="flex flex-col gap-2 rounded-[9px] border border-(--c-e6e6e1) bg-(--c-fafaf8) px-3 py-2.5">
+                                <div className="flex gap-2">
+                                  <input
+                                    className={cn(INPUT, "min-w-0 flex-1 font-mono")}
+                                    inputMode="numeric"
+                                    placeholder="CNPJ ou CPF"
+                                    aria-label="CNPJ ou CPF do tomador"
+                                    value={draft.newTaker.doc}
+                                    onChange={(e) => {
+                                      setTakerStatus(null);
+                                      patch({ newTaker: { ...draft.newTaker, doc: e.target.value } });
+                                    }}
+                                  />
+                                  <button type="button" className={BTN_OUTLINE} onClick={lookup} disabled={looking || draft.newTaker.doc.replace(/\D/g, "").length !== 14}>
+                                    {looking ? <Loader2 className="size-3.5 animate-spin" /> : <Search className="size-3.5" />} Buscar dados
+                                  </button>
+                                  <PopoverTrigger asChild>
+                                    <button type="button" className="px-1.5 text-[12.5px] whitespace-nowrap text-(--c-6b6c66) hover:text-foreground">
+                                      Voltar
+                                    </button>
+                                  </PopoverTrigger>
+                                </div>
+                                {takerEdit ? (
+                                  <>
+                                    <Field label="Nome / razão social">
+                                      <input className={INPUT} value={draft.newTaker.nome} onChange={(e) => patch({ newTaker: { ...draft.newTaker, nome: e.target.value } })} />
+                                    </Field>
+                                    <div className="grid gap-2.5 sm:grid-cols-[2fr_1fr_1.3fr]">
+                                      <Field label="Logradouro">
+                                        <input className={INPUT} value={draft.newTaker.logradouro} onChange={(e) => patch({ newTaker: { ...draft.newTaker, logradouro: e.target.value } })} />
+                                      </Field>
+                                      <Field label="Número">
+                                        <input className={INPUT} value={draft.newTaker.numero} onChange={(e) => patch({ newTaker: { ...draft.newTaker, numero: e.target.value } })} />
+                                      </Field>
+                                      <Field label="Bairro">
+                                        <input className={INPUT} value={draft.newTaker.bairro} onChange={(e) => patch({ newTaker: { ...draft.newTaker, bairro: e.target.value } })} />
+                                      </Field>
+                                    </div>
+                                    <div className="grid gap-2.5 sm:grid-cols-3">
+                                      <Field label="CEP">
+                                        <input className={INPUT} inputMode="numeric" value={draft.newTaker.cep} onChange={(e) => patch({ newTaker: { ...draft.newTaker, cep: e.target.value } })} />
+                                      </Field>
+                                      <Field label="Código IBGE do município">
+                                        <input
+                                          className={INPUT}
+                                          inputMode="numeric"
+                                          value={draft.newTaker.cmun}
+                                          onChange={(e) => patch({ newTaker: { ...draft.newTaker, cmun: e.target.value.replace(/\D/g, "").slice(0, 7), cidade: "" } })}
+                                        />
+                                      </Field>
+                                      <Field label="Cidade">
+                                        <input className={INPUT} value={draft.newTaker.cidade || "—"} disabled />
+                                      </Field>
+                                    </div>
+                                    <button type="button" className={cn(LINK, "self-start")} onClick={() => setTakerEdit(false)}>
+                                      Fechar a edição
+                                    </button>
+                                  </>
+                                ) : draft.newTaker.nome.trim() ? (
+                                  <div className="flex flex-col gap-px text-[12.5px]">
+                                    <b className="font-semibold">{draft.newTaker.nome}</b>
+                                    <span className="text-(--c-6b6c66)">{newTakerAddress || "Endereço ainda não informado: use Buscar dados ou Editar dados."}</span>
+                                    {takerStatus ? (
+                                      takerStatus.toUpperCase() === "ATIVA" ? (
+                                        <span className="text-(--c-1c7a47)">Ativa na Receita Federal</span>
+                                      ) : (
+                                        <span className="text-(--c-9a6205)">Situação na Receita Federal: {takerStatus}</span>
+                                      )
+                                    ) : null}
+                                    <button type="button" className={cn(LINK, "mt-0.5 self-start")} onClick={() => setTakerEdit(true)}>
+                                      Editar dados
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-[12px] text-(--c-6b6c66)">
+                                    Nome e endereço vêm da Receita Federal.{" "}
+                                    <button type="button" className="font-medium text-foreground underline underline-offset-2" onClick={() => setTakerEdit(true)}>
+                                      Preencher à mão
+                                    </button>
+                                  </span>
+                                )}
+                              </div>
+                            ) : draft.takerKind === "known" && !taker ? (
+                              <PopoverTrigger asChild>
+                                <button
+                                  type="button"
+                                  className={cn(
+                                    "flex h-9 w-full items-center gap-2 rounded-[7px] border bg-card px-3 text-left text-[13px] outline-none transition-colors hover:bg-(--c-fafaf8) focus:border-ring",
+                                    mark("taker") ? "border-(--c-f0d9a8)" : "border-(--c-e3e3df)",
+                                  )}
+                                >
+                                  <span className="min-w-0 flex-1 truncate text-(--c-6b6c66)">Escolha o tomador</span>
+                                  <ChevronDown className="size-3.5 shrink-0 text-(--c-6b6c66)" />
+                                </button>
+                              </PopoverTrigger>
                             ) : (
-                              <span className="text-(--c-9a6205)">Situação na Receita Federal: {takerStatus}</span>
-                            )
-                          ) : null}
-                          <button type="button" className={cn(LINK, "mt-0.5 self-start")} onClick={() => setTakerEdit(true)}>
-                            Editar dados
+                              <div className="flex items-center gap-3 rounded-[9px] border border-(--c-e3e3df) px-3 py-2.5">
+                                <div className="flex min-w-0 flex-1 flex-col gap-px">
+                                  <span className="truncate text-[13.5px] font-medium">{taker ? taker.nome : "Sem tomador identificado"}</span>
+                                  {taker ? <span className="font-mono text-[11.5px] text-(--c-6b6c66)">{formatDoc(taker.doc)}</span> : null}
+                                </div>
+                                <PopoverTrigger asChild>
+                                  <button type="button" className={LINK}>
+                                    Trocar
+                                  </button>
+                                </PopoverTrigger>
+                              </div>
+                            )}
+                          </div>
+                        </PopoverAnchor>
+                        <PopoverContent align="start" collisionPadding={8} className="w-(--radix-popover-trigger-width) max-w-[94vw] min-w-[300px] gap-0 overflow-clip rounded-[10px] p-0">
+                          <div className="flex h-[38px] shrink-0 items-center gap-2 border-b border-(--c-efefeb) px-3">
+                            <Search className="size-3.5 shrink-0 text-(--c-6b6c66)" />
+                            <input
+                              className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-(--c-6b6c66)"
+                              placeholder="Buscar pelo nome ou CNPJ"
+                              aria-label="Buscar tomador"
+                              value={takerFilter}
+                              onChange={(e) => setTakerFilter(e.target.value)}
+                              onKeyDown={(e) => {
+                                // Enter escolhe o primeiro tomador da lista
+                                if (e.key === "Enter" && shownTakers[0]) pickTaker(shownTakers[0].doc);
+                              }}
+                            />
+                          </div>
+                          <div className="thin-scrollbar max-h-[min(390px,calc(var(--radix-popover-content-available-height)-124px))] overflow-y-auto">
+                            {shownTakers.map((t) => (
+                              <button
+                                key={t.doc}
+                                type="button"
+                                onClick={() => pickTaker(t.doc)}
+                                className={cn(ROW, "py-2", draft.takerKind === "known" && t.doc === draft.takerDoc && "bg-(--c-f3faf6)")}
+                              >
+                                <span className="flex min-w-0 flex-col gap-px">
+                                  <span className="truncate text-[13px] font-medium">{t.nome}</span>
+                                  <span className="font-mono text-[11.5px] text-(--c-6b6c66)">{formatDoc(t.doc)}</span>
+                                </span>
+                                <span className="text-[11.5px] whitespace-nowrap text-(--c-6b6c66)">
+                                  {t.notas} nota{t.notas === 1 ? "" : "s"} · última {formatDate(t.ultima.data)}
+                                </span>
+                              </button>
+                            ))}
+                            {shownTakers.length === 0 && takerFilter.trim() ? (
+                              <p className="border-b border-(--c-f2f2ef) px-3 py-2.5 text-[12.5px] text-(--c-6b6c66)">Nenhum tomador com esse texto.</p>
+                            ) : null}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => pickTaker("__new")}
+                            className="flex w-full items-center gap-2 border-b border-(--c-f2f2ef) px-3 py-2.5 text-left text-[13px] font-medium text-primary transition-colors hover:bg-(--c-fafaf8)"
+                          >
+                            <Plus className="size-3.5" /> Novo tomador (busca pelo CNPJ)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => pickTaker("__none")}
+                            className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-(--c-4a4b46) transition-colors hover:bg-(--c-fafaf8)"
+                          >
+                            <UserX className="size-3.5 text-(--c-6b6c66)" /> Sem tomador identificado
+                          </button>
+                        </PopoverContent>
+                      </Popover>
+                      {otherDoubts.map((d) => (
+                        <Doubt key={d}>{d}</Doubt>
+                      ))}
+                    </Group>
+
+                    <Group
+                      label="Serviço"
+                      tag={
+                        custom ? (
+                          <Tag tone="amber">outra atividade</Tag>
+                        ) : service ? (
+                          <Origin icon={History}>
+                            do histórico · {service.notas} nota{service.notas === 1 ? "" : "s"}
+                          </Origin>
+                        ) : null
+                      }
+                    >
+                      <div className="overflow-clip rounded-[9px] border border-(--c-e3e3df)">
+                        <div className="flex items-center gap-3 px-3 py-2.5">
+                          <div className="flex min-w-0 flex-1 flex-col gap-px">
+                            <span className="text-[13.5px] font-medium">{service?.nome ?? "Escolha o serviço"}</span>
+                            {service?.codigo ? <span className="font-mono text-[11.5px] text-(--c-6b6c66)">{service.codigo}</span> : null}
+                          </div>
+                          <button type="button" className={LINK} onClick={() => setServiceOpen((open) => !open)} aria-expanded={serviceOpen}>
+                            {serviceOpen ? "Fechar" : "Trocar"}
                           </button>
                         </div>
-                      ) : (
-                        <span className="text-[12px] text-(--c-6b6c66)">
-                          Nome e endereço vêm da Receita Federal.{" "}
-                          <button type="button" className="font-medium text-foreground underline underline-offset-2" onClick={() => setTakerEdit(true)}>
-                            Preencher à mão
-                          </button>
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-3 rounded-[9px] border border-(--c-e3e3df) px-3 py-2.5">
-                      <div className="flex min-w-0 flex-1 flex-col gap-px">
-                        <span className="truncate text-[13.5px] font-medium">{taker ? taker.nome : "Sem tomador identificado"}</span>
-                        {taker ? <span className="font-mono text-[11.5px] text-(--c-6b6c66)">{formatDoc(taker.doc)}</span> : null}
-                      </div>
-                      <button type="button" className={LINK} onClick={() => setTakerOpen(true)}>
-                        Trocar
-                      </button>
-                    </div>
-                  )}
-                  {otherDoubts.map((d) => (
-                    <Doubt key={d}>{d}</Doubt>
-                  ))}
-                </Group>
 
-                <Group
-                  label="Serviço"
-                  tag={
-                    custom ? (
-                      <Tag tone="amber">outra atividade</Tag>
-                    ) : service ? (
-                      <Origin icon={History}>
-                        do histórico · {service.notas} nota{service.notas === 1 ? "" : "s"}
-                      </Origin>
-                    ) : null
-                  }
-                >
-                  <div className="overflow-clip rounded-[9px] border border-(--c-e3e3df)">
-                    <div className="flex items-center gap-3 px-3 py-2.5">
-                      <div className="flex min-w-0 flex-1 flex-col gap-px">
-                        <span className="text-[13.5px] font-medium">{service?.nome ?? "Escolha o serviço"}</span>
-                        {service?.codigo ? <span className="font-mono text-[11.5px] text-(--c-6b6c66)">{service.codigo}</span> : null}
-                      </div>
-                      <button type="button" className={LINK} onClick={() => setServiceOpen((open) => !open)} aria-expanded={serviceOpen}>
-                        {serviceOpen ? "Fechar" : "Trocar"}
-                      </button>
-                    </div>
-
-                    {serviceOpen ? (
-                      <>
-                        {profile.services.map((s) => (
-                          <button
-                            key={s.id}
-                            type="button"
-                            onClick={() => pickService(s.id)}
-                            className={cn(
-                              "grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-(--c-f2f2ef) px-3 py-2 text-left transition-colors hover:bg-(--c-fafaf8)",
-                              s.id === draft.service && "bg-(--c-f3faf6)",
-                            )}
-                          >
-                            <span className="flex min-w-0 flex-col gap-px">
-                              <span className="text-[13px] font-medium">{s.nome}</span>
-                              <span className="font-mono text-[11.5px] text-(--c-6b6c66)">
-                                {s.codigo}
-                                {s.livre ? "" : " · só para tomador que já tem nota com ele"}
-                              </span>
-                            </span>
-                            <span className="text-[11.5px] whitespace-nowrap text-(--c-6b6c66)">
-                              {s.notas} nota{s.notas === 1 ? "" : "s"}
-                            </span>
-                          </button>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => pickService(CUSTOM)}
-                          className={cn(
-                            "flex w-full items-center gap-2 border-t border-(--c-f2f2ef) px-3 py-2.5 text-left text-[13px] text-(--c-4a4b46) transition-colors hover:bg-(--c-fafaf8)",
-                            custom && "bg-(--c-f3faf6)",
-                          )}
-                        >
-                          <ListPlus className="size-3.5 text-(--c-6b6c66)" /> Outra atividade do cadastro (pelo código nacional)
-                        </button>
-                      </>
-                    ) : null}
-
-                    {custom ? (
-                      <div className="flex flex-col gap-2.5 border-t border-(--c-efefeb) bg-(--c-fafaf8) p-3">
-                        {activities.length ? (
-                          <Field label="Atividades já usadas nas notas do escritório (opcional: preenche os códigos)">
-                            <select className={INPUT} value="" onChange={(e) => chooseActivity(e.target.value)}>
-                              <option value="">— escolher da lista —</option>
-                              {activities.map((a) => (
-                                <option key={`${a.c_trib_nac}|${a.c_trib_mun}`} value={`${a.c_trib_nac}|${a.c_trib_mun}`}>
-                                  {a.servico_nome ?? tables?.TRIB_NACIONAL[a.c_trib_nac] ?? "Atividade"} — {formatServiceCode(`${a.c_trib_nac}|${a.c_trib_mun}`)}
-                                </option>
-                              ))}
-                            </select>
-                          </Field>
-                        ) : null}
-                        <Field label="Código de tributação nacional">
-                          {typing ? (
-                            <input className={INPUT} inputMode="numeric" placeholder="6 números. Ex.: 14.06.01" value={draft.customNac} onChange={(e) => patch({ customNac: e.target.value })} maxLength={10} />
-                          ) : (
-                            <SearchSelect
-                              label="Código de tributação nacional"
-                              value={nac}
-                              options={nationalList}
-                              onChange={chooseNational}
-                              placeholder={tables ? "Buscar pelo número ou pelo nome do serviço" : "Carregando as listas…"}
-                              disabled={!tables}
-                            />
-                          )}
-                        </Field>
-                        <Group
-                          label="Código complementar municipal (3 números)"
-                          tag={
-                            munKnown.length && munTyped ? (
-                              <button type="button" className="text-[11px] font-medium text-foreground underline underline-offset-2" onClick={() => patch({ munOther: false, customMun: "" })}>
-                                escolher entre os já usados
+                        {serviceOpen ? (
+                          <>
+                            {profile.services.map((s) => (
+                              <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => pickService(s.id)}
+                                className={cn(
+                                  "grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-(--c-f2f2ef) px-3 py-2 text-left transition-colors hover:bg-(--c-fafaf8)",
+                                  s.id === draft.service && "bg-(--c-f3faf6)",
+                                )}
+                              >
+                                <span className="flex min-w-0 flex-col gap-px">
+                                  <span className="text-[13px] font-medium">{s.nome}</span>
+                                  <span className="font-mono text-[11.5px] text-(--c-6b6c66)">
+                                    {s.codigo}
+                                    {s.livre ? "" : " · só para tomador que já tem nota com ele"}
+                                  </span>
+                                </span>
+                                <span className="text-[11.5px] whitespace-nowrap text-(--c-6b6c66)">
+                                  {s.notas} nota{s.notas === 1 ? "" : "s"}
+                                </span>
                               </button>
-                            ) : null
-                          }
-                        >
-                          {munTyped ? (
-                            <input className={INPUT} inputMode="numeric" placeholder="Ex.: 009" aria-label="Código complementar municipal" value={draft.customMun} onChange={(e) => patch({ customMun: e.target.value })} maxLength={3} />
-                          ) : (
-                            <select
-                              className={INPUT}
-                              aria-label="Código complementar municipal"
-                              value={munCode}
-                              onChange={(e) => (e.target.value === "__other" ? patch({ munOther: true, customMun: "" }) : patch({ customMun: e.target.value }))}
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => pickService(CUSTOM)}
+                              className={cn(
+                                "flex w-full items-center gap-2 border-t border-(--c-f2f2ef) px-3 py-2.5 text-left text-[13px] text-(--c-4a4b46) transition-colors hover:bg-(--c-fafaf8)",
+                                custom && "bg-(--c-f3faf6)",
+                              )}
                             >
-                              <option value="">— escolher —</option>
-                              {munKnown.map((m) => (
-                                <option key={m.code} value={m.code}>
-                                  {formatServiceCode(`${nac}|${m.code}`)} — {m.hint}
-                                </option>
-                              ))}
-                              <option value="__other">Outro código do cadastro da empresa (digitar)</option>
-                            </select>
-                          )}
-                        </Group>
-                      </div>
-                    ) : null}
-
-                    <div className="flex items-center gap-2.5 border-t border-dashed border-(--c-e3e3df) bg-(--c-fafaf8) px-3 py-2">
-                      <span className="text-[12px] whitespace-nowrap text-(--c-6b6c66)">Códigos fiscais</span>
-                      <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-(--c-4a4b46)" title={codesLine}>
-                        {codesLine}
-                      </span>
-                      <button type="button" className="flex items-center gap-1 text-[12px] font-medium whitespace-nowrap" onClick={() => setCodesOpen(!codesShown)} aria-expanded={codesShown}>
-                        {codesShown ? "Fechar" : "Alterar"}
-                        {codesShown ? <ChevronUp className="size-[13px] text-(--c-6b6c66)" /> : <ChevronDown className="size-[13px] text-(--c-6b6c66)" />}
-                      </button>
-                    </div>
-
-                    {codesShown ? (
-                      <div className="grid gap-2.5 border-t border-(--c-efefeb) p-3 [grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]">
-                        {typing ? (
-                          <>
-                            <Field label="Item NBS">
-                              <input className={INPUT} inputMode="numeric" placeholder="9 números" value={draft.nbs} onChange={(e) => patch({ nbs: e.target.value })} maxLength={12} />
-                            </Field>
-                            <Field label="Classificação tributária (IBS/CBS)">
-                              <input className={INPUT} inputMode="numeric" placeholder="cClassTrib, 6 números" value={draft.classTrib} onChange={(e) => patch({ classTrib: e.target.value })} maxLength={6} />
-                            </Field>
-                            <Field label="Situação tributária (CST)">
-                              <input className={INPUT} inputMode="numeric" placeholder="3 números" value={draft.cst} onChange={(e) => patch({ cst: e.target.value })} maxLength={3} />
-                            </Field>
-                            <Field label="Indicador da operação">
-                              <input className={INPUT} inputMode="numeric" placeholder="6 números" value={draft.indOp} onChange={(e) => patch({ indOp: e.target.value })} maxLength={6} />
-                            </Field>
+                              <ListPlus className="size-3.5 text-(--c-6b6c66)" /> Outra atividade do cadastro (pelo código nacional)
+                            </button>
                           </>
-                        ) : (
-                          <>
-                            <Field label="Item NBS" tag={!custom && service?.nbs && nbsCode === service.nbs ? <Origin icon={History}>da última nota</Origin> : null}>
-                              <SearchSelect
-                                label="Item NBS"
-                                value={nbsCode}
-                                options={tables ? withCurrent(nbsOptions(tables, nac), nbsCode, `${nbsLabel(tables, nbsCode)} (fora da tabela oficial para este serviço)`) : []}
-                                onChange={(value) => patch({ nbs: value })}
-                                placeholder={!tables ? "Carregando as listas…" : nac.length === 6 ? "Sem NBS" : "Escolha antes a atividade"}
-                                emptyLabel="— sem NBS —"
-                                disabled={!tables || nac.length !== 6}
-                              />
+                        ) : null}
+
+                        {custom ? (
+                          <div className="flex flex-col gap-2.5 border-t border-(--c-efefeb) bg-(--c-fafaf8) p-3">
+                            {activities.length ? (
+                              <Field label="Atividades já usadas nas notas do escritório (opcional: preenche os códigos)">
+                                <select className={INPUT} value="" onChange={(e) => chooseActivity(e.target.value)}>
+                                  <option value="">— escolher da lista —</option>
+                                  {activities.map((a) => (
+                                    <option key={`${a.c_trib_nac}|${a.c_trib_mun}`} value={`${a.c_trib_nac}|${a.c_trib_mun}`}>
+                                      {a.servico_nome ?? tables?.TRIB_NACIONAL[a.c_trib_nac] ?? "Atividade"} — {formatServiceCode(`${a.c_trib_nac}|${a.c_trib_mun}`)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </Field>
+                            ) : null}
+                            <Field label="Código de tributação nacional">
+                              {typing ? (
+                                <input className={INPUT} inputMode="numeric" placeholder="6 números. Ex.: 14.06.01" value={draft.customNac} onChange={(e) => patch({ customNac: e.target.value })} maxLength={10} />
+                              ) : (
+                                <SearchSelect
+                                  label="Código de tributação nacional"
+                                  value={nac}
+                                  options={nationalList}
+                                  onChange={chooseNational}
+                                  placeholder={tables ? "Buscar pelo número ou pelo nome do serviço" : "Carregando as listas…"}
+                                  disabled={!tables}
+                                />
+                              )}
                             </Field>
-                            <Field
-                              label="Classificação tributária (IBS/CBS)"
-                              tag={service?.ibs && classCode === service.ibs.classTrib ? <Origin icon={History}>da última nota</Origin> : null}
+                            <Group
+                              label="Código complementar municipal (3 números)"
+                              tag={
+                                munKnown.length && munTyped ? (
+                                  <button type="button" className="text-[11px] font-medium text-foreground underline underline-offset-2" onClick={() => patch({ munOther: false, customMun: "" })}>
+                                    escolher entre os já usados
+                                  </button>
+                                ) : null
+                              }
                             >
-                              <SearchSelect
-                                label="Classificação tributária"
-                                value={classCode}
-                                options={tables ? withCurrent(classTribOptions(tables, nac, nbsCode), classCode, `${classTribLabel(tables, classCode)} (fora da tabela oficial)`) : []}
-                                onChange={(value) => chooseClassTrib(value, nac)}
-                                placeholder={!tables ? "Carregando as listas…" : nac.length === 6 ? "Não informar IBS/CBS" : "Escolha antes a atividade"}
-                                emptyLabel="— não informar IBS/CBS —"
-                                disabled={!tables || nac.length !== 6}
-                              />
-                            </Field>
-                            <Field label="Situação tributária (CST)">
-                              <input className={INPUT} value={draft.cst ? cstLabel(tables, onlyDigits(draft.cst)) : "—"} title={draft.cst ? cstLabel(tables, onlyDigits(draft.cst)) : undefined} disabled />
-                            </Field>
-                            <Field label="Indicador da operação">
+                              {munTyped ? (
+                                <input className={INPUT} inputMode="numeric" placeholder="Ex.: 009" aria-label="Código complementar municipal" value={draft.customMun} onChange={(e) => patch({ customMun: e.target.value })} maxLength={3} />
+                              ) : (
+                                <select
+                                  className={INPUT}
+                                  aria-label="Código complementar municipal"
+                                  value={munCode}
+                                  onChange={(e) => (e.target.value === "__other" ? patch({ munOther: true, customMun: "" }) : patch({ customMun: e.target.value }))}
+                                >
+                                  <option value="">— escolher —</option>
+                                  {munKnown.map((m) => (
+                                    <option key={m.code} value={m.code}>
+                                      {formatServiceCode(`${nac}|${m.code}`)} — {m.hint}
+                                    </option>
+                                  ))}
+                                  <option value="__other">Outro código do cadastro da empresa (digitar)</option>
+                                </select>
+                              )}
+                            </Group>
+                          </div>
+                        ) : null}
+
+                        <div className="flex items-center gap-2.5 border-t border-dashed border-(--c-e3e3df) bg-(--c-fafaf8) px-3 py-2">
+                          <span className="flex items-center gap-0.5 text-[12px] whitespace-nowrap text-(--c-6b6c66)">
+                            Códigos fiscais
+                            <HelpTip label="O que são os códigos fiscais">
+                              <p>NBS e IBS/CBS são opcionais: vazios, a nota sai sem eles.</p>
+                              <p>A classificação já vem escolhida quando a tabela oficial só indica uma para o serviço.</p>
+                              <p>Os valores do IBS/CBS quem calcula é a prefeitura.</p>
+                            </HelpTip>
+                          </span>
+                          <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-(--c-4a4b46)" title={codesLine}>
+                            {codesLine}
+                          </span>
+                          <button type="button" className="flex items-center gap-1 text-[12px] font-medium whitespace-nowrap" onClick={() => setCodesOpen(!codesShown)} aria-expanded={codesShown}>
+                            {codesShown ? "Fechar" : "Alterar"}
+                            {codesShown ? <ChevronUp className="size-[13px] text-(--c-6b6c66)" /> : <ChevronDown className="size-[13px] text-(--c-6b6c66)" />}
+                          </button>
+                        </div>
+
+                        {!codesShown && indMissing ? (
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-(--c-efefeb) px-3 py-2.5">
+                            <span className="flex items-center gap-2 text-xs font-medium text-(--c-6b6c66)">
+                              Indicador da operação
+                              {mark("codes") ? <Tag tone="amber">falta escolher</Tag> : null}
+                            </span>
+                            <div className="min-w-[220px] flex-1">
                               <SearchSelect
                                 label="Indicador da operação"
                                 value={indCode}
-                                options={tables ? withCurrent(indOpOptions(tables, nac, nbsCode), indCode, `${indOpLabel(tables, indCode)} (fora da tabela oficial)`) : []}
+                                options={tables ? indOpOptions(tables, nac, nbsCode) : []}
                                 onChange={(value) => patch({ indOp: value })}
-                                placeholder={classCode ? "Escolher o indicador" : "Escolha antes a classificação"}
-                                disabled={!tables || !classCode}
+                                placeholder={tables ? "Há mais de um para este serviço: escolha" : "Carregando as listas…"}
+                                disabled={!tables}
                               />
-                            </Field>
-                          </>
-                        )}
-                        <p className="col-span-full text-[12px] leading-[1.45] text-(--c-6b6c66)">
-                          Opcionais. Vazios, a nota sai sem eles. Os valores do IBS/CBS quem calcula é a prefeitura.{" "}
-                          {tablesFailed ? null : (
-                            <button type="button" className="font-medium text-foreground underline underline-offset-2" onClick={() => patch({ typed: !draft.typed })}>
-                              {draft.typed ? "Voltar para as listas" : "Digitar os códigos"}
-                            </button>
-                          )}
-                        </p>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {codesShown ? (
+                          <div className="grid gap-2.5 border-t border-(--c-efefeb) p-3 [grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]">
+                            {typing ? (
+                              <>
+                                <Field label="Item NBS">
+                                  <input className={INPUT} inputMode="numeric" placeholder="9 números" value={draft.nbs} onChange={(e) => patch({ nbs: e.target.value })} maxLength={12} />
+                                </Field>
+                                <Field label="Classificação tributária (IBS/CBS)">
+                                  <input className={INPUT} inputMode="numeric" placeholder="cClassTrib, 6 números" value={draft.classTrib} onChange={(e) => patch({ classTrib: e.target.value })} maxLength={6} />
+                                </Field>
+                                <Field label="Situação tributária (CST)">
+                                  <input className={INPUT} inputMode="numeric" placeholder="3 números" value={draft.cst} onChange={(e) => patch({ cst: e.target.value })} maxLength={3} />
+                                </Field>
+                                <Field label="Indicador da operação">
+                                  <input className={INPUT} inputMode="numeric" placeholder="6 números" value={draft.indOp} onChange={(e) => patch({ indOp: e.target.value })} maxLength={6} />
+                                </Field>
+                              </>
+                            ) : (
+                              <>
+                                <Field label="Item NBS" tag={!custom && service?.nbs && nbsCode === service.nbs ? <Origin icon={History}>da última nota</Origin> : null}>
+                                  <SearchSelect
+                                    label="Item NBS"
+                                    value={nbsCode}
+                                    options={tables ? withCurrent(nbsOptions(tables, nac), nbsCode, `${nbsLabel(tables, nbsCode)} (fora da tabela oficial para este serviço)`) : []}
+                                    onChange={(value) => patch({ nbs: value, ...(draft.ibsAuto ? { classTrib: "", cst: "", indOp: "", ibsAuto: false } : {}) })}
+                                    placeholder={!tables ? "Carregando as listas…" : nac.length === 6 ? "Sem NBS" : "Escolha antes a atividade"}
+                                    emptyLabel="— sem NBS —"
+                                    disabled={!tables || nac.length !== 6}
+                                  />
+                                </Field>
+                                <Field
+                                  label="Classificação tributária (IBS/CBS)"
+                                  tag={
+                                    service?.ibs && classCode === service.ibs.classTrib ? (
+                                      <Origin icon={History}>da última nota</Origin>
+                                    ) : draft.ibsAuto && classCode ? (
+                                      <Origin icon={ListChecks}>da tabela oficial</Origin>
+                                    ) : null
+                                  }
+                                >
+                                  <SearchSelect
+                                    label="Classificação tributária"
+                                    value={classCode}
+                                    options={tables ? withCurrent(classTribOptions(tables, nac, nbsCode), classCode, `${classTribLabel(tables, classCode)} (fora da tabela oficial)`) : []}
+                                    onChange={(value) => chooseClassTrib(value, nac)}
+                                    placeholder={!tables ? "Carregando as listas…" : nac.length === 6 ? "Não informar IBS/CBS" : "Escolha antes a atividade"}
+                                    emptyLabel="— não informar IBS/CBS —"
+                                    disabled={!tables || nac.length !== 6}
+                                  />
+                                </Field>
+                                <Field label="Situação tributária (CST)">
+                                  <input className={INPUT} value={draft.cst ? cstLabel(tables, onlyDigits(draft.cst)) : "—"} title={draft.cst ? cstLabel(tables, onlyDigits(draft.cst)) : undefined} disabled />
+                                </Field>
+                                <Field label="Indicador da operação">
+                                  <SearchSelect
+                                    label="Indicador da operação"
+                                    value={indCode}
+                                    options={tables ? withCurrent(indOpOptions(tables, nac, nbsCode), indCode, `${indOpLabel(tables, indCode)} (fora da tabela oficial)`) : []}
+                                    onChange={(value) => patch({ indOp: value })}
+                                    placeholder={classCode ? "Escolher o indicador" : "Escolha antes a classificação"}
+                                    disabled={!tables || !classCode}
+                                  />
+                                </Field>
+                              </>
+                            )}
+                            {tablesFailed ? null : (
+                              <p className="col-span-full text-[12px] leading-[1.45] text-(--c-6b6c66)">
+                                <button type="button" className="font-medium text-foreground underline underline-offset-2" onClick={() => patch({ typed: !draft.typed })}>
+                                  {draft.typed ? "Voltar para as listas" : "Digitar os códigos"}
+                                </button>
+                              </p>
+                            )}
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
-                  </div>
-                </Group>
+                    </Group>
 
-                <Field
-                  label="Descrição na nota"
-                  tag={draft.origin ? <Origin icon={draft.source === "ai" ? Sparkles : Repeat2}>{draft.origin}</Origin> : null}
-                >
-                  <textarea className={cn(AREA, "min-h-[62px]")} value={draft.description} onChange={(e) => patch({ description: e.target.value })} maxLength={2000} />
-                </Field>
-
-                <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(180px,1fr))]">
-                  <div className="flex flex-col gap-1.5">
-                    <Field label="Valor">
-                      <span className="flex h-9 items-center gap-1.5 rounded-[7px] border border-(--c-e3e3df) bg-card px-2.5 transition-colors focus-within:border-ring">
-                        <span className="text-[13px] text-(--c-6b6c66)">R$</span>
-                        <input
-                          className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold tabular-nums outline-none placeholder:font-normal placeholder:text-(--c-9a9b94)"
-                          inputMode="decimal"
-                          placeholder="0,00"
-                          value={draft.amount}
-                          onChange={(e) => patch({ amount: e.target.value })}
-                        />
-                      </span>
+                    <Field
+                      label="Descrição na nota"
+                      tag={
+                        mark("description") ? (
+                          <Tag tone="amber">falta escrever</Tag>
+                        ) : draft.origin ? (
+                          <Origin icon={draft.source === "ai" ? Sparkles : Repeat2}>{draft.origin}</Origin>
+                        ) : null
+                      }
+                    >
+                      <textarea className={cn(AREA, "min-h-[62px]", mark("description") && "border-(--c-f0d9a8)")} value={draft.description} onChange={(e) => patch({ description: e.target.value })} maxLength={2000} />
                     </Field>
-                    {valueDoubts.map((d) => (
-                      <Doubt key={d}>{d}</Doubt>
-                    ))}
-                  </div>
-                  <Field label="Competência">
-                    <span className="flex h-9 items-center rounded-[7px] border border-(--c-e3e3df) bg-(--c-f5f5f2) px-2.5 font-mono text-[14px] font-medium text-(--c-6b6c66)">
-                      {month.slice(5)}/{month.slice(0, 4)}
-                    </span>
-                  </Field>
-                </div>
+
+                    <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(180px,1fr))]">
+                      <div className="flex flex-col gap-1.5">
+                        <Field label="Valor" tag={mark("amount") ? <Tag tone="amber">falta informar</Tag> : null}>
+                          <span
+                            className={cn(
+                              "flex h-9 items-center gap-1.5 rounded-[7px] border bg-card px-2.5 transition-colors focus-within:border-ring",
+                              mark("amount") ? "border-(--c-f0d9a8)" : "border-(--c-e3e3df)",
+                            )}
+                          >
+                            <span className="text-[13px] text-(--c-6b6c66)">R$</span>
+                            <input
+                              className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold tabular-nums outline-none placeholder:font-normal placeholder:text-(--c-9a9b94)"
+                              inputMode="decimal"
+                              placeholder="0,00"
+                              value={draft.amount}
+                              onChange={(e) => patch({ amount: e.target.value })}
+                            />
+                          </span>
+                        </Field>
+                        {valueDoubts.map((d) => (
+                          <Doubt key={d}>{d}</Doubt>
+                        ))}
+                      </div>
+                      <Field label="Competência">
+                        <span className="flex h-9 items-center rounded-[7px] border border-(--c-e3e3df) bg-(--c-f5f5f2) px-2.5 font-mono text-[14px] font-medium text-(--c-6b6c66)">
+                          {month.slice(5)}/{month.slice(0, 4)}
+                        </span>
+                      </Field>
+                    </div>
+                  </>
+                )}
               </div>
             ) : null}
-          </section>
 
-          {/* prévia */}
-          <section className="overflow-clip rounded-xl border bg-card shadow-card lg:sticky lg:top-20">
-            <header className="flex items-center gap-2 border-b border-(--c-efefeb) px-4 py-3 text-[13.5px] font-semibold">
-              Prévia da nota
-              {activeState ? (
-                <span className="ml-auto">
-                  <ToneBadge tone={activeState.tone}>{activeState.label}</ToneBadge>
-                </span>
-              ) : null}
-            </header>
-            <div className="flex flex-col gap-3.5 px-4 pt-3.5 pb-4">
-              {!draft && !active ? (
-                <div className="flex flex-col items-center gap-2 rounded-[10px] border border-dashed border-(--c-d9d9d4) px-4 py-7 text-center">
-                  <span className="grid size-9 place-items-center rounded-full bg-(--c-f5f5f2) text-(--c-6b6c66)">
-                    <ReceiptText className="size-[17px]" />
+            {/* 4. conferência: a nota como vai sair, o que falta e o botão; depois de pedir, o andamento e o resultado */}
+            {draft || active ? (
+            <div className="flex flex-col gap-3.5 border-t border-(--c-efefeb) py-3.5 pr-4 pb-[18px] pl-11">
+              <h3 className={cn(STEP_TITLE, "-ml-7")}>
+                <StepDot n={4} done={active?.status === "issued" || active?.status === "canceled"} />
+                {active ? "Nota" : "Confira e emita"}
+                {activeState ? (
+                  <span className="ml-auto">
+                    <ToneBadge tone={activeState.tone}>{activeState.label}</ToneBadge>
                   </span>
-                  <span className="max-w-[260px] text-[13px] leading-[1.45] text-(--c-4a4b46)">
-                    {client ? "Cole o pedido do cliente ou repita uma nota. A prévia se preenche sozinha." : "Escolha a empresa para começar."}
-                  </span>
-                </div>
-              ) : (
+                ) : null}
+              </h3>
                 <div className="relative overflow-hidden rounded-[10px] border border-(--c-d9d9d4)">
                   <div className="flex items-center gap-2 border-b border-(--c-e3e3df) bg-(--c-f5f5f1) px-3 py-[7px] text-[11px] font-semibold tracking-[0.04em] text-(--c-6b6c66) uppercase">
                     NFS-e · Teresina
@@ -1542,7 +1645,6 @@ export function EmitBoard({
                     ) : null}
                   </div>
                 </div>
-              )}
 
               {/* antes de emitir: conferência */}
               {draft && !active ? (
@@ -1557,16 +1659,32 @@ export function EmitBoard({
                         Pronta para emitir <span className="text-(--c-6b6c66)">· certificado, robô e serviço conferidos</span>
                       </span>
                     </div>
-                  ) : problems.length ? (
-                    <ul className="flex flex-col gap-1.5 text-[12.5px]">
-                      {problems.map((p) => (
-                        <li key={p.text} className={cn("flex items-start gap-2", p.red ? "text-(--c-b42323)" : "text-(--c-9a6205)")}>
-                          <TriangleAlert className="mt-px size-3.5 shrink-0" /> {p.text}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                  <button type="button" className={cn(BTN_PRIMARY, "h-10 w-full rounded-lg text-[14px]")} disabled={!ready} onClick={() => setConfirming(true)}>
+                  ) : (
+                    <>
+                      {problems.length ? (
+                        <ul className="flex flex-col gap-1.5 text-[12.5px]">
+                          {problems.map((p) => (
+                            <li key={p.text} className={cn("flex items-start gap-2", p.red ? "text-(--c-b42323)" : "text-(--c-9a6205)")}>
+                              <TriangleAlert className="mt-px size-3.5 shrink-0" /> {p.text}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {gaps.length ? (
+                        <p className={cn("text-[12.5px]", tried ? "text-(--c-9a6205)" : "text-(--c-6b6c66)")}>
+                          {gaps.length === 1 ? "Falta" : "Faltam"}: {listOf(gaps.map((g) => g.short))}.
+                        </p>
+                      ) : null}
+                    </>
+                  )}
+                  {/* com algo faltando o botão não emite: marca nos campos o que falta */}
+                  <button
+                    type="button"
+                    className={cn(BTN_PRIMARY, "h-10 w-full rounded-lg text-[14px]", !ready && "opacity-60")}
+                    disabled={!canRun || !client?.certificate_ok}
+                    aria-disabled={!ready}
+                    onClick={() => (ready ? setConfirming(true) : setTried(true))}
+                  >
                     <Send className="size-[15px]" /> Emitir nota{isOwner && testEnv ? " de teste" : ""}
                   </button>
                   <p className="-mt-1.5 text-center text-[12px] text-(--c-6b6c66)">{canRun ? "A nota só sai depois da sua confirmação." : "Seu perfil só visualiza."}</p>
@@ -1660,6 +1778,7 @@ export function EmitBoard({
                 </>
               ) : null}
             </div>
+            ) : null}
           </section>
         </div>
       ) : (

@@ -9,6 +9,8 @@ import {
   correlationRows,
   cstLabel,
   cstOf,
+  defaultIbs,
+  fillIbs,
   filterOptions,
   formatNac,
   GROUP_OTHERS,
@@ -53,6 +55,35 @@ describe("tabelas oficiais da NFS-e", () => {
     // sem NBS (ou com NBS fora da tabela), valem as do item inteiro
     assert.deepEqual(suggested(classTribOptions(tables, "010101", "")), ["000001", "200043", "200044"]);
     assert.deepEqual(suggested(classTribOptions(tables, "010101", "999999999")), ["000001", "200043", "200044"]);
+  });
+
+  it("IBS/CBS que a tabela resolve sozinha: a classificação quando só há uma; o indicador, quando também é único", () => {
+    // 14.13.01: uma classificação e dois indicadores -> a classificação vem, o indicador fica para a pessoa
+    assert.deepEqual(defaultIbs(tables, "141301", "101075000"), { classTrib: "000001", cst: "000", indOp: "" });
+    // 10.02.01: uma classificação e um indicador -> vem tudo
+    assert.deepEqual(defaultIbs(tables, "100201", ""), { classTrib: "000001", cst: "000", indOp: "100301" });
+    // 01.01.01: depende do NBS; sem ele há mais de uma classificação possível e nada é escolhido
+    assert.equal(defaultIbs(tables, "010101", "115021000")?.classTrib, "000001");
+    assert.equal(defaultIbs(tables, "010101", ""), null);
+    assert.equal(defaultIbs(tables, "010101", "115029000"), null);
+    // serviço fora da tabela
+    assert.equal(defaultIbs(tables, "999999", ""), null);
+  });
+
+  it("o rascunho sem IBS/CBS recebe o da tabela; o que veio de uma nota, o digitado e o 'não informar' ficam", () => {
+    const empty = { nbs: "101075000", cst: "", classTrib: "", indOp: "", typed: false, ibsAuto: false, ibsOff: false };
+    assert.deepEqual(fillIbs(empty, tables, "141301"), { ...empty, classTrib: "000001", cst: "000", indOp: "", ibsAuto: true });
+    assert.deepEqual(fillIbs({ ...empty, nbs: "" }, tables, "100201"), { ...empty, nbs: "", classTrib: "000001", cst: "000", indOp: "100301", ibsAuto: true });
+    // copiado da última nota: fica como está, mesmo diferente do que a tabela indica
+    const copied = { ...empty, cst: "200", classTrib: "200043", indOp: "050102" };
+    assert.equal(fillIbs(copied, tables, "141301"), copied);
+    // quem escolheu não informar, quem está digitando os códigos e serviço sem resposta única: nada é preenchido
+    for (const kept of [{ ...empty, ibsOff: true }, { ...empty, typed: true }]) assert.equal(fillIbs(kept, tables, "141301"), kept);
+    const open = { ...empty, nbs: "" };
+    assert.equal(fillIbs(open, tables, "010101"), open);
+    assert.equal(fillIbs(open, tables, ""), open);
+    // as listas ainda não chegaram: espera
+    assert.equal(fillIbs(empty, null, "141301"), empty);
   });
 
   it("as demais opções continuam disponíveis, depois das indicadas", () => {
