@@ -885,6 +885,30 @@ def cap_downloads() -> list:
                 "para as cidades que usam a NFS-e Nacional ou repassam as notas a ela (Teresina repassa).",
             ]
         ),
+        H2("Quando a prefeitura demora a repassar as notas"),
+        P(
+            "A nota emitida no site da prefeitura só aparece na busca depois que a prefeitura a repassa à NFS-e "
+            "Nacional, e isso nem sempre acontece na hora: pode levar dias. Quando o atraso é relevante, a tela "
+            "<b>NFS-e Nacional</b> mostra o cartão <b>Repasse ao ambiente nacional com atraso</b>, com uma linha "
+            "por cidade:"
+        ),
+        *bullets(
+            [
+                "das notas que chegaram nos últimos 30 dias, quantas levaram <b>mais de um dia</b>, em quanto tempo "
+                "chegou <b>metade</b> delas e quanto levou <b>a mais demorada</b>;",
+                "a situação do <b>mês anterior</b>: <b>Provavelmente completo</b> quando as notas atrasadas já "
+                "chegaram e todas as empresas foram buscadas depois disso; <b>Busque de novo</b> quando alguma "
+                "empresa ainda não foi buscada depois da última chegada.",
+            ]
+        ),
+        *tip(
+            "Antes de fechar o mês, confira esse cartão e busque de novo se ele pedir. <b>Provavelmente completo</b> "
+            "é um indício, não uma garantia: nota que a prefeitura ainda não repassou não aparece em lugar nenhum."
+        ),
+        P(
+            "O cartão não aparece quando as notas estão chegando em minutos. Ele depende da hora de chegada de cada "
+            "nota, que o robô anota a partir da versão 1.2.37."
+        ),
     ]
 
 
