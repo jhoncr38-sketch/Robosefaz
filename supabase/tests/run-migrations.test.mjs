@@ -1472,5 +1472,45 @@ await test("emissão de NFS-e: ligada por escritório; pedido conferido vira tra
   await db.query("update public.automation_jobs set status = 'completed', locked_by = null where org_id = $1 and status <> 'completed'", [ORG_B]);
 });
 
+await test("atraso do repasse da NFS-e ao ambiente nacional: o robô grava a chegada; o painel vê o resumo do próprio escritório", async () => {
+  const chave = (n) => "2211001" + "1" + "2" + "11222333000181" + String(n).padStart(13, "0") + "2610" + "000000001" + "7";
+  const NFE = "22260844444444000191552260000000031820244640";
+  await as(DEVICE_B.authId, async (tx) => {
+    for (let n = 901; n <= 906; n++) {
+      await tx.query(
+        "insert into public.notes (client_id, document_type, competence, chave, numero, valor, zip_path, xml_name) values ($1, 'NFSE_PRESTADAS', '2026-10', $2, $3, 100, 'x.zip', $4)",
+        [CLIENT_B1, chave(n), n, `NFSe ${chave(n)}.xml`],
+      );
+    }
+    // uma nota do SIAT (NF-e) do mesmo cliente: nada do repasse vale para ela
+    await tx.query(
+      "insert into public.notes (client_id, document_type, competence, chave, numero, valor, zip_path, xml_name) values ($1, 'NFE_EMITIDAS', '2026-10', $2, 31, 50, 'y.zip', 'n.xml') on conflict do nothing",
+      [CLIENT_B1, NFE],
+    );
+  });
+  const hour = 3600;
+  const item = (n, delay, amb = 1) => ({ chave: chave(n), recebida_em: new Date(Date.now() - 5 * 86400e3).toISOString(), atraso_s: delay, amb_ger: amb, c_loc_emi: "2211001" });
+  const items = [item(901, 600), item(902, 2 * hour), item(903, 30 * hour), item(904, 7 * 24 * hour), item(905, 20), item(906, 40, 2), { chave: NFE, recebida_em: new Date().toISOString(), atraso_s: 5, amb_ger: 1, c_loc_emi: "2211001" }];
+  const done = await as(DEVICE_B.authId, (tx) => tx.query("select public.nfse_set_arrivals($1, $2::jsonb) n", [CLIENT_B1, JSON.stringify(items)]));
+  assert.equal(done.rows[0].n, 6, "as seis NFS-e; a NF-e fica de fora");
+  const nfe = (await db.query("select adn_recebida_em, adn_atraso_s, amb_ger from public.notes where chave = $1", [NFE])).rows[0];
+  assert.deepEqual([nfe.adn_recebida_em, nfe.adn_atraso_s, nfe.amb_ger], [null, null, null]);
+  // vale a primeira chegada: gravar de novo não muda nada
+  const again = await as(DEVICE_B.authId, (tx) => tx.query("select public.nfse_set_arrivals($1, $2::jsonb) n", [CLIENT_B1, JSON.stringify([item(901, 99999)])]));
+  assert.equal(again.rows[0].n, 0);
+  assert.equal((await db.query("select adn_atraso_s from public.notes where chave = $1", [chave(901)])).rows[0].adn_atraso_s, 600);
+  // o robô de outro escritório não alcança essas notas
+  const other = await as(DEVICE_A.authId, (tx) => tx.query("select public.nfse_set_arrivals($1, $2::jsonb) n", [CLIENT_B1, JSON.stringify([item(902, 1)])]));
+  assert.equal(other.rows[0].n, 0);
+  // painel de B: só as cinco geradas pela prefeitura (a do emissor nacional não conta); A não vê nada
+  const rows = (await as(ADMIN_B, (tx) => tx.query("select * from public.nfse_adn_delay(30)"))).rows;
+  assert.equal(rows.length, 1);
+  const r = rows[0];
+  assert.deepEqual([r.c_loc_emi, Number(r.notas), r.mediana_s, Number(r.acima_1d), r.pior_s], ["2211001", 5, 2 * hour, 2, 7 * 24 * hour]);
+  assert.equal((await as(ADMIN, (tx) => tx.query("select * from public.nfse_adn_delay(30)"))).rows.length, 0);
+  // janela: com 3 dias, as notas que chegaram há 5 dias ficam de fora
+  assert.equal((await as(ADMIN_B, (tx) => tx.query("select * from public.nfse_adn_delay(3)"))).rows.length, 0);
+});
+
 console.log(`\n${passed} teste(s) de banco passaram${process.exitCode ? " (com falhas)" : ""}.`);
 await db.close();
