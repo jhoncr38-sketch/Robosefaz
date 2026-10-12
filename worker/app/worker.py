@@ -30,7 +30,7 @@ from app.downloads.drive_ids import DriveIdLookup, drivefs_databases, link_drive
 from app.downloads.fallback import FallbackOrganizer, notes_folder_kind, organizer_for
 from app.downloads.folder_owner import load_office, save_office
 from app.downloads.note_count import count_pending_notes
-from app.downloads.note_index import index_pending_notes, serve_note_xml_requests
+from app.downloads.note_index import evaluate_nfse_models, index_pending_notes, serve_note_xml_requests
 from app.downloads.organizer import DownloadFolderUnavailable
 from app.utils.files import sha256_file
 from app.jobs.base_runner import RunnerDeps
@@ -213,6 +213,8 @@ class Worker:
             return
         try:
             await index_pending_notes(self.repo, self.organizer.base_dir, skip=self._unindexable)
+            # NFS-e indexadas antes da 1.2.37: códigos do serviço para a emissão pelo sistema
+            await evaluate_nfse_models(self.repo, self.organizer.base_dir, skip=self._unindexable)
             self._note_index_failures = 0
         except Exception:
             self._note_index_failures += 1

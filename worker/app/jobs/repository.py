@@ -79,6 +79,18 @@ class JobRepository(Protocol):
     async def save_nfse_cursor(self, client_id: str, last_nsu: int, documents: int) -> None: ...
     async def latest_download(self, client_id: str, competence: str, document_type: str) -> dict[str, Any] | None: ...
     async def mark_notes_canceled(self, client_id: str, chaves: list[str]) -> int: ...
+    async def set_nfse_arrivals(self, client_id: str, items: list[dict[str, Any]]) -> int: ...
+    # emissão de NFS-e (1.2.37)
+    async def begin_nfse_emission(self, job_id: str) -> dict[str, Any] | None: ...
+    async def bump_nfse_number(self, emission_id: str) -> int: ...
+    async def update_nfse_emission(self, emission_id: str, **fields: Any) -> None: ...
+    async def get_nfse_emission_to_cancel(self, job_id: str) -> dict[str, Any] | None: ...
+    async def mark_emissions_canceled(self, client_id: str, chaves: list[str]) -> int: ...
+    async def emissions_missing_xml(self, client_id: str) -> list[dict[str, Any]]: ...
+    async def get_note_file(self, client_id: str, chave: str) -> dict[str, Any] | None: ...
+    async def latest_emit_model(self, client_id: str) -> dict[str, Any] | None: ...
+    async def list_nfse_notes_to_evaluate(self, limit: int) -> list[dict[str, Any]]: ...
+    async def update_note(self, note_id: str, **fields: Any) -> None: ...
     async def list_client_names(self) -> dict[str, str | None]: ...
     async def device_org(self) -> Office | None: ...
     async def rename_download(self, old_filename: str, new_filename: str, new_filepath: str, checksum: str) -> int: ...
@@ -465,6 +477,114 @@ class SupabaseJobRepository:
             .execute()
         )
         return int(res.count or 0)
+
+    async def set_nfse_arrivals(self, client_id: str, items: list[dict[str, Any]]) -> int:
+        """Grava quando cada NFS-e chegou ao ambiente nacional (vale a primeira vez em que a nota é vista)."""
+        done = 0
+        for i in range(0, len(items), 200):
+            res = await self._db.rpc("nfse_set_arrivals", {"p_client_id": client_id, "p_items": items[i : i + 200]}).execute()
+            done += int(res.data or 0)
+        return done
+
+    # -- emissão de NFS-e ----------------------------------------------------------
+    @_transient
+    async def begin_nfse_emission(self, job_id: str) -> dict[str, Any] | None:
+        """Começa (ou retoma) a emissão deste trabalho: reserva o número da DPS e marca "em andamento"."""
+        res = await self._db.rpc("nfse_emission_begin", {"p_job_id": job_id}).execute()
+        rows = res.data or []
+        return rows[0] if rows else None
+
+    @_transient
+    async def bump_nfse_number(self, emission_id: str) -> int:
+        """O número reservado já existe na prefeitura (usado fora do sistema): pega o próximo."""
+        res = await self._db.rpc("nfse_emission_bump_number", {"p_emission_id": emission_id}).execute()
+        return int(res.data)
+
+    @_transient
+    async def update_nfse_emission(self, emission_id: str, **fields: Any) -> None:
+        await self._db.table("nfse_emissions").update(_serialize(fields)).eq("id", emission_id).execute()
+
+    @_transient
+    async def get_nfse_emission_to_cancel(self, job_id: str) -> dict[str, Any] | None:
+        res = await self._db.table("nfse_emissions").select("*").eq("cancel_job_id", job_id).limit(1).execute()
+        return res.data[0] if res.data else None
+
+    @_transient
+    async def mark_emissions_canceled(self, client_id: str, chaves: list[str]) -> int:
+        """Cancelamento que chegou pela busca de NFS-e (feito no site da prefeitura ou confirmado depois)."""
+        if not chaves:
+            return 0
+        res = (
+            await self._db.table("nfse_emissions")
+            .update({"status": "canceled", "canceled_at": iso(utcnow()), "cancel_status": None, "last_message": "Nota cancelada"}, count=CountMethod.exact)
+            .eq("client_id", client_id)
+            .eq("status", "issued")
+            .eq("test_env", False)
+            .in_("chave", chaves)
+            .execute()
+        )
+        return int(res.count or 0)
+
+    @_transient
+    async def emissions_missing_xml(self, client_id: str) -> list[dict[str, Any]]:
+        """Notas emitidas pelo sistema que a prefeitura confirmou mas não devolveu: esperam o XML da busca de NFS-e."""
+        res = (
+            await self._db.table("nfse_emissions")
+            .select("id, chave, numero, status")
+            .eq("client_id", client_id)
+            .in_("status", ["issued", "canceled"])
+            .eq("test_env", False)
+            .is_("nfse_xml", "null")
+            .execute()
+        )
+        return res.data or []
+
+    @_transient
+    async def get_note_file(self, client_id: str, chave: str) -> dict[str, Any] | None:
+        """Onde está o XML de uma NFS-e prestada do cliente (ZIP e nome do arquivo)."""
+        res = (
+            await self._db.table("notes")
+            .select("id, chave, xml_name, zip_path, emit_model, dest_doc, downloads(filepath, competence, document_type, size, checksum)")
+            .eq("client_id", client_id)
+            .eq("document_type", "NFSE_PRESTADAS")
+            .eq("chave", chave)
+            .limit(1)
+            .execute()
+        )
+        return res.data[0] if res.data else None
+
+    @_transient
+    async def latest_emit_model(self, client_id: str) -> dict[str, Any] | None:
+        """A NFS-e prestada mais recente que serve de modelo (cadastro atual do prestador)."""
+        res = (
+            await self._db.table("notes")
+            .select("id, chave, emitida_em, emit_model")
+            .eq("client_id", client_id)
+            .eq("document_type", "NFSE_PRESTADAS")
+            .in_("emit_model", ["ok", "mesmo_tomador"])
+            .order("emitida_em", desc=True)
+            .limit(1)
+            .execute()
+        )
+        return res.data[0] if res.data else None
+
+    @_transient
+    async def list_nfse_notes_to_evaluate(self, limit: int) -> list[dict[str, Any]]:
+        """NFS-e prestadas do índice ainda sem os códigos do serviço (indexadas antes da 1.2.37)."""
+        res = (
+            await self._db.table("notes")
+            .select("id, chave, xml_name, zip_path, downloads(filepath, competence, document_type, size, checksum)")
+            .eq("document_type", "NFSE_PRESTADAS")
+            .is_("emit_model", "null")
+            .order("emitida_em", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return res.data or []
+
+    @_transient
+    async def update_note(self, note_id: str, **fields: Any) -> None:
+        await self._db.table("notes").update(_serialize(fields)).eq("id", note_id).execute()
 
     @_transient
     async def clear_download_drive_ids(self) -> int:

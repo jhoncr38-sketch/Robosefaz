@@ -315,6 +315,93 @@ class FakeRepo:
             n["canceled"] = True
         return len(hits)
 
+    async def set_nfse_arrivals(self, client_id: str, items: list[dict[str, Any]]) -> int:
+        done = 0
+        for item in items:
+            for n in self._notes():
+                if n["client_id"] == client_id and n["chave"] == item["chave"] and str(n["document_type"]).startswith("NFSE_") and not n.get("adn_recebida_em"):
+                    n.update(adn_recebida_em=item["recebida_em"], adn_atraso_s=item["atraso_s"], amb_ger=item.get("amb_ger"), c_loc_emi=n.get("c_loc_emi") or item.get("c_loc_emi"))
+                    done += 1
+        return done
+
+    # -- emissão de NFS-e ----------------------------------------------------------
+    def _emissions(self) -> list[dict[str, Any]]:
+        if not hasattr(self, "emissions"):
+            self.emissions = []
+        return self.emissions
+
+    def add_emission(self, client: Client, job: Job, **fields: Any) -> dict[str, Any]:
+        row = {
+            "id": str(uuid.uuid4()), "client_id": client.id, "job_id": job.id, "cancel_job_id": None, "test_env": False,
+            "status": "queued", "serie": None, "n_dps": None, "id_dps": None, "send_started_at": None, "chave": None,
+            "numero": None, "errors": [], "steps": {}, "toma": None, "toma_chave": None, "toma_doc": None, "toma_nome": None,
+            "competence": job.competence, "cancel_status": None, "cancel_errors": [], "nfse_xml": None, "last_message": None,
+            "custom_service": False, "c_trib_nac": "140101", "c_trib_mun": "040", "c_nbs": None, "ibs_cst": None, "ibs_class_trib": None, "ibs_ind_op": None,
+        }
+        row.update(fields)
+        self._emissions().append(row)
+        return row
+
+    def _next_dps(self, em: dict[str, Any]) -> int:
+        used = [e["n_dps"] for e in self._emissions() if e["client_id"] == em["client_id"] and e["test_env"] == em["test_env"] and e["n_dps"]]
+        return max(used, default=0) + 1
+
+    async def begin_nfse_emission(self, job_id: str) -> dict[str, Any] | None:
+        em = next((e for e in self._emissions() if e["job_id"] == job_id), None)
+        if em is None:
+            return None
+        if em["status"] not in ("issued", "canceled"):
+            if em["n_dps"] is None:
+                em.update(serie="10001", n_dps=self._next_dps(em))
+            em.update(status="processing", errors=[], steps={**em["steps"], "started_at": now().isoformat()})
+        return dict(em)
+
+    async def bump_nfse_number(self, emission_id: str) -> int:
+        em = next(e for e in self._emissions() if e["id"] == emission_id)
+        assert em["status"] == "processing" and em["send_started_at"] is None, "a DPS já foi enviada"
+        em.update(n_dps=self._next_dps(em), id_dps=None)
+        return em["n_dps"]
+
+    async def update_nfse_emission(self, emission_id: str, **fields: Any) -> None:
+        next(e for e in self._emissions() if e["id"] == emission_id).update(fields)
+
+    async def get_nfse_emission_to_cancel(self, job_id: str) -> dict[str, Any] | None:
+        em = next((e for e in self._emissions() if e["cancel_job_id"] == job_id), None)
+        return dict(em) if em else None
+
+    async def mark_emissions_canceled(self, client_id: str, chaves: list[str]) -> int:
+        hits = [e for e in self._emissions() if e["client_id"] == client_id and e["status"] == "issued" and not e["test_env"] and e["chave"] in chaves]
+        for e in hits:
+            e.update(status="canceled", cancel_status=None)
+        return len(hits)
+
+    async def emissions_missing_xml(self, client_id: str) -> list[dict[str, Any]]:
+        return [
+            {"id": e["id"], "chave": e["chave"], "numero": e["numero"], "status": e["status"]}
+            for e in self._emissions()
+            if e["client_id"] == client_id and e["status"] in ("issued", "canceled") and not e["test_env"] and e["nfse_xml"] is None
+        ]
+
+    async def get_note_file(self, client_id: str, chave: str) -> dict[str, Any] | None:
+        for n in self._notes():
+            if n["client_id"] == client_id and str(n["document_type"]) == "NFSE_PRESTADAS" and n["chave"] == chave:
+                return {**n, "downloads": next((d for d in self.downloads if d.get("id") == n.get("download_id")), None)}
+        return None
+
+    async def latest_emit_model(self, client_id: str) -> dict[str, Any] | None:
+        rows = [
+            n for n in self._notes()
+            if n["client_id"] == client_id and str(n["document_type"]) == "NFSE_PRESTADAS" and n.get("emit_model") in ("ok", "mesmo_tomador")
+        ]
+        return max(rows, key=lambda n: str(n.get("emitida_em") or ""), default=None)
+
+    async def list_nfse_notes_to_evaluate(self, limit: int) -> list[dict[str, Any]]:
+        rows = [n for n in self._notes() if str(n["document_type"]) == "NFSE_PRESTADAS" and n.get("emit_model") is None]
+        return [{**n, "downloads": next((d for d in self.downloads if d.get("id") == n.get("download_id")), None)} for n in rows[:limit]]
+
+    async def update_note(self, note_id: str, **fields: Any) -> None:
+        next(n for n in self._notes() if n["id"] == note_id).update(fields)
+
     office = None  # escritório do computador (device_org); None = instalação antiga
 
     async def device_org(self):  # noqa: ANN201

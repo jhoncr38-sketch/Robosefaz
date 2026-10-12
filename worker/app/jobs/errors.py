@@ -27,6 +27,7 @@ class ErrorCode(StrEnum):
     BROWSER_ERROR = "BROWSER_ERROR"
     COLLECTOR_EXHAUSTED = "COLLECTOR_EXHAUSTED"
     NFSE_UNAVAILABLE = "NFSE_UNAVAILABLE"  # API da NFS-e Nacional (ADN) fora do ar ou recusou a consulta
+    NFSE_REJECTED = "NFSE_REJECTED"  # a prefeitura recusou a nota ou o cancelamento (regra de negócio): nada foi emitido
     UNEXPECTED = "UNEXPECTED"
 
 
@@ -42,6 +43,7 @@ NON_RETRYABLE_CODES: frozenset[ErrorCode] = frozenset(
         ErrorCode.EXPORT_ALREADY_SCHEDULED,
         ErrorCode.EXPORT_FAILED,
         ErrorCode.COLLECTOR_EXHAUSTED,
+        ErrorCode.NFSE_REJECTED,
     }
 )
 

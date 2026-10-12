@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from app.downloads.note_count import locate
+from app.nfse.dps import ibs_codes, model_status
 
 log = logging.getLogger(__name__)
 
@@ -51,6 +52,18 @@ class NoteInfo:
     iss_valor: str | None = None
     municipio: str | None = None
     servico: str | None = None
+    # só NFS-e, para a emissão pelo sistema (1.2.37): códigos do serviço, município emissor e se a
+    # nota serve de modelo ("ok", "mesmo_tomador" ou o motivo de não servir)
+    c_trib_nac: str | None = None
+    c_trib_mun: str | None = None
+    c_nbs: str | None = None
+    servico_nome: str | None = None
+    c_loc_emi: str | None = None
+    emit_model: str | None = None
+    # códigos de IBS/CBS da DPS, quando a nota tem (CST, cClassTrib e indicador da operação)
+    ibs_cst: str | None = None
+    ibs_class_trib: str | None = None
+    ibs_ind_op: str | None = None
     # AAAA-MM da competência informada na NFS-e (dCompet); fora do índice, só para separar por mês
     competence: str | None = None
 
@@ -86,7 +99,7 @@ def parse_note_xml(data: bytes, xml_name: str = "") -> NoteInfo | None:
     inf = root.find(".//{*}infNFe")
     if inf is None:
         nfse = root.find(".//{*}infNFSe")
-        return _parse_nfse(nfse, xml_name) if nfse is not None else None
+        return _parse_nfse(nfse, xml_name, data) if nfse is not None else None
     chave = (inf.get("Id") or "")[-44:]
     if not _KEY.fullmatch(chave):
         m = _KEY.search(xml_name)
@@ -116,7 +129,7 @@ def parse_note_xml(data: bytes, xml_name: str = "") -> NoteInfo | None:
     )
 
 
-def _parse_nfse(inf: ET.Element, xml_name: str) -> NoteInfo | None:
+def _parse_nfse(inf: ET.Element, xml_name: str, data: bytes = b"") -> NoteInfo | None:
     """NFS-e Nacional (leiaute do ADN): prestador no lugar do emitente e tomador no do destinatário."""
     chave = (inf.get("Id") or "")[-50:]
     if not _NFSE_KEY.fullmatch(chave):
@@ -132,6 +145,8 @@ def _parse_nfse(inf: ET.Element, xml_name: str) -> NoteInfo | None:
     emit_is_prest = _doc(emit) == prest_doc
     competence = (_text(dps, "{*}dCompet") or "")[:7] or None
     servico = _text(dps, "{*}serv/{*}cServ/{*}xDescServ")
+    text = data.decode("utf-8", "replace") if data else ""
+    ibs = ibs_codes(text) if text else None
     return NoteInfo(
         chave=chave,
         modelo=None,
@@ -151,8 +166,22 @@ def _parse_nfse(inf: ET.Element, xml_name: str) -> NoteInfo | None:
         iss_valor=_text(inf, "{*}valores/{*}vISSQN"),
         municipio=_text(inf, "{*}xLocIncid") or _text(inf, "{*}xLocPrestacao"),
         servico=servico[:_SERVICE_MAX] if servico else None,
+        c_trib_nac=_text(dps, "{*}serv/{*}cServ/{*}cTribNac"),
+        c_trib_mun=_text(dps, "{*}serv/{*}cServ/{*}cTribMun"),
+        c_nbs=_text(dps, "{*}serv/{*}cServ/{*}cNBS"),
+        servico_nome=((_text(inf, "{*}xTribMun") or _text(inf, "{*}xTribNac") or "")[:_SERVICE_MAX] or None),
+        c_loc_emi=_text(dps, "{*}cLocEmi"),
+        emit_model=model_status(text) if text else None,
+        ibs_cst=ibs["cst"] if ibs else None,
+        ibs_class_trib=ibs["class_trib"] if ibs else None,
+        ibs_ind_op=ibs["ind_op"] if ibs else None,
         competence=competence,
     )
+
+
+NFSE_ONLY_FIELDS = (
+    "c_trib_nac", "c_trib_mun", "c_nbs", "servico_nome", "c_loc_emi", "emit_model", "ibs_cst", "ibs_class_trib", "ibs_ind_op",
+)
 
 
 def index_zip(path: Path) -> list[NoteInfo] | None:
@@ -191,6 +220,9 @@ def note_rows(download: dict[str, Any], zip_path: Path, notes: list[NoteInfo]) -
             # NFS-e: o cancelamento vem por evento depois da nota; reindexar uma versão nova do ZIP
             # não pode desmarcar a nota cancelada
             row.pop("canceled")
+        else:
+            for k in NFSE_ONLY_FIELDS:
+                row.pop(k, None)  # NF-e/NFC-e: sem as colunas da emissão de NFS-e
         by_key[n.chave] = row
     return list(by_key.values())
 
@@ -230,6 +262,33 @@ async def index_pending_notes(repo: Any, base_dir: Path, *, skip: set[str], limi
         done += 1
     if done:
         log.info("Notas indexadas em %s download(s).", done)
+    return done
+
+
+async def evaluate_nfse_models(repo: Any, base_dir: Path, *, skip: set[str], limit: int = 200) -> int:
+    """NFS-e prestadas indexadas antes da 1.2.37: preenche os códigos do serviço e se a nota serve de
+    modelo para a emissão. Só lê os ZIPs; nota cujo ZIP não está neste computador fica para depois."""
+    rows = [r for r in await repo.list_nfse_notes_to_evaluate(limit + len(skip)) if r["id"] not in skip][:limit]
+    cache: dict[Path, dict[str, NoteInfo]] = {}
+    done = 0
+    for row in rows:
+        download = row.get("downloads") or {}
+        locator = {**download, "filepath": download.get("filepath") or row.get("zip_path")}
+        path = await asyncio.to_thread(locate, locator, base_dir)
+        if path is None:
+            skip.add(row["id"])
+            continue
+        if path not in cache:
+            notes = await asyncio.to_thread(index_zip, path)
+            cache[path] = {n.chave: n for n in notes or []}
+        info = cache[path].get(row["chave"])
+        if info is None or info.emit_model is None:
+            skip.add(row["id"])
+            continue
+        await repo.update_note(row["id"], **{k: getattr(info, k) for k in NFSE_ONLY_FIELDS})
+        done += 1
+    if done:
+        log.info("Códigos de serviço preenchidos em %s NFS-e do índice.", done)
     return done
 
 

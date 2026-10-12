@@ -26,6 +26,7 @@ import uuid
 import xml.etree.ElementTree as ET
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -133,6 +134,46 @@ def parse_batch(payload: dict[str, Any]) -> AdnBatch:
         )
     docs.sort(key=lambda d: d.nsu)
     return AdnBatch(status=str(payload.get("StatusProcessamento") or ""), documents=docs, errors=errors)
+
+
+_BRASILIA = timezone(timedelta(hours=-3))
+
+
+def _moment(value: str | None) -> datetime | None:
+    """Data e hora ISO; sem fuso, é horário de Brasília (é assim que a distribuição do ADN informa)."""
+    text = re.sub(r"(\.\d{6})\d+", r"\1", (value or "").strip().replace("Z", "+00:00"))
+    if not text:
+        return None
+    try:
+        when = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return when if when.tzinfo else when.replace(tzinfo=_BRASILIA)
+
+
+def arrival(xml: bytes | str, gerado_em: str | None) -> dict[str, Any] | None:
+    """Quando a NFS-e chegou ao ambiente nacional e quanto demorou desde a autorização na origem.
+
+    `gerado_em` é o DataHoraGeracao da distribuição; a autorização é o dhProc do XML. None se faltar uma das
+    duas horas. O painel usa isso para avisar quando a prefeitura está demorando a repassar as notas."""
+    text = xml.decode("utf-8", "replace") if isinstance(xml, bytes) else xml
+    head = text.split("<DPS", 1)[0]
+
+    def tag(name: str, source: str) -> str:
+        m = re.search(rf"<{name}>([^<]*)</{name}>", source)
+        return m.group(1).strip() if m else ""
+
+    authorized = _moment(tag("dhProc", head) or tag("dhProc", text))
+    arrived = _moment(gerado_em)
+    if authorized is None or arrived is None:
+        return None
+    amb = tag("ambGer", head)
+    return {
+        "recebida_em": arrived.isoformat(),
+        "atraso_s": max(0, int((arrived - authorized).total_seconds())),
+        "amb_ger": int(amb) if amb.isdigit() else None,
+        "c_loc_emi": tag("cLocEmi", text) or None,
+    }
 
 
 def parse_event(xml: bytes) -> NfseEvent | None:

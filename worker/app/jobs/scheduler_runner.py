@@ -19,6 +19,7 @@ from app.jobs.collect import ExportCollection
 from app.jobs.dedup import DuplicateGuard
 from app.jobs.efd_check import run_efd_check
 from app.jobs.malha_check import run_malha_check
+from app.jobs.nfse_emit import run_nfse_cancel, run_nfse_emit
 from app.jobs.nfse_fetch import run_nfse_fetch
 from app.jobs.errors import AutomationError, ErrorCode, JobCancelled, TaxpayerMismatchError
 from app.jobs.models import EXPORT_TASK_TYPES, ExportRequestResult, Job, Task, TaskStatus, TaskType
@@ -123,6 +124,25 @@ class SchedulerRunner(ExportCollection, BaseRunner):
                 await run_nfse_fetch(
                     self.repo, self.deps.organizer, client, certificate, job, nfse_tasks, reporter, logger
                 )
+                return
+
+            # Emissão e cancelamento de NFS-e: API da prefeitura com o certificado do Windows, sem
+            # navegador; um pedido confirmado no painel por trabalho
+            emit_tasks = [
+                t
+                for t in all_tasks
+                if t.task_type in (TaskType.NFSE_EMIT, TaskType.NFSE_CANCEL)
+                and not t.superseded
+                and t.status in (TaskStatus.PENDING, TaskStatus.RUNNING)
+            ]
+            if emit_tasks:
+                tasks = emit_tasks
+                if emit_tasks[0].task_type == TaskType.NFSE_EMIT:
+                    await run_nfse_emit(
+                        self.repo, self.deps.organizer, client, certificate, job, emit_tasks, reporter, logger
+                    )
+                else:
+                    await run_nfse_cancel(self.repo, client, certificate, job, emit_tasks, reporter, logger)
                 return
 
             tasks = sorted(

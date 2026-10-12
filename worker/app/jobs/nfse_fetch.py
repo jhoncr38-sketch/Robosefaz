@@ -32,7 +32,7 @@ from app.jobs.reporter import JobReporter
 from app.jobs.repository import JobRepository
 from app.jobs.state_machine import JobStatus
 from app.logs.job_logger import JobLogger
-from app.nfse.adn import AdnBatch, AdnClient, AdnDocument, parse_event
+from app.nfse.adn import AdnBatch, AdnClient, AdnDocument, arrival, parse_event
 from app.utils.cnpj import extract_cnpjs, normalize_cnpj
 
 # 40 páginas de 50 = 2.000 documentos por trabalho; o resto fica para a próxima busca
@@ -168,6 +168,7 @@ async def run_nfse_fetch(
     # 1) lê as páginas (até MAX_PAGES); nada é gravado ainda
     groups: dict[tuple[str, str], dict[str, tuple[NoteInfo, AdnDocument]]] = defaultdict(dict)
     cancels: dict[str, str] = {}
+    arrivals: dict[str, dict[str, Any]] = {}  # chave -> quando a nota chegou ao ambiente nacional
     nsu = start
     while summary.pages < MAX_PAGES:
         await reporter.check_cancel()
@@ -192,6 +193,9 @@ async def run_nfse_fetch(
                 continue
             comp = note_competence(info, job.competence)
             groups[(kind.value, comp)][info.chave] = (info, doc)
+            arrived = arrival(doc.xml, doc.gerado_em)
+            if arrived is not None:
+                arrivals[info.chave] = {"chave": info.chave, **arrived}
         nsu = batch.last_nsu or nsu
         if len(batch.documents) < PAGE_SIZE:
             break
@@ -207,9 +211,41 @@ async def run_nfse_fetch(
             summary.new_notes[doc_type] += added
             summary.files.append(f"{doc_type}:{comp}")
 
+    # 2a) nota emitida pelo sistema que a prefeitura confirmou mas não devolveu: o XML que chegou agora
+    #     completa o registro da emissão (é dele que o painel tira o DANFSE)
+    issued = {
+        chave: doc
+        for (doc_type, _), notes in groups.items()
+        if doc_type == DocumentType.NFSE_PRESTADAS.value
+        for chave, (_, doc) in notes.items()
+    }
+    if issued:
+        try:
+            for em in await repo.emissions_missing_xml(client.id):
+                doc = issued.get(em.get("chave") or "")
+                if doc is not None:
+                    fields: dict[str, Any] = {"nfse_xml": doc.xml.decode("utf-8", "replace")}
+                    if em.get("status") == "issued":  # tira o aviso "a prefeitura ainda não devolveu o arquivo"
+                        fields["last_message"] = f"NFS-e nº {em.get('numero')} emitida"
+                    await repo.update_nfse_emission(em["id"], **fields)
+                    await logger.info(f"Chegou o arquivo da NFS-e nº {em.get('numero')}, emitida pelo sistema.", step="organizing_files")
+        except Exception:  # noqa: BLE001 - banco ainda sem a tabela de emissões, ou falha passageira: a busca não depende disso
+            pass
+
+    # 2b) hora em que cada nota chegou ao ambiente nacional (o painel avisa quando a prefeitura demora a repassar)
+    if arrivals:
+        try:
+            await repo.set_nfse_arrivals(client.id, list(arrivals.values()))
+        except Exception:  # noqa: BLE001 - banco ainda sem essa função, ou falha passageira: a busca não depende disso
+            pass
+
     # 3) cancelamentos marcam a nota no índice (o XML da nota continua no ZIP)
     if cancels:
         summary.canceled = await repo.mark_notes_canceled(client.id, sorted(cancels))
+        try:
+            await repo.mark_emissions_canceled(client.id, sorted(cancels))
+        except Exception:  # noqa: BLE001 - banco ainda sem a tabela de emissões: o índice já foi marcado
+            pass
         for chave, desc in sorted(cancels.items()):
             await logger.info(f"Evento na NFS-e {chave}: {desc}.", step="organizing_files")
 

@@ -27,6 +27,10 @@ class TaskType(StrEnum):
     # NFS-e Nacional (desde a 1.2.36): notas de serviço prestadas e tomadas, lidas da API do ADN
     # com o certificado do cliente, sem navegador
     NFSE_FETCH = "NFSE_FETCH"
+    # emissão e cancelamento de NFS-e pela API da prefeitura (desde a 1.2.37): um pedido confirmado no
+    # painel por trabalho; o robô assina com o certificado do cliente, sem navegador
+    NFSE_EMIT = "NFSE_EMIT"
+    NFSE_CANCEL = "NFSE_CANCEL"
 
 
 # ordem em que o robô agenda: cada tipo e logo depois as canceladas dele

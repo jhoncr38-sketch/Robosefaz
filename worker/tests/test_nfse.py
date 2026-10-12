@@ -16,7 +16,7 @@ from app.jobs import nfse_fetch
 from app.jobs.errors import AutomationError, CertificateNotInstalledError, ErrorCode
 from app.jobs.models import TaskStatus, TaskType
 from app.jobs.scheduler_runner import SchedulerRunner
-from app.nfse.adn import NO_DOCUMENTS, AdnBatch, AdnClient, AdnDocument, parse_batch, parse_event
+from app.nfse.adn import NO_DOCUMENTS, AdnBatch, AdnClient, AdnDocument, arrival, parse_batch, parse_event
 from fakes import CNPJ_OK, FakeRepo, make_certificate, make_client
 
 NS = "http://www.sped.fazenda.gov.br/nfse"
@@ -215,6 +215,39 @@ async def test_first_fetch_writes_one_zip_per_type_and_month(repo: FakeRepo, dep
     (task,) = [t for t in repo.tasks_of(job.id) if t["task_type"] == TaskType.NFSE_FETCH]
     assert task["status"] == TaskStatus.COMPLETED
     assert task["result"]["new_notes"] == {"NFSE_PRESTADAS": 1, "NFSE_TOMADAS": 2}
+
+
+def test_arrival_compares_the_authorization_with_the_national_environment() -> None:
+    k = chave(CNPJ_OK, 1, "2609")
+    xml = nfse_xml(k, prest=CNPJ_OK, toma=OTHER, numero=1, compet="2026-09")  # autorizada em 15/09 às 10:00 (-03:00)
+    full = xml.replace(b"<cStat>100</cStat>", b"<ambGer>1</ambGer><cStat>100</cStat>").replace(b"<serie>900</serie>", b"<serie>900</serie><cLocEmi>2211001</cLocEmi>")
+    # a hora do ADN vem sem fuso, em horário de Brasília: 2 dias, 6 h e 30 min depois
+    assert arrival(full, "2026-09-17T16:30:00.123") == {
+        "recebida_em": "2026-09-17T16:30:00.123000-03:00", "atraso_s": 196200, "amb_ger": 1, "c_loc_emi": "2211001",
+    }
+    assert arrival(xml, "2026-09-15T10:00:38.5")["atraso_s"] == 38 and arrival(xml, "2026-09-15T10:00:38.5")["amb_ger"] is None
+    assert arrival(xml, "2026-09-15T13:00:05Z")["atraso_s"] == 5  # com fuso, vale o fuso informado
+    assert arrival(xml, "2026-09-15T09:59:00")["atraso_s"] == 0  # relógios desencontrados: nunca negativo
+    assert arrival(xml, None) is None and arrival(xml, "ontem") is None
+    assert arrival(b"<NFSe><infNFSe/></NFSe>", "2026-09-15T10:00:00") is None  # sem a hora da autorização
+
+
+async def test_fetch_records_when_each_note_reached_the_national_environment(repo: FakeRepo, deps, adn: FakeAdn) -> None:  # noqa: ANN001
+    client, job = setup(repo)
+    k1, k2 = chave(CNPJ_OK, 1, "2609"), chave(OTHER, 7, "2609")
+    x1 = nfse_xml(k1, prest=CNPJ_OK, toma=OTHER, numero=1, compet="2026-09").replace(b"<cStat>100</cStat>", b"<ambGer>1</ambGer><cStat>100</cStat>")
+    adn.docs = [
+        AdnDocument(nsu=1, chave=k1, tipo="NFSE", xml=x1, gerado_em="2026-09-17T16:30:00"),
+        doc(2, k2, nfse_xml(k2, prest=OTHER, toma=CNPJ_OK, numero=7, compet="2026-09")),  # sem a hora de chegada
+    ]
+    assert await SchedulerRunner(deps).run_once()
+    assert repo.job(job.id)["status"] == "completed", repo.log_messages()
+    notes = {n["chave"]: n for n in repo.notes}
+    assert (notes[k1]["adn_recebida_em"], notes[k1]["adn_atraso_s"], notes[k1]["amb_ger"]) == ("2026-09-17T16:30:00-03:00", 196200, 1)
+    assert notes[k2].get("adn_recebida_em") is None and notes[k2].get("adn_atraso_s") is None
+    # reler a mesma nota depois não muda a hora já gravada (vale a primeira chegada)
+    assert await repo.set_nfse_arrivals(client.id, [{"chave": k1, "recebida_em": "2026-10-01T00:00:00-03:00", "atraso_s": 9, "amb_ger": 1}]) == 0
+    assert notes[k1]["adn_atraso_s"] == 196200
 
 
 async def test_new_notes_make_a_new_version_and_cancel_marks_the_note(repo: FakeRepo, deps, adn: FakeAdn) -> None:  # noqa: ANN001
