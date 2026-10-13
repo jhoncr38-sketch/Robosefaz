@@ -26,6 +26,19 @@ export function validateCNPJ(value: string | null | undefined): boolean {
   return cnpj.slice(12) === `${d1}${d2}`;
 }
 
+/** CPF com os dois dígitos verificadores certos (só números; sequências repetidas não valem). */
+export function validateCPF(value: string | null | undefined): boolean {
+  const cpf = (value ?? "").replace(/\D/g, "");
+  if (!/^\d{11}$/.test(cpf) || /^(\d)\1{10}$/.test(cpf)) return false;
+  const digit = (len: number) => {
+    let sum = 0;
+    for (let i = 0; i < len; i += 1) sum += Number(cpf[i]) * (len + 1 - i);
+    const rest = (sum * 10) % 11;
+    return rest === 10 ? 0 : rest;
+  };
+  return digit(9) === Number(cpf[9]) && digit(10) === Number(cpf[10]);
+}
+
 export function formatCNPJ(value: string | null | undefined): string {
   const cnpj = normalizeCNPJ(value);
   if (cnpj.length !== 14) return value ?? "";

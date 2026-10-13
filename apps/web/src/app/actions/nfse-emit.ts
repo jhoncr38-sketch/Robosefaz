@@ -7,6 +7,7 @@ import { authorize } from "@/lib/auth";
 import { buildEmitProfile, EMISSION_COLUMNS, EMIT_NOTE_COLUMNS, NFSE_EMIT_RELEASED, type Emission, type EmitNote } from "@/lib/nfse-emit";
 import type { Permission } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { validateCNPJ, validateCPF } from "@/lib/cnpj";
 import { CNPJ_SOURCES, usableRecord } from "@/lib/cnpj-fontes";
 import type { ActionResult } from "@/lib/types";
 
@@ -56,6 +57,8 @@ export interface ReadRequest {
   service: string | null;
   description: string;
   doubts: string[];
+  /** CNPJ citado no pedido que não é tomador conhecido: nome e endereço já consultados */
+  newTaker: TakerLookup | null;
 }
 
 const READ_SYSTEM =
@@ -141,16 +144,22 @@ export async function readEmitRequest(input: { clientId: string; text: string })
   }
   if (!service) service = profile.services[0]?.id ?? null;
   const amount = typeof answer.valor === "number" && answer.valor > 0 ? Math.round(answer.valor * 100) / 100 : null;
+  const document = String(answer.documento ?? "").replace(/\D/g, "").slice(0, 14);
+  // CNPJ no pedido sem tomador conhecido: a consulta pública já traz nome e endereço
+  const found = !taker && document.length === 14 ? await fetchTaker(document) : null;
+  const newTaker = found?.ok ? (found.data ?? null) : null;
+  if (newTaker) doubts.unshift("Tomador novo preenchido pela consulta pública do CNPJ: confira o nome e o endereço.");
   return {
     ok: true,
     data: {
       amount,
       takerDoc: taker?.doc ?? null,
       takerQuoted: String(answer.tomador_citado ?? "").slice(0, 120),
-      document: String(answer.documento ?? "").replace(/\D/g, "").slice(0, 14),
+      document,
       service,
       description: String(answer.descricao ?? "").replace(/\s+/g, " ").trim().slice(0, 600),
       doubts,
+      newTaker,
     },
   };
 }
@@ -177,6 +186,11 @@ export async function lookupTaker(cnpj: string): Promise<ActionResult<TakerLooku
   if ("error" in auth) return { ok: false, error: auth.error };
   const doc = cnpj.replace(/\D/g, "");
   if (doc.length !== 14) return { ok: false, error: "Informe os 14 números do CNPJ (para CPF, digite os dados)." };
+  return fetchTaker(doc);
+}
+
+/** Nome e endereço de um CNPJ nas fontes públicas (ver lib/cnpj-fontes). */
+async function fetchTaker(doc: string): Promise<ActionResult<TakerLookup>> {
   // três fontes abertas, na ordem; uma fora do ar ou limitando pedidos não derruba a consulta
   let notFound = false;
   for (const source of CNPJ_SOURCES) {
@@ -248,10 +262,17 @@ const emissionSchema = z.object({
   toma_chave: key50.nullable().optional(),
   toma: z
     .object({
-      doc: z.string().min(11).max(18),
+      doc: z
+        .string()
+        .min(11)
+        .max(18)
+        .refine((v) => {
+          const d = v.replace(/\D/g, "");
+          return d.length === 11 ? validateCPF(d) : d.length === 14 && validateCNPJ(d);
+        }, "CNPJ ou CPF do tomador inválido"),
       nome: z.string().trim().min(2, "Informe o nome do tomador").max(150),
       cmun: z.string().regex(/^\d{7}$/, "Código do município inválido"),
-      cep: z.string().min(8).max(10),
+      cep: z.string().regex(/^\d{5}-?\d{3}$/, "O CEP do tomador tem 8 números"),
       logradouro: z.string().trim().min(1, "Informe o logradouro").max(255),
       numero: z.string().trim().min(1, "Informe o número").max(60),
       complemento: z.string().trim().max(156).optional(),

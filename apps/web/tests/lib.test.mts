@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { formatCNPJ, maskCNPJ, normalizeCNPJ, validateCNPJ } from "../src/lib/cnpj.ts";
+import { formatCNPJ, maskCNPJ, normalizeCNPJ, validateCNPJ, validateCPF } from "../src/lib/cnpj.ts";
 import {
   competenceBounds,
   formatCompetence,
@@ -16,6 +16,11 @@ describe("CNPJ", () => {
   it("valida numérico e alfanumérico", () => {
     assert.equal(validateCNPJ("11.222.333/0001-81"), true);
     assert.equal(validateCNPJ("11222333000182"), false);
+    // CPF: dígitos verificadores; sequência repetida e tamanho errado não valem
+    assert.equal(validateCPF("123.456.789-09"), true);
+    assert.equal(validateCPF("12345678900"), false);
+    assert.equal(validateCPF("11111111111"), false);
+    assert.equal(validateCPF("1234567890"), false);
     assert.equal(validateCNPJ("00000000000000"), false);
     assert.equal(validateCNPJ("12.ABC.345/01DE-35"), true);
     assert.equal(validateCNPJ(""), false);

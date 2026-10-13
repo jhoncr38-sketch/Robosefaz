@@ -20,6 +20,7 @@ import {
   parseAmount,
   cepMismatch,
   cepUf,
+  checkNewTaker,
   checkCodes,
   emitAccess,
   NFSE_EMIT_RELEASED,
@@ -295,6 +296,24 @@ describe("quem entra na emissão", () => {
     assert.equal(cepMismatch("50010310", "2611606"), null);
     assert.equal(cepMismatch("5001031", "2211001"), null); // CEP incompleto: nada a dizer ainda
     assert.equal(cepMismatch("50010310", "9999999"), null); // município fora da tabela
+  });
+
+  it("tomador novo é conferido antes de enviar: documento com dígito certo, CEP, município, rua, número e bairro", () => {
+    const ok = { doc: "11.222.333/0001-81", nome: "EMPRESA EXEMPLO LTDA", cmun: "2211001", cep: "64000-100", logradouro: "RUA DAS FLORES", numero: "100", bairro: "CENTRO" };
+    assert.deepEqual(checkNewTaker(ok), []);
+    assert.deepEqual(checkNewTaker({ ...ok, doc: "123.456.789-09" }), []); // CPF válido também serve
+    const shorts = (t: typeof ok) => checkNewTaker(t).map((i) => i.short);
+    assert.deepEqual(shorts({ ...ok, doc: "11222333000182" }), ["CNPJ ou CPF do tomador"]); // dígito errado
+    assert.deepEqual(shorts({ ...ok, doc: "1122233300018" }), ["CNPJ ou CPF do tomador"]); // incompleto
+    assert.deepEqual(shorts({ ...ok, cep: "50010310" }), ["CEP do tomador (outro estado)"]); // PE com Teresina/PI: a recusa E0240
+    assert.deepEqual(shorts({ ...ok, cep: "6400010" }), ["CEP do tomador"]);
+    assert.deepEqual(shorts({ ...ok, nome: " ", numero: "", bairro: "", logradouro: "", cmun: "" }), [
+      "nome do tomador",
+      "município do tomador",
+      "rua do tomador",
+      "número do tomador",
+      "bairro do tomador",
+    ]);
   });
 
   it("a função segue travada até alguém decidir lançar", () => {

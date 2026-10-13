@@ -2,6 +2,7 @@
 // nota-modelo) e como mostrar cada emissão. Nada aqui decide imposto: o serviço e a tributação saem
 // sempre de uma nota real que a prefeitura já aceitou; a tela só escolhe qual e avisa o que mudou.
 
+import { validateCNPJ, validateCPF } from "./cnpj.ts";
 import { MUNICIPIOS } from "./ibge-municipios.ts";
 import type { Tone } from "./status.ts";
 
@@ -327,6 +328,37 @@ export function cepMismatch(cep: string, cmun: string): string | null {
   if (!uf || !cityUf || uf === cityUf) return null;
   const d = cep.replace(/\D/g, "");
   return `O CEP ${d.slice(0, 5)}-${d.slice(5)} é de ${uf}, mas o município do tomador é ${city}. A prefeitura recusa a nota assim: confira o endereço.`;
+}
+
+/** Dados do tomador novo como a tela guarda. */
+export interface NewTakerInput {
+  doc: string;
+  nome: string;
+  cmun: string;
+  cep: string;
+  logradouro: string;
+  numero: string;
+  bairro: string;
+}
+
+/** O que falta ou está errado no tomador novo, antes de enviar: cada recusa da prefeitura custa um trabalho do
+ *  robô. `short` é o nome curto para a linha "Faltam: ..."; `text` explica. */
+export function checkNewTaker(t: NewTakerInput): { short: string; text: string }[] {
+  const out: { short: string; text: string }[] = [];
+  const doc = t.doc.replace(/\D/g, "");
+  if (doc.length === 11 ? !validateCPF(doc) : doc.length === 14 ? !validateCNPJ(doc) : true) {
+    out.push({ short: "CNPJ ou CPF do tomador", text: doc.length === 11 || doc.length === 14 ? "O CNPJ ou CPF do tomador está com dígito errado." : "Informe o CNPJ (14 números) ou CPF (11) do tomador." });
+  }
+  if (!t.nome.trim()) out.push({ short: "nome do tomador", text: "Informe o nome do tomador." });
+  const cep = t.cep.replace(/\D/g, "");
+  if (cep.length !== 8) out.push({ short: "CEP do tomador", text: "O CEP do tomador tem 8 números." });
+  if (!/^\d{7}$/.test(t.cmun.replace(/\D/g, ""))) out.push({ short: "município do tomador", text: "Informe o município do tomador (código IBGE de 7 números)." });
+  const mismatch = cep.length === 8 ? cepMismatch(cep, t.cmun) : null;
+  if (mismatch) out.push({ short: "CEP do tomador (outro estado)", text: mismatch });
+  if (!t.logradouro.trim()) out.push({ short: "rua do tomador", text: "Informe a rua do tomador." });
+  if (!t.numero.trim()) out.push({ short: "número do tomador", text: "Informe o número do endereço do tomador (ou S/N)." });
+  if (!t.bairro.trim()) out.push({ short: "bairro do tomador", text: "Informe o bairro do tomador." });
+  return out;
 }
 
 // ---------------------------------------------------------------------------

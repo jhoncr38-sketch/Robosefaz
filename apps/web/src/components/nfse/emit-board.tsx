@@ -69,7 +69,7 @@ import {
   pickModel,
   takerNoteKey,
   type Emission,
-  cepMismatch,
+  checkNewTaker,
   type EmitNote,
   type EmitActivity,
   type EmitNoteRef,
@@ -521,11 +521,17 @@ export function EmitBoard({
       const known = Boolean(r.takerDoc);
       if (!known) doubts.unshift(r.takerQuoted ? `Não achei “${r.takerQuoted}” entre os tomadores desta empresa. Escolha na lista ou cadastre como novo.` : "O pedido não diz claramente quem é o tomador.");
       if (!r.amount) doubts.unshift("Não consegui ler o valor com certeza. Digite o valor.");
+      // CNPJ no pedido: o servidor já consultou nome e endereço; a tela não consulta de novo
+      const t = r.newTaker;
+      if (t) lastDoc.current = t.doc;
+      setTakerStatus(t?.situacao || null);
       openDraft({
         source: "ai",
         takerKind: known ? "known" : r.document.length === 14 ? "new" : "known",
         takerDoc: r.takerDoc ?? "",
-        newTaker: { ...EMPTY_TAKER, doc: r.document, nome: known ? "" : r.takerQuoted },
+        newTaker: t
+          ? { doc: t.doc, nome: t.nome, cmun: t.cmun || EMPTY_TAKER.cmun, cidade: t.cidade, cep: t.cep, logradouro: t.logradouro, numero: t.numero, complemento: t.complemento, bairro: t.bairro }
+          : { ...EMPTY_TAKER, doc: r.document, nome: known ? "" : r.takerQuoted },
         service: r.service ?? profile?.services[0]?.id ?? "",
         description: r.description,
         amount: r.amount ? formatAmountInput(r.amount) : "",
@@ -670,10 +676,8 @@ export function EmitBoard({
       lack("codes", text.startsWith("Atividade") ? "atividade" : text.includes("NBS") ? "NBS" : indMissing ? "indicador da operação" : "códigos de IBS/CBS", text);
     }
     if (draft.takerKind === "new") {
-      const t = draft.newTaker;
-      if (![11, 14].includes(t.doc.replace(/\D/g, "").length) || !t.nome.trim() || t.cep.replace(/\D/g, "").length !== 8 || !t.logradouro.trim() || !t.numero.trim() || !t.bairro.trim()) {
-        lack("taker", "dados do tomador novo", "Complete os dados do tomador novo.");
-      }
+      // cada recusa da prefeitura custa um trabalho do robô: o endereço é conferido aqui
+      for (const issue of checkNewTaker(draft.newTaker)) lack("taker", issue.short, issue.text);
     }
     if (!amount) lack("amount", "valor", "Informe o valor.");
     if (draft.description.trim().length < 3) lack("description", "descrição", "Escreva a descrição do serviço.");
@@ -816,10 +820,6 @@ export function EmitBoard({
     if (robot.state === "offline") problems.push({ text: "Robô desligado: a nota fica na fila e sai quando ele ligar" });
     // campo que falta não é problema: vira a linha "Faltam: ..."; aqui fica só o que pede atenção
     for (const text of new Set([...(check?.warnings ?? []), ...(model && !model.ok ? [model.error] : [])])) problems.push({ text });
-    if (draft.takerKind === "new") {
-      const cep = cepMismatch(draft.newTaker.cep, draft.newTaker.cmun);
-      if (cep) problems.push({ text: cep });
-    }
   }
   const allClear = ready && problems.length === 0;
 
