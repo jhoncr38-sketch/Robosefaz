@@ -51,7 +51,7 @@ export default async function ClientDetailPage({ params }: PageProps<"/clients/[
   if (!client) notFound();
   const c = client as Client;
 
-  const [certRes, jobsRes, downloadsRes, auditRes, users, drive, emptyRes] = await Promise.all([
+  const [certRes, jobsRes, downloadsRes, auditRes, users, drive, emptyRes, notesRes] = await Promise.all([
     supabase.from("certificates").select("*").eq("client_id", id).order("created_at", { ascending: false }),
     supabase.from("automation_jobs").select(JOB_SELECT).eq("client_id", id).order("created_at", { ascending: false }).limit(100),
     supabase.from("downloads").select("*").eq("client_id", id).order("downloaded_at", { ascending: false }),
@@ -62,6 +62,8 @@ export default async function ClientDetailPage({ params }: PageProps<"/clients/[
     notesInGoogleDrive(supabase),
     // processados sem notas no período (não há arquivo)
     supabase.from("downloads_no_movement").select("*").eq("client_id", id).order("checked_at", { ascending: false }),
+    // quantas notas estão no índice: o diálogo de excluir diz o que iria junto
+    supabase.from("notes").select("id", { count: "exact", head: true }).eq("client_id", id),
   ]);
 
   const certificates = (certRes.data ?? []) as Certificate[];
@@ -94,7 +96,7 @@ export default async function ClientDetailPage({ params }: PageProps<"/clients/[
         <div className="flex flex-wrap gap-2">
           {admin ? <ClientFormDialog client={c} /> : null}
           {can(profile.role, "clients:delete") ? (
-            <DeleteClientDialog client={c} jobs={jobs.length} downloads={downloads.length} />
+            <DeleteClientDialog client={c} jobs={jobs.length} downloads={downloads.length} notes={notesRes.count ?? 0} certificates={certificates.length} />
           ) : null}
           {/* empresa só de serviço (sem SIAT): nada a agendar no SIAT; as notas vêm pela NFS-e Nacional */}
           {can(profile.role, "automation:run") && c.uses_siat !== false ? (

@@ -54,11 +54,13 @@ export async function setClientActive(id: string, active: boolean): Promise<Acti
 }
 
 /** Exclui cliente cadastrado por engano: só administrador e só cliente sem histórico (o banco confere). */
-export async function deleteClient(id: string): Promise<ActionResult> {
+/** `force`: apaga também o histórico (trabalhos, downloads, índice de notas, EFD, malhas); só com a confirmação
+ *  explícita na tela. Os arquivos na pasta de notas não são tocados. */
+export async function deleteClient(id: string, force = false): Promise<ActionResult> {
   const auth = await authorize("clients:delete");
   if ("error" in auth) return { ok: false, error: auth.error };
   const supabase = await createClient();
-  const { error } = await supabase.rpc("delete_client", { p_client_id: id });
+  const { error } = await supabase.rpc("delete_client", { p_client_id: id, p_force: force });
   if (error) {
     if (/HAS_HISTORY/.test(error.message)) {
       return {

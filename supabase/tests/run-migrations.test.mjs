@@ -811,6 +811,46 @@ await test("excluir cliente: só admin, só sem histórico, só do próprio escr
   assert.equal(audit.org_id, ORG_A);
 });
 
+await test("excluir cliente com o histórico: só admin, só com a confirmação (p_force), leva tudo junto e fica na auditoria", async () => {
+  const velho = (
+    await as(ADMIN, (tx) => tx.query("insert into public.clients (legal_name, cnpj) values ('CLIENTE QUE SAIU', '22222222000191') returning id, client_code"))
+  ).rows[0];
+  await db.query(
+    `insert into public.automation_jobs (client_id, provider, competence, start_date, end_date, operations, status, current_step)
+     values ($1, 'siat_pi', '2026-08', '2026-08-01', '2026-08-31', array['NFCE_EXPORT']::public.task_type[], 'completed', 'completed')`,
+    [velho.id],
+  );
+  await db.query(
+    "insert into public.downloads (client_id, document_type, competence, filename, filepath, checksum) values ($1, 'NFCE', '2026-08', 'v.zip', 'C:/v.zip', repeat('d', 64))",
+    [velho.id],
+  );
+  await db.query("insert into public.efd_declarations (client_id, competence, epe_number, situation) values ($1, '2026-08', '9', 'processed')", [velho.id]);
+  await as(ADMIN, (tx) =>
+    tx.query("insert into public.certificates (client_id, type, subject_name, valid_until) values ($1, 'A1', 'SAIU', now() + interval '1 year')", [velho.id]),
+  );
+  // sem a confirmação continua bloqueado; operador não exclui nem com ela
+  await rejects(as(ADMIN, (tx) => tx.query("select public.delete_client($1)", [velho.id])), /HAS_HISTORY/);
+  await rejects(as(ADMIN, (tx) => tx.query("select public.delete_client($1, false)", [velho.id])), /HAS_HISTORY/);
+  await rejects(as(OPERATOR, (tx) => tx.query("select public.delete_client($1, true)", [velho.id])), /FORBIDDEN/);
+  await as(ADMIN, (tx) => tx.query("select public.delete_client($1, true)", [velho.id]));
+  const left = (
+    await db.query(
+      `select (select count(*)::int from public.clients where id = $1) c, (select count(*)::int from public.automation_jobs where client_id = $1) j,
+              (select count(*)::int from public.downloads where client_id = $1) d, (select count(*)::int from public.efd_declarations where client_id = $1) e,
+              (select count(*)::int from public.certificates where client_id = $1) k`,
+      [velho.id],
+    )
+  ).rows[0];
+  assert.deepEqual(left, { c: 0, j: 0, d: 0, e: 0, k: 0 });
+  // o que foi apagado junto fica registrado, além do client.deleted de sempre
+  const hist = (await db.query("select data from public.audit_logs where action = 'client.history_deleted' and entity_id = $1", [velho.id])).rows[0];
+  assert.deepEqual(
+    { code: hist.data.client_code, jobs: hist.data.jobs, downloads: hist.data.downloads, efd: hist.data.efd, certificates: hist.data.certificates },
+    { code: velho.client_code, jobs: 1, downloads: 1, efd: 1, certificates: 1 },
+  );
+  assert.equal((await db.query("select count(*)::int n from public.audit_logs where action = 'client.deleted' and entity_id = $1", [velho.id])).rows[0].n, 1);
+});
+
 // ---------------------------------------------------------------------
 // Consulta de Malhas Fiscais (SIAT web)
 // ---------------------------------------------------------------------
