@@ -7,6 +7,7 @@ import { authorize } from "@/lib/auth";
 import { buildEmitProfile, EMISSION_COLUMNS, EMIT_NOTE_COLUMNS, NFSE_EMIT_RELEASED, type Emission, type EmitNote } from "@/lib/nfse-emit";
 import type { Permission } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { CNPJ_SOURCES, usableRecord } from "@/lib/cnpj-fontes";
 import type { ActionResult } from "@/lib/types";
 
 /** Autoriza uma ação da emissão. Enquanto a função não é lançada, só o dono da plataforma usa
@@ -176,29 +177,32 @@ export async function lookupTaker(cnpj: string): Promise<ActionResult<TakerLooku
   if ("error" in auth) return { ok: false, error: auth.error };
   const doc = cnpj.replace(/\D/g, "");
   if (doc.length !== 14) return { ok: false, error: "Informe os 14 números do CNPJ (para CPF, digite os dados)." };
-  try {
-    const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${doc}`, { signal: AbortSignal.timeout(6000), next: { revalidate: 86_400 } });
-    if (!res.ok) return { ok: false, error: "CNPJ não encontrado na consulta pública. Digite os dados do tomador." };
-    const d = (await res.json()) as Record<string, string | number | null>;
-    const text = (k: string) => String(d[k] ?? "").trim();
-    return {
-      ok: true,
-      data: {
-        doc,
-        nome: text("razao_social"),
-        cmun: text("codigo_municipio_ibge"),
-        cidade: [text("municipio"), text("uf")].filter(Boolean).join("/"),
-        cep: text("cep").replace(/\D/g, ""),
-        logradouro: [text("descricao_tipo_de_logradouro"), text("logradouro")].filter(Boolean).join(" "),
-        numero: text("numero") || "S/N",
-        complemento: text("complemento"),
-        bairro: text("bairro"),
-        situacao: text("descricao_situacao_cadastral"),
-      },
-    };
-  } catch {
-    return { ok: false, error: "A consulta pública do CNPJ não respondeu. Digite os dados do tomador." };
+  // três fontes abertas, na ordem; uma fora do ar ou limitando pedidos não derruba a consulta
+  let notFound = false;
+  for (const source of CNPJ_SOURCES) {
+    try {
+      const res = await fetch(source.url(doc), { headers: { accept: "application/json" }, signal: AbortSignal.timeout(6000), cache: "no-store" });
+      if (res.status === 404) {
+        notFound = true;
+        continue;
+      }
+      if (!res.ok) {
+        console.warn(`[cnpj] ${source.name} respondeu ${res.status}`);
+        continue;
+      }
+      const record = source.parse((await res.json()) as Record<string, unknown>);
+      if (!usableRecord(record)) continue;
+      return { ok: true, data: { doc, ...record } };
+    } catch (err) {
+      console.warn(`[cnpj] ${source.name} não respondeu: ${String(err).slice(0, 80)}`);
+    }
   }
+  return {
+    ok: false,
+    error: notFound
+      ? "CNPJ não encontrado na consulta pública. Digite os dados do tomador."
+      : "A consulta pública do CNPJ não respondeu agora. Tente de novo ou digite os dados do tomador.",
+  };
 }
 
 export interface CepLookup {
