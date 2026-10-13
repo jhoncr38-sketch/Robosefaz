@@ -201,6 +201,34 @@ export async function lookupTaker(cnpj: string): Promise<ActionResult<TakerLooku
   }
 }
 
+export interface CepLookup {
+  cmun: string;
+  cidade: string;
+  logradouro: string;
+  bairro: string;
+}
+
+/** Município (código IBGE), cidade, rua e bairro de um CEP, pela consulta pública (ViaCEP). */
+export async function lookupCep(cep: string): Promise<ActionResult<CepLookup>> {
+  const auth = await authorizeEmit("automation:run");
+  if ("error" in auth) return { ok: false, error: auth.error };
+  const d = cep.replace(/\D/g, "");
+  if (d.length !== 8) return { ok: false, error: "O CEP tem 8 números." };
+  try {
+    const res = await fetch(`https://viacep.com.br/ws/${d}/json/`, { signal: AbortSignal.timeout(6000), next: { revalidate: 86_400 } });
+    if (!res.ok) return { ok: false, error: "CEP não encontrado." };
+    const v = (await res.json()) as Record<string, string | boolean | undefined>;
+    const text = (k: string) => String(v[k] ?? "").trim();
+    if (v.erro || !/^\d{7}$/.test(text("ibge"))) return { ok: false, error: "CEP não encontrado." };
+    return {
+      ok: true,
+      data: { cmun: text("ibge"), cidade: [text("localidade"), text("uf")].filter(Boolean).join("/"), logradouro: text("logradouro"), bairro: text("bairro") },
+    };
+  } catch {
+    return { ok: false, error: "A consulta do CEP não respondeu." };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Emitir e cancelar
 // ---------------------------------------------------------------------------

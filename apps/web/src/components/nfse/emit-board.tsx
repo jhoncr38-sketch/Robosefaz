@@ -27,7 +27,7 @@ import {
   UserX,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { retryJob } from "@/app/actions/automation";
@@ -37,6 +37,7 @@ import {
   loadEmission,
   loadEmissionXml,
   loadEmitNotes,
+  lookupCep,
   lookupTaker,
   readEmitRequest,
 } from "@/app/actions/nfse-emit";
@@ -68,6 +69,7 @@ import {
   pickModel,
   takerNoteKey,
   type Emission,
+  cepMismatch,
   type EmitNote,
   type EmitActivity,
   type EmitNoteRef,
@@ -375,6 +377,10 @@ export function EmitBoard({
   const [reading, startRead] = useTransition();
   const [sending, startSend] = useTransition();
   const [looking, startLookup] = useTransition();
+  const [, startCep] = useTransition();
+  /** último CEP e último CNPJ consultados: digitar o mesmo de novo não consulta de novo */
+  const lastCep = useRef("");
+  const lastDoc = useRef("");
   const [tables, setTables] = useState<NfseTables | null>(null);
   const [tablesFailed, setTablesFailed] = useState(false);
 
@@ -587,19 +593,43 @@ export function EmitBoard({
     patch({ classTrib: value, cst: cstOf(value), ibsAuto: false, ibsOff: false, indOp: draft?.indOp || (tables ? onlyIndOp(tables, nac, onlyDigits(draft?.nbs ?? "")) : "") });
   }
 
-  function lookup() {
-    if (!draft) return;
+  /** CNPJ completo: nome e endereço vêm sozinhos da consulta pública (o botão Buscar dados refaz a consulta) */
+  function lookup(doc: string = draft?.newTaker.doc ?? "") {
+    const digits = doc.replace(/\D/g, "");
+    if (!draft || digits.length !== 14) return;
+    lastDoc.current = digits;
     startLookup(async () => {
-      const res = await lookupTaker(draft.newTaker.doc);
+      const res = await lookupTaker(digits);
       if (!res.ok || !res.data) {
         toast.error(res.ok ? "CNPJ não encontrado." : res.error);
         return;
       }
       const d = res.data;
       patch({ newTaker: { doc: d.doc, nome: d.nome, cmun: d.cmun || "2211001", cidade: d.cidade, cep: d.cep, logradouro: d.logradouro, numero: d.numero, complemento: d.complemento, bairro: d.bairro } });
+      lastCep.current = d.cep;
       setTakerStatus(d.situacao || null);
       setTakerEdit(false);
       if (d.situacao && d.situacao.toUpperCase() !== "ATIVA") toast.warning(`Situação do CNPJ na Receita: ${d.situacao}.`);
+    });
+  }
+
+  /** CEP digitado: o município (código IBGE, que a prefeitura confere) e a cidade vêm dele; rua e bairro só se estiverem vazios */
+  function fillFromCep(cep: string) {
+    const digits = cep.replace(/\D/g, "");
+    if (digits.length !== 8 || digits === lastCep.current) return;
+    lastCep.current = digits;
+    startCep(async () => {
+      const res = await lookupCep(digits);
+      if (!res.ok || !res.data) {
+        toast.warning(res.ok ? "CEP não encontrado." : res.error);
+        return;
+      }
+      const c = res.data;
+      setDraft((d) =>
+        d && d.takerKind === "new" && d.newTaker.cep.replace(/\D/g, "") === digits
+          ? { ...d, newTaker: { ...d.newTaker, cmun: c.cmun, cidade: c.cidade, logradouro: d.newTaker.logradouro || c.logradouro, bairro: d.newTaker.bairro || c.bairro } }
+          : d,
+      );
     });
   }
 
@@ -786,6 +816,10 @@ export function EmitBoard({
     if (robot.state === "offline") problems.push({ text: "Robô desligado: a nota fica na fila e sai quando ele ligar" });
     // campo que falta não é problema: vira a linha "Faltam: ..."; aqui fica só o que pede atenção
     for (const text of new Set([...(check?.warnings ?? []), ...(model && !model.ok ? [model.error] : [])])) problems.push({ text });
+    if (draft.takerKind === "new") {
+      const cep = cepMismatch(draft.newTaker.cep, draft.newTaker.cmun);
+      if (cep) problems.push({ text: cep });
+    }
   }
   const allClear = ready && problems.length === 0;
 
@@ -1114,9 +1148,11 @@ export function EmitBoard({
                                     onChange={(e) => {
                                       setTakerStatus(null);
                                       patch({ newTaker: { ...draft.newTaker, doc: e.target.value } });
+                                      const digits = e.target.value.replace(/\D/g, "");
+                                      if (digits.length === 14 && digits !== lastDoc.current) lookup(e.target.value);
                                     }}
                                   />
-                                  <button type="button" className={BTN_OUTLINE} onClick={lookup} disabled={looking || draft.newTaker.doc.replace(/\D/g, "").length !== 14}>
+                                  <button type="button" className={BTN_OUTLINE} onClick={() => lookup()} disabled={looking || draft.newTaker.doc.replace(/\D/g, "").length !== 14}>
                                     {looking ? <Loader2 className="size-3.5 animate-spin" /> : <Search className="size-3.5" />} Buscar dados
                                   </button>
                                   <PopoverTrigger asChild>
@@ -1143,7 +1179,11 @@ export function EmitBoard({
                                     </div>
                                     <div className="grid gap-2.5 sm:grid-cols-3">
                                       <Field label="CEP">
-                                        <input className={INPUT} inputMode="numeric" value={draft.newTaker.cep} onChange={(e) => patch({ newTaker: { ...draft.newTaker, cep: e.target.value } })} />
+                                        <input className={INPUT} inputMode="numeric" value={draft.newTaker.cep}
+                                          onChange={(e) => {
+                                            patch({ newTaker: { ...draft.newTaker, cep: e.target.value } });
+                                            fillFromCep(e.target.value);
+                                          }} />
                                       </Field>
                                       <Field label="Código IBGE do município">
                                         <input
@@ -1178,7 +1218,7 @@ export function EmitBoard({
                                   </div>
                                 ) : (
                                   <span className="text-[12px] text-(--c-6b6c66)">
-                                    Nome e endereço vêm da Receita Federal.{" "}
+                                    Com o CNPJ completo, nome e endereço vêm sozinhos da Receita Federal.{" "}
                                     <button type="button" className="font-medium text-foreground underline underline-offset-2" onClick={() => setTakerEdit(true)}>
                                       Preencher à mão
                                     </button>

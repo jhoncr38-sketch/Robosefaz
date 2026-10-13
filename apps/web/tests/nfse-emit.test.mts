@@ -18,6 +18,8 @@ import {
   formatServiceCode,
   monthSummary,
   parseAmount,
+  cepMismatch,
+  cepUf,
   checkCodes,
   emitAccess,
   NFSE_EMIT_RELEASED,
@@ -281,6 +283,18 @@ describe("quem entra na emissão", () => {
     assert.equal(emitAccess({ released: true, officeEnabled: true, isOwner: false }), "on");
     assert.equal(emitAccess({ released: true, officeEnabled: false, isOwner: false }), "locked");
     assert.equal(emitAccess({ released: true, officeEnabled: false, isOwner: true }), "on");
+  });
+
+  it("CEP de outro estado que o município do tomador: aviso antes de enviar (a prefeitura recusa com E0240)", () => {
+    assert.equal(cepUf("50010-310"), "PE");
+    assert.equal(cepUf("64000000"), "PI");
+    assert.equal(cepUf("73000000"), "DF");
+    assert.equal(cepUf("72800000"), "GO");
+    assert.equal(cepUf("1234"), "");
+    assert.match(cepMismatch("50010310", "2211001") ?? "", /CEP 50010-310 é de PE, mas o município do tomador é Teresina\/PI/);
+    assert.equal(cepMismatch("50010310", "2611606"), null);
+    assert.equal(cepMismatch("5001031", "2211001"), null); // CEP incompleto: nada a dizer ainda
+    assert.equal(cepMismatch("50010310", "9999999"), null); // município fora da tabela
   });
 
   it("a função segue travada até alguém decidir lançar", () => {

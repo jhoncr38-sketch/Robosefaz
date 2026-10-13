@@ -2,6 +2,7 @@
 // nota-modelo) e como mostrar cada emissão. Nada aqui decide imposto: o serviço e a tributação saem
 // sempre de uma nota real que a prefeitura já aceitou; a tela só escolhe qual e avisa o que mudou.
 
+import { MUNICIPIOS } from "./ibge-municipios.ts";
 import type { Tone } from "./status.ts";
 
 /** Linha do índice (tabela notes) de uma NFS-e prestada do cliente. */
@@ -298,6 +299,34 @@ export function checkDraft(amount: number | null, service: string, taker: EmitTa
     warnings.push("Tomador novo: confira o CNPJ e o endereço com atenção.");
   }
   return { amountDiff, serviceChanged, warnings };
+}
+
+/** Faixas de CEP por estado (Correios): os 5 primeiros números, de–até. */
+const CEP_RANGES: [number, number, string][] = [
+  [1000, 19999, "SP"], [20000, 28999, "RJ"], [29000, 29999, "ES"], [30000, 39999, "MG"], [40000, 48999, "BA"],
+  [49000, 49999, "SE"], [50000, 56999, "PE"], [57000, 57999, "AL"], [58000, 58999, "PB"], [59000, 59999, "RN"],
+  [60000, 63999, "CE"], [64000, 64999, "PI"], [65000, 65999, "MA"], [66000, 68899, "PA"], [68900, 68999, "AP"],
+  [69000, 69299, "AM"], [69300, 69399, "RR"], [69400, 69899, "AM"], [69900, 69999, "AC"], [70000, 72799, "DF"],
+  [72800, 72999, "GO"], [73000, 73699, "DF"], [73700, 76799, "GO"], [76800, 76999, "RO"], [77000, 77999, "TO"],
+  [78000, 78899, "MT"], [79000, 79999, "MS"], [80000, 87999, "PR"], [88000, 89999, "SC"], [90000, 99999, "RS"],
+];
+
+/** Estado a que o CEP pertence ("PE"); vazio se o CEP está incompleto. */
+export function cepUf(cep: string): string {
+  const d = cep.replace(/\D/g, "");
+  if (d.length !== 8) return "";
+  const n = Number(d.slice(0, 5));
+  return CEP_RANGES.find(([from, to]) => n >= from && n <= to)?.[2] ?? "";
+}
+
+/** CEP de um estado e município de outro: a prefeitura recusa a nota (E0240). O aviso sai antes de enviar. */
+export function cepMismatch(cep: string, cmun: string): string | null {
+  const uf = cepUf(cep);
+  const city = MUNICIPIOS[cmun.replace(/\D/g, "")];
+  const cityUf = city?.split("/").pop() ?? "";
+  if (!uf || !cityUf || uf === cityUf) return null;
+  const d = cep.replace(/\D/g, "");
+  return `O CEP ${d.slice(0, 5)}-${d.slice(5)} é de ${uf}, mas o município do tomador é ${city}. A prefeitura recusa a nota assim: confira o endereço.`;
 }
 
 // ---------------------------------------------------------------------------
