@@ -109,6 +109,7 @@ class JobRepository(Protocol):
     async def list_locked_jobs(self) -> list[dict[str, Any]]: ...
     async def list_heartbeats(self) -> dict[str, dict[str, Any]]: ...
     async def update_job_if_locked_by(self, job_id: str, owner: str, **fields: Any) -> bool: ...
+    async def update_own_job(self, job_id: str, owner: str, attempt: int, **fields: Any) -> bool: ...
     # -- retenção (limpeza automática) -------------------------------------
     async def list_downloads_before(self, cutoff: datetime) -> list[dict[str, Any]]: ...
     async def delete_rows(self, table: str, ids: list[str]) -> int: ...
@@ -201,6 +202,20 @@ class SupabaseJobRepository:
             .update(_serialize(fields), count=CountMethod.exact, returning=ReturnMethod.minimal)
             .eq("id", job_id)
             .eq("locked_by", owner)
+            .execute()
+        )
+        return bool(res.count)
+
+    @_transient
+    async def update_own_job(self, job_id: str, owner: str, attempt: int, **fields: Any) -> bool:
+        """Grava só se o trabalho ainda é deste robô e desta tentativa. False = outro computador assumiu
+        (este foi dado como desligado): a tentativa antiga não pode escrever por cima da nova."""
+        res = await (
+            self._db.table("automation_jobs")
+            .update(_serialize(fields), count=CountMethod.exact, returning=ReturnMethod.minimal)
+            .eq("id", job_id)
+            .eq("locked_by", owner)
+            .eq("attempts", attempt)
             .execute()
         )
         return bool(res.count)

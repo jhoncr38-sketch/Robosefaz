@@ -16,7 +16,7 @@ from app.jobs.collect import (  # noqa: F401 - reexportados (testes e chamadores
     KEY_CHECK_MINUTES,
     ExportCollection,
 )
-from app.jobs.errors import AutomationError, ErrorCode, JobCancelled
+from app.jobs.errors import AutomationError, ErrorCode, JobCancelled, JobLockLost
 from app.jobs.models import Job, TaskStatus
 from app.jobs.reporter import JobReporter
 from app.jobs.state_machine import JobStatus
@@ -47,6 +47,7 @@ class CollectorRunner(ExportCollection, BaseRunner):
             phase=self.phase,
             initial=JobStatus.CHECKING_PROCESSING,
             page_getter=lambda: ctx.page if ctx else None,
+            owner=self.deps.worker_id,
         )
         await logger.info(f"Collector: consulta nº {job.check_count} dos agendamentos.", step="checking_processing")
         try:
@@ -78,8 +79,9 @@ class CollectorRunner(ExportCollection, BaseRunner):
 
         except asyncio.CancelledError:
             # worker interrompido: volta a aguardar a SEFAZ para nova consulta
-            await self.repo.update_job(
-                job.id,
+            await self.update_own(
+                job,
+                logger,
                 status=JobStatus.WAITING_SEFAZ.value,
                 current_step=JobStatus.WAITING_SEFAZ.value,
                 progress=80,
@@ -88,12 +90,17 @@ class CollectorRunner(ExportCollection, BaseRunner):
             )
             raise
         except JobCancelled:
-            await self.repo.update_job(
-                job.id,
+            await self.update_own(
+                job,
+                logger,
                 status=JobStatus.CANCELLED.value,
                 current_step=JobStatus.CANCELLED.value,
                 finished_at=now_utc(),
                 last_message="Cancelado pelo usuário",
+            )
+        except JobLockLost:
+            await logger.warning(
+                "O trabalho passou para outro computador; esta consulta foi encerrada sem gravar nada.", step="lock_lost"
             )
         except Exception as exc:  # noqa: BLE001
             await self._failed(job, reporter, logger, ctx, exc)
@@ -113,8 +120,9 @@ class CollectorRunner(ExportCollection, BaseRunner):
             # erros transitórios: volta a aguardar e tenta de novo mais tarde, sem martelar o SIAT
             # (5 min; 15 min se a consulta anterior também falhou)
             wait = 15 if job.error_code else 5
-            await self.repo.update_job(
-                job.id,
+            await self.update_own(
+                job,
+                logger,
                 status=JobStatus.WAITING_SEFAZ.value,
                 current_step=JobStatus.WAITING_SEFAZ.value,
                 progress=80,
@@ -128,8 +136,9 @@ class CollectorRunner(ExportCollection, BaseRunner):
         status = JobStatus.CERTIFICATE_REQUIRED if code in (
             ErrorCode.CERTIFICATE_REQUIRED, ErrorCode.CERTIFICATE_EXPIRED
         ) else JobStatus.FAILED
-        await self.repo.update_job(
-            job.id,
+        await self.update_own(
+            job,
+            logger,
             status=status.value,
             current_step=status.value,
             error_code=code.value,

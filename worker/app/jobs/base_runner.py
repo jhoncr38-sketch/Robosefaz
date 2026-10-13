@@ -170,6 +170,18 @@ class BaseRunner:
             await logger.info(f"Screenshot do erro salvo em {path}", step="error", metadata={"screenshot": path})
         return path
 
+    async def update_own(self, job: Job, logger: JobLogger, **fields: object) -> bool:
+        """Grava no trabalho só se ele ainda é deste robô e desta tentativa. False = outro computador assumiu
+        (este foi dado como desligado); o resultado desta tentativa não vale mais e nada é gravado."""
+        if await self.repo.update_own_job(job.id, self.deps.worker_id, job.attempts, **fields):
+            return True
+        await logger.warning(
+            "O trabalho passou para outro computador enquanto este ainda o executava; o resultado desta tentativa "
+            f"não foi gravado (tentativa {job.attempts} de {re.sub(r'-[0-9]+$', '', self.deps.worker_id)}).",
+            step="lock_lost",
+        )
+        return False
+
     @staticmethod
     def describe(error: BaseException) -> tuple[ErrorCode, str]:
         if isinstance(error, AutomationError):

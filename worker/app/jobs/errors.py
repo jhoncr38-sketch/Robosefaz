@@ -28,6 +28,7 @@ class ErrorCode(StrEnum):
     COLLECTOR_EXHAUSTED = "COLLECTOR_EXHAUSTED"
     NFSE_UNAVAILABLE = "NFSE_UNAVAILABLE"  # API da NFS-e Nacional (ADN) fora do ar ou recusou a consulta
     NFSE_REJECTED = "NFSE_REJECTED"  # a prefeitura recusou a nota ou o cancelamento (regra de negócio): nada foi emitido
+    LOCK_LOST = "LOCK_LOST"  # o trabalho passou para outro computador enquanto este ainda o executava
     UNEXPECTED = "UNEXPECTED"
 
 
@@ -44,6 +45,7 @@ NON_RETRYABLE_CODES: frozenset[ErrorCode] = frozenset(
         ErrorCode.EXPORT_FAILED,
         ErrorCode.COLLECTOR_EXHAUSTED,
         ErrorCode.NFSE_REJECTED,
+        ErrorCode.LOCK_LOST,
     }
 )
 
@@ -104,6 +106,13 @@ class ManualActionRequired(AutomationError):
 class JobCancelled(AutomationError):
     def __init__(self) -> None:
         super().__init__(ErrorCode.CANCELLED, "Automação cancelada pelo usuário.")
+
+
+class JobLockLost(AutomationError):
+    """Outro computador assumiu o trabalho (este foi dado como desligado): esta tentativa encerra sem gravar nada."""
+
+    def __init__(self) -> None:
+        super().__init__(ErrorCode.LOCK_LOST, "O trabalho passou para outro computador; esta tentativa foi encerrada.")
 
 
 def is_retryable(error: BaseException) -> bool:

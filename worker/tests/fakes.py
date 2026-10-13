@@ -478,6 +478,13 @@ class FakeRepo:
         await self.update_job(job_id, **fields)
         return True
 
+    async def update_own_job(self, job_id: str, owner: str, attempt: int, **fields: Any) -> bool:
+        j = self.jobs[job_id]
+        if j.get("locked_by") != owner or j.get("attempts") != attempt:
+            return False
+        await self.update_job(job_id, **fields)
+        return True
+
     # -- retenção -------------------------------------------------------------
     async def list_downloads_before(self, cutoff: datetime) -> list[dict[str, Any]]:
         return [d for d in self.downloads if d.get("downloaded_at") and d["downloaded_at"] < cutoff]

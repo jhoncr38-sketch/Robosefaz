@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Awaitable, Callable
 
 from app.browser.screenshots import capture_step_screenshot
 from app.browser.window import robot_windows
-from app.jobs.errors import JobCancelled, ManualActionRequired
+from app.jobs.errors import JobCancelled, JobLockLost, ManualActionRequired
 from app.jobs.state_machine import JobStateMachine, JobStatus, label_for
 
 if TYPE_CHECKING:
@@ -33,9 +33,12 @@ class JobReporter:
         page_getter: Callable[[], "Page | None"] = lambda: None,
         poll_interval: float = 2.0,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        owner: str | None = None,
     ) -> None:
         self.repo = repo
         self.job = job
+        # id deste robô: com ele, cada gravação confere que o trabalho ainda é desta tentativa
+        self.owner = owner
         self.settings = settings
         self.logger = logger
         self.machine = JobStateMachine(initial, phase=phase)
@@ -47,12 +50,19 @@ class JobReporter:
     def state(self) -> JobStatus:
         return self.machine.state
 
+    async def update(self, **fields) -> None:  # noqa: ANN003
+        """Grava no trabalho. Se outro computador assumiu (este foi dado como desligado), esta tentativa
+        não pode escrever por cima da nova: encerra aqui."""
+        if self.owner is None:
+            await self.repo.update_job(self.job.id, **fields)
+        elif not await self.repo.update_own_job(self.job.id, self.owner, self.job.attempts, **fields):
+            raise JobLockLost()
+
     async def step(self, status: JobStatus, message: str | None = None) -> None:
         await self.check_cancel()
         self.machine.transition(status)
         text = message or label_for(status)
-        await self.repo.update_job(
-            self.job.id,
+        await self.update(
             status=status.value,
             current_step=status.value,
             progress=self.machine.progress,
@@ -68,7 +78,7 @@ class JobReporter:
         self.machine.transition(status)
         payload = {"status": status.value, "current_step": status.value, "progress": self.machine.progress}
         payload.update(fields)
-        await self.repo.update_job(self.job.id, **payload)
+        await self.update(**payload)
 
     async def check_cancel(self) -> None:
         if await self.repo.is_cancel_requested(self.job.id):
@@ -96,8 +106,7 @@ class JobReporter:
         previous = self.machine.state
         requested_at = datetime.now(timezone.utc)
         self.machine.transition(status)
-        await self.repo.update_job(
-            self.job.id,
+        await self.update(
             status=status.value,
             current_step=status.value,
             progress=self.machine.progress,
@@ -131,7 +140,7 @@ class JobReporter:
                 if loop.time() >= deadline:
                     raise ManualActionRequired(f"Tempo esgotado aguardando intervenção: {message}")
                 if loop.time() - last_heartbeat > 60:
-                    await self.repo.update_job(self.job.id, locked_at=datetime.now(timezone.utc))
+                    await self.update(locked_at=datetime.now(timezone.utc))
                     last_heartbeat = loop.time()
                 await self._sleep(self.poll_interval)
 
@@ -140,8 +149,7 @@ class JobReporter:
             step=status.value,
         )
         self.machine.transition(previous)
-        await self.repo.update_job(
-            self.job.id,
+        await self.update(
             status=previous.value,
             current_step=previous.value,
             progress=self.machine.progress,

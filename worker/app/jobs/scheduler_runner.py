@@ -21,7 +21,7 @@ from app.jobs.efd_check import run_efd_check
 from app.jobs.malha_check import run_malha_check
 from app.jobs.nfse_emit import run_nfse_cancel, run_nfse_emit
 from app.jobs.nfse_fetch import run_nfse_fetch
-from app.jobs.errors import AutomationError, ErrorCode, JobCancelled, TaxpayerMismatchError
+from app.jobs.errors import AutomationError, ErrorCode, JobCancelled, JobLockLost, TaxpayerMismatchError
 from app.jobs.models import EXPORT_TASK_TYPES, ExportRequestResult, Job, Task, TaskStatus, TaskType
 from app.jobs.reporter import JobReporter
 from app.jobs.state_machine import JobStatus
@@ -66,6 +66,7 @@ class SchedulerRunner(ExportCollection, BaseRunner):
             phase=self.phase,
             initial=JobStatus.STARTING,
             page_getter=lambda: ctx.page if ctx else None,
+            owner=self.deps.worker_id,
         )
         await logger.info(
             f"Job iniciado (tentativa {job.attempts}) por {self.deps.worker_id}. "
@@ -226,10 +227,16 @@ class SchedulerRunner(ExportCollection, BaseRunner):
 
         except asyncio.CancelledError:
             # worker interrompido (2º Ctrl+C): devolve o job à fila sem contar tentativa
-            await self._requeue_after_interrupt(job, tasks)
+            await self._requeue_after_interrupt(job, tasks, logger)
             raise
         except JobCancelled:
             await self._cancelled(job, reporter, tasks, logger)
+        except JobLockLost:
+            # outro computador assumiu o trabalho (este foi dado como desligado): a tentativa nova é a que vale
+            await logger.warning(
+                f"O trabalho passou para outro computador; esta tentativa ({job.attempts}) foi encerrada sem gravar nada.",
+                step="lock_lost",
+            )
         except Exception as exc:  # noqa: BLE001 - tratado e registrado
             await self._failed(job, reporter, tasks, logger, ctx, exc)
         finally:
@@ -508,12 +515,11 @@ class SchedulerRunner(ExportCollection, BaseRunner):
         await reporter.set_final(JobStatus.COMPLETED, finished_at=now_utc(), last_message=message)
         await logger.info(message, step="completed")
 
-    async def _requeue_after_interrupt(self, job: Job, tasks: list[Task]) -> None:
-        for t in tasks:
-            if t.status == TaskStatus.RUNNING:
-                await self.repo.update_task(t.id, status=TaskStatus.PENDING.value)
-        await self.repo.update_job(
-            job.id,
+    async def _requeue_after_interrupt(self, job: Job, tasks: list[Task], logger: JobLogger) -> None:
+        # o trabalho primeiro: se outro computador já o assumiu, as tarefas são dele
+        if not await self.update_own(
+            job,
+            logger,
             status=JobStatus.QUEUED.value,
             current_step=JobStatus.QUEUED.value,
             progress=0,
@@ -521,19 +527,25 @@ class SchedulerRunner(ExportCollection, BaseRunner):
             next_attempt_at=now_utc(),
             manual_action_message=None,
             last_message="Worker interrompido; job devolvido à fila.",
-        )
+        ):
+            return
+        for t in tasks:
+            if t.status == TaskStatus.RUNNING:
+                await self.repo.update_task(t.id, status=TaskStatus.PENDING.value)
 
     async def _cancelled(self, job: Job, reporter: JobReporter, tasks: list[Task], logger: JobLogger) -> None:
-        for t in tasks:
-            if t.status in (TaskStatus.PENDING, TaskStatus.RUNNING):
-                await self.repo.update_task(t.id, status=TaskStatus.CANCELLED.value, finished_at=now_utc())
-        await self.repo.update_job(
-            job.id,
+        if not await self.update_own(
+            job,
+            logger,
             status=JobStatus.CANCELLED.value,
             current_step=JobStatus.CANCELLED.value,
             finished_at=now_utc(),
             last_message="Cancelado pelo usuário",
-        )
+        ):
+            return
+        for t in tasks:
+            if t.status in (TaskStatus.PENDING, TaskStatus.RUNNING):
+                await self.repo.update_task(t.id, status=TaskStatus.CANCELLED.value, finished_at=now_utc())
         await logger.warning("Automação cancelada pelo usuário.", step="cancelled")
 
     async def _failed(
@@ -554,9 +566,11 @@ class SchedulerRunner(ExportCollection, BaseRunner):
         screenshot = await self.error_screenshot(ctx, job, logger)
         await logger.error(f"[{code}] {message}", step=reporter.state.value, metadata={"error_code": code.value})
 
+        # o trabalho é gravado antes das tarefas: se outro computador já o assumiu, nada daqui vale mais
         if code in (ErrorCode.CERTIFICATE_REQUIRED, ErrorCode.CERTIFICATE_EXPIRED):
-            await self.repo.update_job(
-                job.id,
+            if not await self.update_own(
+                job,
+                logger,
                 status=JobStatus.CERTIFICATE_REQUIRED.value,
                 current_step=JobStatus.CERTIFICATE_REQUIRED.value,
                 error_code=code.value,
@@ -564,17 +578,17 @@ class SchedulerRunner(ExportCollection, BaseRunner):
                 error_screenshot_path=screenshot,
                 last_message=message,
                 finished_at=now_utc(),
-            )
+            ):
+                return
             for t in running:
                 await self.repo.update_task(t.id, status=TaskStatus.PENDING.value)
             return
 
         decision = self.deps.retry_policy.decide(exc, job.attempts)
         if decision.retry:
-            for t in running:
-                await self.repo.update_task(t.id, status=TaskStatus.PENDING.value, retry_count=t.retry_count + 1)
-            await self.repo.update_job(
-                job.id,
+            if not await self.update_own(
+                job,
+                logger,
                 status=JobStatus.QUEUED.value,
                 current_step=JobStatus.QUEUED.value,
                 progress=0,
@@ -583,17 +597,16 @@ class SchedulerRunner(ExportCollection, BaseRunner):
                 error_message=message,
                 error_screenshot_path=screenshot,
                 last_message=f"Erro: {message}. Nova tentativa em {decision.delay_seconds}s.",
-            )
+            ):
+                return
+            for t in running:
+                await self.repo.update_task(t.id, status=TaskStatus.PENDING.value, retry_count=t.retry_count + 1)
             await logger.warning(decision.reason, step="retry")
             return
 
-        for t in tasks:
-            if t.status in (TaskStatus.PENDING, TaskStatus.RUNNING):
-                await self.repo.update_task(
-                    t.id, status=TaskStatus.FAILED.value, error_message=message, finished_at=now_utc()
-                )
-        await self.repo.update_job(
-            job.id,
+        if not await self.update_own(
+            job,
+            logger,
             status=JobStatus.FAILED.value,
             current_step=JobStatus.FAILED.value,
             error_code=code.value,
@@ -601,7 +614,13 @@ class SchedulerRunner(ExportCollection, BaseRunner):
             error_screenshot_path=screenshot,
             finished_at=now_utc(),
             last_message=f"Erro: {message}",
-        )
+        ):
+            return
+        for t in tasks:
+            if t.status in (TaskStatus.PENDING, TaskStatus.RUNNING):
+                await self.repo.update_task(
+                    t.id, status=TaskStatus.FAILED.value, error_message=message, finished_at=now_utc()
+                )
         if isinstance(exc, AutomationError) and not exc.retryable:
             await logger.error(f"Erro {code} não permite retentativa automática.", step="failed")
         else:
