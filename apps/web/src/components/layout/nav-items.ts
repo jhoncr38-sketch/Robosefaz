@@ -2,6 +2,7 @@ import {
   Activity,
   Bot,
   BriefcaseBusiness,
+  ChartColumn,
   Building2,
   Download,
   FileSearch,
@@ -97,6 +98,7 @@ export const NAV_GROUPS: NavGroup[] = [
         children: [
           { href: "/downloads", label: "Downloads", icon: Download, badge: "downloads" },
           { href: "/notes", label: "Busca por chave de acesso", icon: Receipt },
+          { href: "/faturamento", label: "Faturamento", icon: ChartColumn, isNew: true },
           { href: "/history", label: "Histórico", icon: History },
           { href: "/errors", label: "Erros", icon: TriangleAlert },
         ],

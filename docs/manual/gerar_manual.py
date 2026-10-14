@@ -847,6 +847,17 @@ def cap_downloads() -> list:
                 "Ao terminar, chega um aviso no sino com o link para a nota.",
             ]
         ),
+        H2("Faturamento por empresa e mês"),
+        P(
+            "Em <b>Resultados › Faturamento</b>, escolha a empresa e o mês e veja o faturamento (saídas + serviços prestados) "
+            "e as quatro parcelas: saídas (NF-e emitidas e NFC-e), serviços prestados (NFS-e), entradas (NF-e recebidas) e "
+            "serviços tomados (NFS-e). Os valores saem do índice das notas já baixadas; notas canceladas ficam fora da soma "
+            "e aparecem contadas."
+        ),
+        *warn(
+            "Sem o CFOP, as saídas incluem remessas, devoluções e transferências. Use como visão geral do movimento, não "
+            "como receita bruta para o Simples. O mês em andamento só mostra o que já foi baixado."
+        ),
         H2("NFS-e Nacional (notas de serviço)"),
         P(
             "O robô consulta a <b>NFS-e Nacional</b> (Ambiente de Dados Nacional) com o certificado de cada cliente "

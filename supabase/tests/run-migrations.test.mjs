@@ -851,6 +851,41 @@ await test("excluir cliente com o histórico: só admin, só com a confirmação
   assert.equal((await db.query("select count(*)::int n from public.audit_logs where action = 'client.deleted' and entity_id = $1", [velho.id])).rows[0].n, 1);
 });
 
+await test("faturamento mensal: soma o índice por mês, separa saídas/entradas/serviços, deixa canceladas fora; só o próprio escritório", async () => {
+  const emp = (
+    await as(ADMIN, (tx) => tx.query("insert into public.clients (legal_name, cnpj) values ('EMPRESA FATURAMENTO', '33333333000191') returning id"))
+  ).rows[0].id;
+  const chave = (n) => "22" + String(n).padStart(42, "0");
+  const nfse = (n) => "2211001" + "1" + "2" + "33333333000191" + String(n).padStart(13, "0") + "2609" + "000000001" + "7";
+  const linhas = [
+    ["NFE_EMITIDAS", "2026-09", chave(1), "1000.00", false],
+    ["NFCE", "2026-09", chave(2), "250.50", false],
+    ["NFCE_CANCELADAS", "2026-09", chave(3), "99.00", false], // arquivo de canceladas: fora da soma
+    ["NFE_EMITIDAS", "2026-09", chave(4), "70.00", true], // marcada como cancelada: fora da soma
+    ["NFE_RECEBIDAS", "2026-09", chave(5), "400.00", false],
+    ["NFSE_PRESTADAS", "2026-09", nfse(6), "300.00", false],
+    ["NFSE_TOMADAS", "2026-09", nfse(7), "80.00", false],
+    ["NFE_EMITIDAS", "2026-08", chave(8), "500.00", false],
+  ];
+  for (const [tipo, comp, ch, valor, cancelada] of linhas) {
+    await db.query(
+      "insert into public.notes (client_id, document_type, competence, chave, zip_path, xml_name, valor, canceled) values ($1, $2, $3, $4, 'C:/f.zip', 'n.xml', $5, $6)",
+      [emp, tipo, comp, ch, valor, cancelada],
+    );
+  }
+  const rows = (await as(OPERATOR, (tx) => tx.query("select * from public.faturamento_mensal($1)", [emp]))).rows;
+  assert.deepEqual(
+    rows.map((r) => [r.competence, Number(r.saidas), Number(r.entradas), Number(r.prestados), Number(r.tomados), r.notas, r.canceladas]),
+    [
+      ["2026-09", 1250.5, 400, 300, 80, 5, 2],
+      ["2026-08", 500, 0, 0, 0, 1, 0],
+    ],
+  );
+  // outro escritório não vê nada (RLS do próprio usuário)
+  assert.deepEqual((await as(ADMIN_B, (tx) => tx.query("select * from public.faturamento_mensal($1)", [emp]))).rows, []);
+  await rejects(as("anon", (tx) => tx.query("select * from public.faturamento_mensal($1)", [emp])), /permission denied/);
+});
+
 // ---------------------------------------------------------------------
 // Consulta de Malhas Fiscais (SIAT web)
 // ---------------------------------------------------------------------
