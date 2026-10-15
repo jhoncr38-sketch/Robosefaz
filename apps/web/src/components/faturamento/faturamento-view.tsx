@@ -3,13 +3,16 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { SearchSelect } from "@/components/nfse/search-select";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatCNPJ } from "@/lib/cnpj";
 import { formatBRL, monthLabel, type MonthView, pickMonth } from "@/lib/faturamento";
 
 export interface FaturamentoClient {
   id: string;
   client_code: string;
   name: string;
+  cnpj: string;
 }
 
 /** Resultados › Faturamento: a pessoa escolhe a empresa e o mês e vê o faturamento com as quatro parcelas. */
@@ -44,21 +47,17 @@ export function FaturamentoView({
   return (
     <div className="flex max-w-[900px] flex-col gap-4">
       <div className="flex flex-wrap gap-3">
-        <label className="flex flex-col gap-1 text-xs font-medium text-(--c-6b6c66)">
+        {/* lista com busca: digita parte do nome, do código ou do CNPJ */}
+        <div className="flex w-[360px] max-w-full flex-col gap-1 text-xs font-medium text-(--c-6b6c66)">
           Empresa
-          <Select value={selected} onValueChange={chooseClient}>
-            <SelectTrigger className="w-[340px] max-w-full bg-card">
-              <SelectValue placeholder="Escolha a empresa" />
-            </SelectTrigger>
-            <SelectContent>
-              {clients.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name} <span className="font-mono text-[11px] text-(--c-6b6c66)">{c.client_code}</span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </label>
+          <SearchSelect
+            label="Empresa"
+            value={selected}
+            options={clients.map((c) => ({ value: c.id, label: c.name, hint: `${c.client_code} · ${formatCNPJ(c.cnpj)}` }))}
+            onChange={chooseClient}
+            placeholder="Escolha a empresa"
+          />
+        </div>
         <label className="flex flex-col gap-1 text-xs font-medium text-(--c-6b6c66)">
           Mês
           <Select value={month} onValueChange={chooseMonth} disabled={months.length === 0}>

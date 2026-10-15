@@ -13,9 +13,9 @@ export default async function FaturamentoPage({ searchParams }: PageProps<"/fatu
   await requireSession();
   const params = await searchParams;
   const supabase = await createClient();
-  const { data } = await supabase.from("clients").select("id, client_code, trade_name, legal_name").eq("active", true).order("trade_name").order("legal_name");
-  const clients = ((data ?? []) as { id: string; client_code: string; trade_name: string | null; legal_name: string }[])
-    .map((c) => ({ id: c.id, client_code: c.client_code, name: c.trade_name || c.legal_name }))
+  const { data } = await supabase.from("clients").select("id, client_code, trade_name, legal_name, cnpj").eq("active", true).order("trade_name").order("legal_name");
+  const clients = ((data ?? []) as { id: string; client_code: string; trade_name: string | null; legal_name: string; cnpj: string }[])
+    .map((c) => ({ id: c.id, client_code: c.client_code, name: c.trade_name || c.legal_name, cnpj: c.cnpj }))
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }));
 
   const wanted = typeof params.empresa === "string" ? params.empresa : "";
