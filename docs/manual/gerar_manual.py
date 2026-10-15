@@ -925,7 +925,7 @@ def cap_downloads() -> list:
 
 def cap_historico() -> list:
     return [
-        H1("9. Histórico, Erros, Dashboard, Consulta EFD e Configurações"),
+        H1("9. Histórico, Dashboard, Consulta EFD e Configurações"),
         H2("Histórico"),
         P(
             "Todas as execuções, com quem pediu, resultado e duração. Ao abrir uma, aparecem: período, "
@@ -933,11 +933,14 @@ def cap_historico() -> list:
             "mostra as 300 execuções mais recentes; no fim dela, <b>Carregar mais</b> traz as próximas."
         ),
         P(
+            "O filtro <b>Com erro</b> mostra só o que falhou. Em cada execução com erro aparece, em linguagem simples, "
+            "o que fazer (por exemplo, “o certificado venceu: instale o novo e cadastre em Certificados”) e o botão "
+            "<b>Reprocessar</b>. O código técnico e o print da tela ficam no detalhe da execução."
+        ),
+        P(
             "Quando a empresa não teve notas no mês, o SIAT mostra <i>“Processado sem notas”</i> e não oferece "
             "arquivo. O robô conclui sem erro e a tarefa aparece como <b>Sem notas no período</b>."
         ),
-        H2("Erros"),
-        P("Lista das falhas com o código do erro, a mensagem e o print da tela no momento do erro."),
         H2("Dashboard"),
         P(
             "A tela inicial do painel, atualizada em tempo real:"

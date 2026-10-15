@@ -19,7 +19,6 @@ import {
   Settings,
   ShieldCheck,
   SlidersHorizontal,
-  TriangleAlert,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -100,7 +99,6 @@ export const NAV_GROUPS: NavGroup[] = [
           { href: "/notes", label: "Busca por chave de acesso", icon: Receipt },
           { href: "/faturamento", label: "Faturamento", icon: ChartColumn, isNew: true },
           { href: "/history", label: "Histórico", icon: History },
-          { href: "/errors", label: "Erros", icon: TriangleAlert },
         ],
       },
     ],

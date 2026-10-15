@@ -47,7 +47,7 @@ describe("menu lateral", () => {
 
   it("Resultados, Empresas e Administração também recolhem, como o SIAT", () => {
     const byKey = Object.fromEntries(folders.map((f) => [f.key, f.children.map((c) => c.href)]));
-    assert.deepEqual(byKey.resultados, ["/downloads", "/notes", "/faturamento", "/history", "/errors"]);
+    assert.deepEqual(byKey.resultados, ["/downloads", "/notes", "/faturamento", "/history"]);
     assert.deepEqual(byKey.empresas, ["/clients", "/certificates", "/organizations"]);
     assert.deepEqual(byKey.admin, ["/users", "/devices", "/settings"]);
     assert.equal(new Set(folders.map((f) => f.key)).size, folders.length);
@@ -55,7 +55,7 @@ describe("menu lateral", () => {
 
   it("todas as páginas continuam no menu (inclusive as de dentro do SIAT)", () => {
     const hrefs = NAV_ITEMS.map((i) => i.href);
-    for (const href of ["/dashboard", "/operation", "/automation", "/malhas", "/efd", "/nfse", "/emissao", "/queue", "/downloads", "/notes", "/faturamento", "/history", "/errors", "/clients", "/certificates", "/organizations", "/users", "/devices", "/settings"]) {
+    for (const href of ["/dashboard", "/operation", "/automation", "/malhas", "/efd", "/nfse", "/emissao", "/queue", "/downloads", "/notes", "/faturamento", "/history", "/clients", "/certificates", "/organizations", "/users", "/devices", "/settings"]) {
       assert.ok(hrefs.includes(href), href);
     }
     assert.equal(new Set(hrefs).size, hrefs.length);

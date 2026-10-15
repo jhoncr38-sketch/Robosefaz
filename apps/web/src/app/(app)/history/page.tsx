@@ -16,9 +16,11 @@ export const metadata: Metadata = { title: "Histórico" };
 
 /** execuções por lote do "Carregar mais" */
 const PAGE = 300;
+/** filtro "Com erro": o que falhou, parou por certificado ou guardou um código de erro (a antiga aba Erros) */
+const WITH_ERROR = "erro";
 
 export default async function HistoryPage({ searchParams }: PageProps<"/history">) {
-  await requireSession();
+  const { profile } = await requireSession();
   const params = await searchParams;
   const supabase = await createClient();
 
@@ -30,7 +32,8 @@ export default async function HistoryPage({ searchParams }: PageProps<"/history"
     .limit(shown);
   if (typeof params.competence === "string") query = query.eq("competence", params.competence);
   if (typeof params.client === "string") query = query.eq("client_id", params.client);
-  if (typeof params.status === "string") query = query.eq("status", params.status);
+  if (params.status === WITH_ERROR) query = query.or("status.in.(failed,certificate_required),error_code.not.is.null");
+  else if (typeof params.status === "string") query = query.eq("status", params.status);
 
   const [{ data, count }, users, { data: clients }] = await Promise.all([
     query,
@@ -40,31 +43,37 @@ export default async function HistoryPage({ searchParams }: PageProps<"/history"
 
   return (
     <>
-      <PageHeader title="Histórico" description="Todas as execuções do robô, com usuário, resultado e duração." />
+      <PageHeader
+        title="Histórico"
+        description="Todas as execuções do robô, com usuário, resultado e duração. Nas que falharam, o que fazer e o botão Reprocessar."
+      />
       <ListCard>
         <ListToolbar>
-        <ListFilters
-          filters={[
-            {
-              name: "competence",
-              placeholder: "Todas as competências",
-              options: recentCompetences(24).map((c) => ({ value: c, label: formatCompetence(c) })),
-            },
-            {
-              name: "client",
-              placeholder: "Todos os clientes",
-              width: "w-64",
-              options: (clients ?? []).map((c) => ({ value: c.id, label: c.trade_name || c.legal_name })),
-            },
-            {
-              name: "status",
-              placeholder: "Todos os status",
-              options: (Object.keys(JOB_STATUS_LABEL) as JobStatus[]).map((s) => ({ value: s, label: JOB_STATUS_LABEL[s] })),
-            },
-          ]}
-        />
+          <ListFilters
+            filters={[
+              {
+                name: "competence",
+                placeholder: "Todas as competências",
+                options: recentCompetences(24).map((c) => ({ value: c, label: formatCompetence(c) })),
+              },
+              {
+                name: "client",
+                placeholder: "Todos os clientes",
+                width: "w-64",
+                options: (clients ?? []).map((c) => ({ value: c.id, label: c.trade_name || c.legal_name })),
+              },
+              {
+                name: "status",
+                placeholder: "Todos os status",
+                options: [
+                  { value: WITH_ERROR, label: "Com erro" },
+                  ...(Object.keys(JOB_STATUS_LABEL) as JobStatus[]).map((s) => ({ value: s, label: JOB_STATUS_LABEL[s] })),
+                ],
+              },
+            ]}
+          />
         </ListToolbar>
-        <JobsTable jobs={(data ?? []) as AutomationJob[]} users={users} />
+        <JobsTable jobs={(data ?? []) as AutomationJob[]} users={users} role={profile.role} />
         <LoadMore
           shown={(data ?? []).length}
           total={count ?? 0}

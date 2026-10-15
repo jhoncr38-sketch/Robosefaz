@@ -1,17 +1,22 @@
 import { History } from "lucide-react";
+import Link from "next/link";
 
 import { ListEmptyText, ListHead, ListRow, OpTags, PrimaryCell } from "@/components/data-list";
 import { EmptyState } from "@/components/page-header";
+import { JobActions } from "@/components/queue/job-actions";
 import { JobStatusBadge } from "@/components/status-badge";
 import { formatCompetence } from "@/lib/competence";
 import { formatDateTime, formatDuration } from "@/lib/format";
-import { ERROR_CODE_LABEL } from "@/lib/status";
-import type { AutomationJob } from "@/lib/types";
+import { ERROR_CODE_LABEL, errorAdvice } from "@/lib/status";
+import type { AutomationJob, UserRole } from "@/lib/types";
 
 // sem rolagem lateral: no celular, só a primeira coluna e o resultado;
 // usuário e operações aparecem a partir de telas largas
 const GRID_CLIENT =
   "grid grid-cols-[minmax(0,1fr)_auto] gap-3 md:grid-cols-[minmax(0,1.4fr)_120px_64px_minmax(0,1.2fr)_70px] xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_120px_64px_130px_minmax(0,1.2fr)_70px]";
+// com a coluna de ações (Histórico): o botão de Reprocessar fica na própria linha
+const GRID_CLIENT_ACTIONS =
+  "grid grid-cols-[minmax(0,1fr)_auto_32px] gap-3 md:grid-cols-[minmax(0,1.4fr)_120px_64px_minmax(0,1.2fr)_70px_32px] xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_120px_64px_130px_minmax(0,1.2fr)_70px_32px]";
 const GRID_NO_CLIENT =
   "grid grid-cols-[minmax(0,1fr)_auto] gap-3 md:grid-cols-[120px_64px_minmax(0,1.2fr)_70px] xl:grid-cols-[minmax(0,1fr)_120px_64px_130px_minmax(0,1.2fr)_70px]";
 
@@ -19,10 +24,13 @@ export function JobsTable({
   jobs,
   users = {},
   showClient = true,
+  role,
 }: {
   jobs: AutomationJob[];
   users?: Record<string, string>;
   showClient?: boolean;
+  /** com o papel do usuário, a linha ganha o menu de ações (Reprocessar, Cancelar) e o nome vira o link do detalhe */
+  role?: UserRole;
 }) {
   if (jobs.length === 0) {
     return showClient ? (
@@ -31,7 +39,8 @@ export function JobsTable({
       <ListEmptyText>Nenhuma execução encontrada.</ListEmptyText>
     );
   }
-  const grid = showClient ? GRID_CLIENT : GRID_NO_CLIENT;
+  const actions = Boolean(role) && showClient;
+  const grid = showClient ? (actions ? GRID_CLIENT_ACTIONS : GRID_CLIENT) : GRID_NO_CLIENT;
   const who = (job: AutomationJob) => (job.created_by ? (users[job.created_by] ?? "—") : "Sistema");
 
   return (
@@ -44,48 +53,63 @@ export function JobsTable({
         <span className="hidden xl:block">Operações</span>
         <span className="text-right md:text-left">Resultado</span>
         <span className="hidden text-right md:block">Duração</span>
+        {actions ? <span /> : null}
       </ListHead>
-      {jobs.map((job) => (
-        <ListRow key={job.id} grid={grid} href={`/history/${job.id}`}>
-          {showClient ? (
-            <PrimaryCell
-              title={job.clients?.trade_name || job.clients?.legal_name}
-              sub={
-                <>
-                  <span className="font-mono">{job.clients?.client_code}</span>
-                  <span className="md:hidden">
-                    {" "}
-                    · {formatCompetence(job.competence)} · {formatDateTime(job.created_at)}
-                  </span>
-                </>
-              }
-            />
-          ) : (
-            <PrimaryCell
-              className="md:hidden"
-              title={formatCompetence(job.competence)}
-              sub={`${formatDateTime(job.created_at)} · ${who(job)}`}
-            />
-          )}
-          <span className="hidden truncate text-xs text-(--c-4a4b46) xl:block">{who(job)}</span>
-          <span className="hidden text-xs text-(--c-4a4b46) tabular-nums md:block">{formatDateTime(job.created_at)}</span>
-          <span className="hidden font-mono text-[12.5px] text-(--c-4a4b46) md:block">{formatCompetence(job.competence)}</span>
-          <span className="hidden xl:block">
-            <OpTags ops={job.operations} />
-          </span>
-          <div className="flex min-w-0 flex-col items-end gap-0.5 md:items-start">
-            <JobStatusBadge status={job.status} />
-            {job.error_code ? (
-              <span className="max-w-full truncate text-[11px] text-(--c-b42323)">
-                {ERROR_CODE_LABEL[job.error_code] ?? job.error_code}
-              </span>
-            ) : null}
-          </div>
-          <span className="hidden text-right font-mono text-[11.5px] text-(--c-6b6c66) md:block">
-            {job.started_at ? formatDuration(job.started_at, job.finished_at ?? job.updated_at) : "—"}
-          </span>
-        </ListRow>
-      ))}
+      {jobs.map((job) => {
+        const advice = errorAdvice(job.error_code);
+        const name = job.clients?.trade_name || job.clients?.legal_name;
+        return (
+          <ListRow key={job.id} grid={grid} href={actions ? undefined : `/history/${job.id}`}>
+            {showClient ? (
+              <PrimaryCell
+                title={
+                  actions ? (
+                    <Link href={`/history/${job.id}`} className="text-foreground hover:underline">
+                      {name}
+                    </Link>
+                  ) : (
+                    name
+                  )
+                }
+                sub={
+                  <>
+                    <span className="font-mono">{job.clients?.client_code}</span>
+                    <span className="md:hidden">
+                      {" "}
+                      · {formatCompetence(job.competence)} · {formatDateTime(job.created_at)}
+                    </span>
+                  </>
+                }
+              />
+            ) : (
+              <PrimaryCell
+                className="md:hidden"
+                title={formatCompetence(job.competence)}
+                sub={`${formatDateTime(job.created_at)} · ${who(job)}`}
+              />
+            )}
+            <span className="hidden truncate text-xs text-(--c-4a4b46) xl:block">{who(job)}</span>
+            <span className="hidden text-xs text-(--c-4a4b46) tabular-nums md:block">{formatDateTime(job.created_at)}</span>
+            <span className="hidden font-mono text-[12.5px] text-(--c-4a4b46) md:block">{formatCompetence(job.competence)}</span>
+            <span className="hidden xl:block">
+              <OpTags ops={job.operations} />
+            </span>
+            <div className="flex min-w-0 flex-col items-end gap-0.5 md:items-start">
+              <JobStatusBadge status={job.status} />
+              {job.error_code ? (
+                // o que fazer, em linguagem simples; o código técnico fica no detalhe da execução
+                <span className="max-w-full text-[11px] leading-[1.35] text-(--c-b42323)" title={ERROR_CODE_LABEL[job.error_code] ?? job.error_code}>
+                  {advice ?? (ERROR_CODE_LABEL[job.error_code] ?? job.error_code)}
+                </span>
+              ) : null}
+            </div>
+            <span className="hidden text-right font-mono text-[11.5px] text-(--c-6b6c66) md:block">
+              {job.started_at ? formatDuration(job.started_at, job.finished_at ?? job.updated_at) : "—"}
+            </span>
+            {actions && role ? <JobActions job={job} role={role} /> : null}
+          </ListRow>
+        );
+      })}
     </>
   );
 }

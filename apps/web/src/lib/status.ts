@@ -207,5 +207,38 @@ export const ERROR_CODE_LABEL: Record<string, string> = {
   COLLECTOR_EXHAUSTED: "Arquivo não disponibilizado a tempo",
   NFSE_UNAVAILABLE: "NFS-e Nacional indisponível",
   WORKER_LOST: "Worker interrompido",
+  LOCK_LOST: "Trabalho passou para outro computador",
   UNEXPECTED: "Erro inesperado",
 };
+
+/** O que fazer em cada erro, em linguagem simples: é o que o usuário vê no Histórico. O código técnico fica no detalhe. */
+export const ERROR_ADVICE: Record<string, string> = {
+  TAXPAYER_MISMATCH: "O certificado abriu outro contribuinte no SIAT. Confira o CNPJ e a inscrição estadual no cadastro da empresa.",
+  SECURITY_CLIENT_MISMATCH: "O SIAT abriu outra inscrição estadual com esse certificado. Confira a inscrição no cadastro antes de reprocessar.",
+  CERTIFICATE_EXPIRED: "O certificado venceu. Instale o novo no computador do robô e cadastre em Certificados.",
+  CERTIFICATE_REQUIRED: "O certificado não está instalado em nenhum computador ligado. Instale o A1 e clique em Reprocessar.",
+  INVALID_CONFIGURATION: "Falta algo no cadastro (empresa inativa, sem certificado ou dado incompleto). Corrija e reprocesse.",
+  MANUAL_ACTION_REQUIRED: "O robô esperou uma ação sua no SIAT e o tempo acabou. Reprocesse e acompanhe pela Fila.",
+  SIAT_UNAVAILABLE: "O SIAT estava fora do ar. Reprocesse mais tarde.",
+  LOGIN_FAILED: "O SIAT não aceitou o login. Confira se o certificado é da empresa certa e se está válido.",
+  SELECTOR_NOT_FOUND: "O SIAT mudou uma tela ou não carregou. Reprocesse; se repetir, avise o suporte.",
+  TIMEOUT: "O SIAT ou o computador demorou demais. Reprocesse; se repetir no mesmo computador, ele pode estar lento.",
+  SCHEDULE_FAILED: "O SIAT recusou o pedido das notas. Veja a mensagem no detalhe e reprocesse.",
+  EXPORT_FAILED: "A SEFAZ devolveu o pedido com erro. Veja a mensagem no detalhe; pode ser preciso pedir de novo.",
+  EXPORT_NOT_FOUND: "O pedido sumiu da lista do SIAT. Reprocesse para pedir de novo.",
+  EXPORT_ALREADY_SCHEDULED: "Já havia um pedido igual no SIAT. Aguarde a SEFAZ processar; o robô baixa quando ficar pronto.",
+  DOWNLOAD_FAILED: "O arquivo não baixou. Confira a pasta das notas e o espaço em disco, e reprocesse.",
+  PROFILE_IN_USE: "O navegador do robô já estava aberto para essa empresa. Reprocesse; se repetir, reinicie o robô.",
+  BROWSER_ERROR: "O navegador do robô não abriu ou travou. Reprocesse; se repetir, o computador pode estar lento.",
+  COLLECTOR_EXHAUSTED: "A SEFAZ não disponibilizou o arquivo no prazo. Reprocesse para pedir de novo.",
+  NFSE_UNAVAILABLE: "A NFS-e Nacional ou a prefeitura não respondeu. Reprocesse mais tarde.",
+  NFSE_REJECTED: "A prefeitura recusou a nota. Veja o motivo na aba Emitir NFS-e e corrija antes de emitir de novo.",
+  WORKER_LOST: "O computador do robô desligou no meio. Reprocesse quando um robô estiver ligado.",
+  LOCK_LOST: "Outro computador assumiu este trabalho; o resultado que vale é o dele.",
+  CANCELLED: "Cancelado por um usuário.",
+  UNEXPECTED: "Erro inesperado. Reprocesse; se repetir, abra o detalhe e avise o suporte.",
+};
+
+export function errorAdvice(code: string | null | undefined): string | null {
+  return code ? (ERROR_ADVICE[code] ?? null) : null;
+}
