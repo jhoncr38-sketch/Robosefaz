@@ -854,6 +854,13 @@ def cap_downloads() -> list:
             "serviços tomados (NFS-e). Os valores saem do índice das notas já baixadas; notas canceladas ficam fora da soma "
             "e aparecem contadas."
         ),
+        P(
+            "A opção <b>Todas as empresas</b>, no topo da lista, mostra uma linha por empresa no mês escolhido, com o "
+            "<b>total de saídas</b> (mercadorias + serviços prestados), o <b>total de entradas</b> (mercadorias + serviços "
+            "tomados) e a linha <b>Total do escritório</b>. Clique num cabeçalho para ordenar; <b>Tudo · Saídas · Entradas</b> "
+            "mostra só um lado; <b>Só os totais</b> esconde as parcelas. Quem ainda não tem nota baixada no mês aparece por "
+            "último, com aviso. Clique no nome da empresa para ver só ela."
+        ),
         *warn(
             "Sem o CFOP, as saídas incluem remessas, devoluções e transferências. Use como visão geral do movimento, não "
             "como receita bruta para o Simples. O mês em andamento só mostra o que já foi baixado."
