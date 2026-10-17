@@ -106,3 +106,31 @@ def test_old_pending_entry_is_sent_after_local_reorganize(tmp_path: Path) -> Non
     assert org.reorganize() == 1  # pasta local (a do Drive está vazia)
     assert org.send_pending() == 1
     assert (org.base_dir / "2026" / "08" / "LIS" / "NFCE" / "CLI000001_2026-08_NFCE.zip").read_bytes() == ZIP
+
+
+def test_store_accepts_an_empty_zip_only_when_asked(tmp_path: Path) -> None:
+    """NFS-e: mês em que todas as notas foram canceladas grava um ZIP normal vazio (allow_empty); para o
+    SIAT o ZIP vazio continua sendo erro. O organizador com plano B precisa repassar o parâmetro (1.2.41)."""
+    import zipfile
+
+    import pytest
+
+    from app.downloads.organizer import EmptyExportError
+
+    org = FallbackOrganizer(tmp_path / "G" / "Meu Drive" / "JR Sistema - Notas", tmp_path / "local", tmp_path / "pend.json")
+    (tmp_path / "G" / "Meu Drive" / "JR Sistema - Notas").mkdir(parents=True)
+    empty = tmp_path / "vazio.zip"
+    with zipfile.ZipFile(empty, "w"):
+        pass
+    with pytest.raises(EmptyExportError):
+        org.store(empty, "CLI000001", "2026-09", "NFSE_PRESTADAS", "Empresa A")
+    stored = org.store(empty, "CLI000001", "2026-09", "NFSE_PRESTADAS", "Empresa A", allow_empty=True)
+    assert stored.filename == "Empresa A - NFS-e prestadas - 09-2026 - CLI000001.zip"
+    assert Path(stored.filepath).is_file() and not stored.saved_locally
+
+    # plano B (pasta das notas fora do ar): também aceita
+    off = FallbackOrganizer(tmp_path / "X" / "nao-existe" / "Notas", tmp_path / "local2", tmp_path / "pend2.json")
+    with zipfile.ZipFile(empty, "w"):
+        pass
+    stored2 = off.store(empty, "CLI000001", "2026-10", "NFSE_PRESTADAS", "Empresa A", allow_empty=True)
+    assert stored2.saved_locally

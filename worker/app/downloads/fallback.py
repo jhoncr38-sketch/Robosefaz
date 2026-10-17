@@ -96,16 +96,19 @@ class FallbackOrganizer(DownloadOrganizer):
         *,
         keep_name: str | None = None,
         note_key: str | None = None,
+        allow_empty: bool = False,
     ) -> DownloadedFile:
         try:
             return super().store(
-                source, client_code, competence, document_type, client_name, keep_name=keep_name, note_key=note_key
+                source, client_code, competence, document_type, client_name,
+                keep_name=keep_name, note_key=note_key, allow_empty=allow_empty,
             )
         except DownloadFolderUnavailable as exc:
             if not source.exists():
                 raise
             stored = self.local.store(
-                source, client_code, competence, document_type, client_name, keep_name=keep_name, note_key=note_key
+                source, client_code, competence, document_type, client_name,
+                keep_name=keep_name, note_key=note_key, allow_empty=allow_empty,
             )
             rel = Path(stored.filepath).relative_to(self.local.base_dir).as_posix()
             add_pending(self.pending_file, rel)
