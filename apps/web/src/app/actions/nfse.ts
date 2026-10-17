@@ -18,6 +18,8 @@ export interface NfseFetchSummary {
 const nfseFetchSchema = z.object({
   client_ids: z.array(z.uuid()).min(1, "Selecione ao menos um cliente").max(500),
   competence: competenceSchema.optional(),
+  /** relê a NFS-e Nacional desde o início para montar os ZIPs de canceladas antigos (robô 1.2.39+) */
+  from_start: z.boolean().optional(),
 });
 
 function rpcError(message: string): string {
@@ -37,6 +39,7 @@ export async function requestNfseFetch(input: z.input<typeof nfseFetchSchema>): 
     p_client_ids: parsed.data.client_ids,
     // a busca não é de um mês só; a competência só identifica o pedido nas telas
     p_competence: parsed.data.competence ?? currentCompetence(),
+    p_from_start: parsed.data.from_start ?? false,
   });
   if (error) return { ok: false, error: rpcError(error.message) };
 

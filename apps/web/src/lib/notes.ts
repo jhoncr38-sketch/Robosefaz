@@ -19,13 +19,11 @@ export function issuedByClient(note: Pick<NoteRow, "emit_doc" | "clients">): boo
 
 /** Nota de serviço (NFS-e Nacional, chave de 50 números). */
 export function isNfse(note: Pick<NoteRow, "document_type">): boolean {
-  return note.document_type === "NFSE_PRESTADAS" || note.document_type === "NFSE_TOMADAS";
+  return note.document_type.startsWith("NFSE_");
 }
 
 /** A outra parte da nota, do ponto de vista do cliente: destinatário (nota emitida) ou emitente (recebida). */
-export function counterparty(
-  note: Pick<NoteRow, "emit_doc" | "emit_nome" | "dest_doc" | "dest_nome" | "clients"> & Partial<Pick<NoteRow, "document_type">>,
-): {
+export function counterparty(note: Pick<NoteRow, "emit_doc" | "emit_nome" | "dest_doc" | "dest_nome" | "clients"> & Partial<Pick<NoteRow, "document_type">>): {
   role: "Destinatário" | "Emitente" | "Tomador" | "Prestador";
   nome: string;
   doc: string;
@@ -37,9 +35,10 @@ export function counterparty(
 
 /** "NF-e emitida", "NFC-e", "NF-e recebida", "NFS-e prestada", "NFS-e tomada" (+ cancelada). */
 export function noteKind(note: Pick<NoteRow, "document_type" | "canceled">): { label: string; canceled: boolean } {
-  if (note.document_type === "NFSE_PRESTADAS") return { label: "NFS-e prestada", canceled: note.canceled };
-  if (note.document_type === "NFSE_TOMADAS") return { label: "NFS-e tomada", canceled: note.canceled };
   const base = note.document_type.replace("_CANCELADAS", "");
+  const fromCanceledZip = note.document_type.endsWith("_CANCELADAS");
+  if (base === "NFSE_PRESTADAS") return { label: "NFS-e prestada", canceled: note.canceled || fromCanceledZip };
+  if (base === "NFSE_TOMADAS") return { label: "NFS-e tomada", canceled: note.canceled || fromCanceledZip };
   const label = base === "NFCE" ? "NFC-e" : base === "NFE_EMITIDAS" ? "NF-e emitida" : "NF-e recebida";
   return { label, canceled: note.canceled || note.document_type.endsWith("_CANCELADAS") };
 }

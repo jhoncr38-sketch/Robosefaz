@@ -95,6 +95,8 @@ describe("busca e índice com NFS-e", () => {
   it("chip NFS-e em Downloads", () => {
     assert.equal(blockKey("NFSE_PRESTADAS"), "nfse");
     assert.equal(blockKey("NFSE_TOMADAS"), "nfse");
+    assert.equal(blockKey("NFSE_TOMADAS_CANCELADAS"), "canc"); // o ZIP de canceladas fica com as canceladas
+    assert.deepEqual(noteKind({ document_type: "NFSE_TOMADAS_CANCELADAS", canceled: false }), { label: "NFS-e tomada", canceled: true });
     assert.equal(typeFilterFromDoc("nfse"), "nfse");
     assert.equal(typeFilterFromDoc("NFSE_TOMADAS"), "nfse");
     assert.equal(typeFilterFromDoc("NFE_EMITIDAS"), "emit");

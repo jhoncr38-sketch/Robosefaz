@@ -16,6 +16,8 @@ export const BLOCK_ORDER: DocumentType[] = [
   "NFCE_CANCELADAS",
   "NFE_EMITIDAS_CANCELADAS",
   "NFE_RECEBIDAS_CANCELADAS",
+  "NFSE_PRESTADAS_CANCELADAS",
+  "NFSE_TOMADAS_CANCELADAS",
 ];
 
 /** Chips de tipo do topo da lista. */
@@ -170,11 +172,7 @@ export function monthClients(
     if (blocks.length === 0) continue;
     const regular = blocks.filter((b) => !b.doc.endsWith("_CANCELADAS"));
     const pending = (b: MonthBlock) => b.state === "queued" || b.state === "waiting" || b.state === "error";
-    const situation: MonthSituation = blocks.some((b) => b.state === "file")
-      ? "com"
-      : regular.some(pending)
-        ? "resp"
-        : "sem";
+    const situation: MonthSituation = blocks.some((b) => b.state === "file") ? "com" : regular.some(pending) ? "resp" : "sem";
     out.push({
       clientId: c.id,
       name: c.trade_name || c.legal_name,
@@ -192,9 +190,7 @@ export function monthClients(
 /** Só os blocos do chip escolhido (cliente sem nenhum some da lista). */
 export function filterBlocks(rows: MonthClient[], type: TypeFilter): MonthClient[] {
   if (type === "all") return rows;
-  return rows
-    .map((r) => ({ ...r, blocks: r.blocks.filter((b) => blockKey(b.doc) === type) }))
-    .filter((r) => r.blocks.length > 0);
+  return rows.map((r) => ({ ...r, blocks: r.blocks.filter((b) => blockKey(b.doc) === type) })).filter((r) => r.blocks.length > 0);
 }
 
 const CHIP_KEYS: Exclude<TypeFilter, "all">[] = ["nfce", "emit", "receb", "nfse", "canc"];

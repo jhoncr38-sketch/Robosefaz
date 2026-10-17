@@ -268,17 +268,29 @@ async def test_new_notes_make_a_new_version_and_cancel_marks_the_note(repo: Fake
 
     assert adn.calls == [0, 1]  # continuou do último NSU
     assert repo.job(job2.id)["last_message"] == "NFS-e: 1 tomada(s) nova(s); 1 cancelamento(s)."
-    second = repo.downloads[-1]
+    second = next(d for d in repo.downloads if d["document_type"] == "NFSE_TOMADAS" and d is not first)
     assert second["filename"] == "Empresa A - NFS-e tomadas - 09-2026 - CLI000001 (2).zip"
     assert zip_names(second["filepath"]) == sorted([f"NFSe {k1}.xml", f"NFSe {k2}.xml"])  # a versão nova tem tudo
     assert Path(first["filepath"]).is_file()  # a anterior fica (nada é apagado)
     notes = {n["chave"]: n for n in repo.notes}
     assert notes[k1]["canceled"] is True and notes[k2]["canceled"] is False
-    # a manutenção reindexa a versão nova sem desmarcar o cancelamento
+
+    # o cancelamento também vai para o ZIP de canceladas do mês da nota, com a nota e o evento
+    canceled = repo.downloads[-1]
+    assert canceled["document_type"] == "NFSE_TOMADAS_CANCELADAS"
+    assert canceled["filename"] == "Empresa A - NFS-e tomadas canceladas - 09-2026 - CLI000001.zip"
+    assert "NFSE_TOMADAS_CANCELADAS" in Path(canceled["filepath"]).parts
+    assert zip_names(canceled["filepath"]) == sorted([f"NFSe {k1}.xml", f"NFSe {k1} - evento e101101.xml"])
+    assert canceled["note_count"] == 1 and canceled["notes_indexed_at"] is not None  # não entra no índice
+    assert [n for n in repo.notes if n["chave"] == k1] and len([n for n in repo.notes if n["chave"] == k1]) == 1
+
+    # a manutenção reindexa a versão nova sem desmarcar o cancelamento e não indexa o ZIP de canceladas
     for d in repo.downloads:
         d["notes_indexed_at"] = None
     await index_pending_notes(repo, deps.organizer.base_dir, skip=set())
     assert {n["chave"]: n for n in repo.notes}[k1]["canceled"] is True
+    assert len([n for n in repo.notes if n["chave"] == k1]) == 1
+    assert all(d["notes_indexed_at"] is not None for d in repo.downloads)
     assert repo.nfse_cursors[client.id]["last_nsu"] == 3
 
 
@@ -354,3 +366,78 @@ async def test_certificate_found_by_cnpj_when_registry_has_no_serial(repo: FakeR
         return store(thumb="B" * 40, serial="999")
 
     assert await nfse_fetch.resolve_thumbprint(cert, client, store_loader=loader) == "B" * 40
+
+
+# -- canceladas (1.2.39) ---------------------------------------------------------------------
+
+
+async def test_cancel_in_the_same_batch_goes_to_the_canceled_zip_with_note_and_event(repo: FakeRepo, deps, adn: FakeAdn) -> None:  # noqa: ANN001
+    client, job = setup(repo)
+    k1 = chave(CNPJ_OK, 3, "2609")
+    adn.docs = [
+        doc(1, k1, nfse_xml(k1, prest=CNPJ_OK, toma=OTHER, numero=3, compet="2026-09")),
+        doc(2, k1, cancel_xml(k1), tipo="EVENTO"),
+    ]
+    await SchedulerRunner(deps).run_once()
+    types = [d["document_type"] for d in repo.downloads]
+    assert types == ["NFSE_PRESTADAS", "NFSE_PRESTADAS_CANCELADAS"]
+    canceled = repo.downloads[-1]
+    assert zip_names(canceled["filepath"]) == sorted([f"NFSe {k1}.xml", f"NFSe {k1} - evento e101101.xml"])
+    assert repo.job(job.id)["last_message"] == "NFS-e: 1 prestada(s) nova(s); 1 cancelamento(s)."
+    assert {n["chave"]: n["canceled"] for n in repo.notes} == {k1: True}
+    task = next(t for t in repo.tasks.values() if t.get("document_type") == "NFSE_PRESTADAS_CANCELADAS")
+    assert task["result"]["canceled"] is True
+
+
+async def test_reading_the_same_cancel_again_writes_nothing_more(repo: FakeRepo, deps, adn: FakeAdn) -> None:  # noqa: ANN001
+    client, _job = setup(repo)
+    k1 = chave(OTHER, 7, "2609")
+    adn.docs = [
+        doc(1, k1, nfse_xml(k1, prest=OTHER, toma=CNPJ_OK, numero=7, compet="2026-09")),
+        doc(2, k1, cancel_xml(k1), tipo="EVENTO"),
+    ]
+    await SchedulerRunner(deps).run_once()
+    assert len(repo.downloads) == 2
+    # "desde o início": relê do NSU 0; nota e cancelamento já estão nos arquivos, nada é regravado
+    job2 = repo.add_job(client, [TaskType.NFSE_FETCH], competence="2026-10", force=True)
+    await SchedulerRunner(deps).run_once()
+    assert adn.calls == [0, 0]
+    assert len(repo.downloads) == 2
+    assert repo.job(job2.id)["last_message"] == "NFS-e: nenhuma nota nova; 1 cancelamento(s)."
+    assert repo.nfse_cursors[client.id]["last_nsu"] == 2
+
+
+async def test_from_start_builds_the_old_canceled_zips(repo: FakeRepo, deps, adn: FakeAdn, tmp_path: Path) -> None:  # noqa: ANN001
+    """Robô antigo leu nota e cancelamento sem gravar o ZIP de canceladas; a releitura monta o arquivo."""
+    client, _job = setup(repo)
+    k1 = chave(OTHER, 7, "2609")
+    adn.docs = [doc(1, k1, nfse_xml(k1, prest=OTHER, toma=CNPJ_OK, numero=7, compet="2026-09"))]
+    await SchedulerRunner(deps).run_once()
+    assert [d["document_type"] for d in repo.downloads] == ["NFSE_TOMADAS"]
+    # o cancelamento chegou numa versão que só marcava o índice (simulado: marca e avança o NSU)
+    adn.docs.append(doc(2, k1, cancel_xml(k1), tipo="EVENTO"))
+    await repo.mark_notes_canceled(client.id, [k1])
+    await repo.save_nfse_cursor(client.id, 2, 1)
+
+    job2 = repo.add_job(client, [TaskType.NFSE_FETCH], competence="2026-10", force=True)
+    await SchedulerRunner(deps).run_once()
+    assert adn.calls[-1] == 0
+    canceled = repo.downloads[-1]
+    assert canceled["document_type"] == "NFSE_TOMADAS_CANCELADAS" and canceled["competence"] == "2026-09"
+    # o XML da nota veio do ZIP normal do mês, já gravado antes
+    assert zip_names(canceled["filepath"]) == sorted([f"NFSe {k1}.xml", f"NFSe {k1} - evento e101101.xml"])
+    assert len([d for d in repo.downloads if d["document_type"] == "NFSE_TOMADAS"]) == 1  # a nota não foi regravada
+    assert repo.job(job2.id)["last_message"] == "NFS-e: nenhuma nota nova; 1 cancelamento(s)."
+
+
+async def test_cancel_of_an_unknown_note_stays_in_the_log(repo: FakeRepo, deps, adn: FakeAdn) -> None:  # noqa: ANN001
+    client, job = setup(repo)
+    k_other = chave(OTHER, 9, "2609")  # nota em que o cliente não é prestador nem tomador
+    adn.docs = [
+        doc(1, k_other, nfse_xml(k_other, prest=OTHER, toma="55666777000199", numero=9, compet="2026-09")),
+        doc(2, k_other, cancel_xml(k_other), tipo="EVENTO"),
+    ]
+    await SchedulerRunner(deps).run_once()
+    assert repo.downloads == []
+    assert repo.job(job.id)["status"] == "completed"
+    assert any("ficaram só no histórico" in e.get("message", "") for e in repo.logs if e.get("job_id") == job.id)

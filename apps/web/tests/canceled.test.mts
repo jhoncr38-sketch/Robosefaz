@@ -24,6 +24,10 @@ describe("notas canceladas", () => {
     assert.equal(isCanceledDocument("NFE_EMITIDAS"), false);
     assert.equal(DOCUMENT_LABEL[baseDocument("NFE_EMITIDAS_CANCELADAS")], "NF-e emitidas");
     assert.equal(DOCUMENT_LABEL.NFCE_CANCELADAS, "NFC-e canceladas"); // filtro Tipo e celular
+    // NFS-e canceladas (robô 1.2.39): ZIP próprio, mesma etiqueta
+    assert.equal(isCanceledDocument("NFSE_TOMADAS_CANCELADAS"), true);
+    assert.equal(baseDocument("NFSE_PRESTADAS_CANCELADAS"), "NFSE_PRESTADAS");
+    assert.equal(DOCUMENT_LABEL.NFSE_TOMADAS_CANCELADAS, "NFS-e tomadas canceladas");
   });
 
   it("pedir só as canceladas não marca o mês como solicitado", () => {

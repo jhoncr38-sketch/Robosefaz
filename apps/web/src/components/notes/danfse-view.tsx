@@ -100,7 +100,7 @@ export function DanfseView({ data, canceled = false }: { data: DanfseData; cance
           {[data.serieDps, data.numeroDps].filter(Boolean).join(" / ")}
         </Cell>
         <Cell label="Situação" mono>
-          {data.cStat === "100" ? "100 · gerada" : data.cStat}
+          {canceled ? "cancelada" : data.cStat === "100" ? "100 · gerada" : data.cStat}
         </Cell>
         <Cell label="Regime">{data.simples}</Cell>
       </Row>

@@ -1,4 +1,13 @@
-import type { CanceledExportTaskType, CertificateStatus, DocumentType, ExportTaskType, JobStatus, RegularExportTaskType, TaskStatus, TaskType } from "@/lib/types";
+import type {
+  CanceledExportTaskType,
+  CertificateStatus,
+  DocumentType,
+  ExportTaskType,
+  JobStatus,
+  RegularExportTaskType,
+  TaskStatus,
+  TaskType,
+} from "@/lib/types";
 
 // slate = na fila; amber = certificado vencendo (não confundir com "Aguardando SEFAZ")
 export type Tone = "gray" | "blue" | "yellow" | "green" | "red" | "orange" | "purple" | "slate" | "amber";
@@ -53,12 +62,7 @@ export function jobTone(status: JobStatus): Tone {
 
 export const FINAL_JOB_STATUSES: JobStatus[] = ["completed", "failed", "cancelled"];
 export const MANUAL_JOB_STATUSES: JobStatus[] = ["manual_action_required", "waiting_certificate"];
-export const RETRYABLE_JOB_STATUSES: JobStatus[] = [
-  "failed",
-  "cancelled",
-  "certificate_required",
-  "manual_action_required",
-];
+export const RETRYABLE_JOB_STATUSES: JobStatus[] = ["failed", "cancelled", "certificate_required", "manual_action_required"];
 
 export function isJobRunning(status: JobStatus): boolean {
   return !["queued", "waiting_sefaz", "completed", "failed", "cancelled", "certificate_required"].includes(status);
@@ -146,17 +150,21 @@ export const DOCUMENT_LABEL: Record<DocumentType, string> = {
   NFE_RECEBIDAS_CANCELADAS: "NF-e recebidas canceladas",
   NFSE_PRESTADAS: "NFS-e prestadas",
   NFSE_TOMADAS: "NFS-e tomadas",
+  NFSE_PRESTADAS_CANCELADAS: "NFS-e prestadas canceladas",
+  NFSE_TOMADAS_CANCELADAS: "NFS-e tomadas canceladas",
 };
 
 /** Notas de serviço (NFS-e Nacional). */
 export function isNfseDocument(doc: DocumentType): boolean {
-  return doc === "NFSE_PRESTADAS" || doc === "NFSE_TOMADAS";
+  return doc.startsWith("NFSE_");
 }
 
 const CANCELED_BASE: Partial<Record<DocumentType, DocumentType>> = {
   NFCE_CANCELADAS: "NFCE",
   NFE_EMITIDAS_CANCELADAS: "NFE_EMITIDAS",
   NFE_RECEBIDAS_CANCELADAS: "NFE_RECEBIDAS",
+  NFSE_PRESTADAS_CANCELADAS: "NFSE_PRESTADAS",
+  NFSE_TOMADAS_CANCELADAS: "NFSE_TOMADAS",
 };
 
 export function isCanceledDocument(doc: DocumentType): boolean {

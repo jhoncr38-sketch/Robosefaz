@@ -37,20 +37,9 @@ export interface NfseClient {
 
 type Tab = "all" | NfseRowState;
 
-const ROW_GRID =
-  "grid grid-cols-[28px_minmax(0,1fr)_minmax(0,auto)] gap-3 md:grid-cols-[28px_minmax(150px,1.3fr)_minmax(200px,1.6fr)_minmax(130px,0.8fr)]";
+const ROW_GRID = "grid grid-cols-[28px_minmax(0,1fr)_minmax(0,auto)] gap-3 md:grid-cols-[28px_minmax(150px,1.3fr)_minmax(200px,1.6fr)_minmax(130px,0.8fr)]";
 
-export function NfseBoard({
-  clients,
-  cursors,
-  jobs,
-  canRun,
-}: {
-  clients: NfseClient[];
-  cursors: NfseCursor[];
-  jobs: NfseJob[];
-  canRun: boolean;
-}) {
+export function NfseBoard({ clients, cursors, jobs, canRun }: { clients: NfseClient[]; cursors: NfseCursor[]; jobs: NfseJob[]; canRun: boolean }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [tab, setTab] = useState<Tab>("all");
@@ -58,19 +47,19 @@ export function NfseBoard({
   const [showLocked, setShowLocked] = useState(false);
   const [result, setResult] = useState<NfseFetchSummary | null>(null);
   const [pending, startTransition] = useTransition();
+  // "Desde o início": relê tudo para montar os ZIPs de canceladas das notas antigas (nada é regravado)
+  const [fromStart, setFromStart] = useState(false);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // quando o robô avança ou termina uma busca de NFS-e, recarrega a lista
   useEffect(() => {
     const supabase = createClient();
-    const channel = supabase
-      .channel("nfse")
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "automation_jobs" }, (payload) => {
-        const row = payload.new as { operations?: string[] };
-        if (!row.operations?.includes("NFSE_FETCH")) return;
-        if (refreshTimer.current) clearTimeout(refreshTimer.current);
-        refreshTimer.current = setTimeout(() => router.refresh(), 800);
-      });
+    const channel = supabase.channel("nfse").on("postgres_changes", { event: "UPDATE", schema: "public", table: "automation_jobs" }, (payload) => {
+      const row = payload.new as { operations?: string[] };
+      if (!row.operations?.includes("NFSE_FETCH")) return;
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+      refreshTimer.current = setTimeout(() => router.refresh(), 800);
+    });
     const closeChannel = subscribeWithAuth(channel);
     return () => {
       if (refreshTimer.current) clearTimeout(refreshTimer.current);
@@ -91,8 +80,7 @@ export function NfseBoard({
       })
       .sort(
         (a, b) =>
-          NFSE_SEVERITY.indexOf(a.state) - NFSE_SEVERITY.indexOf(b.state) ||
-          a.client.name.localeCompare(b.client.name, "pt-BR", { sensitivity: "base" }),
+          NFSE_SEVERITY.indexOf(a.state) - NFSE_SEVERITY.indexOf(b.state) || a.client.name.localeCompare(b.client.name, "pt-BR", { sensitivity: "base" }),
       );
   }, [clients, cursors, jobs]);
 
@@ -101,10 +89,7 @@ export function NfseBoard({
   const matches = (r: (typeof rows)[number]) => {
     if (!term) return true;
     const c = r.client;
-    return (
-      `${c.client_code} ${c.name} ${c.legal_name}`.toLowerCase().includes(term) ||
-      (digits.length >= 3 && c.cnpj.toLowerCase().includes(digits))
-    );
+    return `${c.client_code} ${c.name} ${c.legal_name}`.toLowerCase().includes(term) || (digits.length >= 3 && c.cnpj.toLowerCase().includes(digits));
   };
   const inTab = rows.filter((r) => tab === "all" || r.state === tab);
   // sem certificado e nunca buscado: vai para o grupo dos bloqueados no fim da lista
@@ -133,7 +118,7 @@ export function NfseBoard({
   function submit() {
     const ids = chosen.map((r) => r.client.id);
     startTransition(async () => {
-      const res = await requestNfseFetch({ client_ids: ids });
+      const res = await requestNfseFetch({ client_ids: ids, from_start: fromStart });
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -279,12 +264,7 @@ export function NfseBoard({
           );
         })
       )}
-      <LockedGroup
-        title="Sem certificado válido"
-        rows={lockedRows}
-        open={showLocked}
-        onToggle={() => setShowLocked((v) => !v)}
-      />
+      <LockedGroup title="Sem certificado válido" rows={lockedRows} open={showLocked} onToggle={() => setShowLocked((v) => !v)} />
       {result ? (
         <StickyBar success>
           <CircleCheck className="size-4 shrink-0 text-(--c-1c7a47)" />
@@ -319,6 +299,18 @@ export function NfseBoard({
                 </button>
               ) : null}
               <span className="flex-1" />
+              <button
+                type="button"
+                aria-pressed={fromStart}
+                onClick={() => setFromStart((v) => !v)}
+                title="Relê a NFS-e Nacional desde o início e monta os ZIPs de canceladas das notas antigas. Nada é apagado nem regravado."
+                className={cn(
+                  "h-[38px] rounded-lg border px-3 text-[12.5px] whitespace-nowrap",
+                  fromStart ? "border-primary bg-(--c-f3faf6) text-(--c-17603b)" : "border-input text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Desde o início
+              </button>
               <span className="text-[13px] whitespace-nowrap text-(--c-4a4b46)">
                 <b className="font-semibold text-foreground">{chosen.length}</b> cliente(s)
               </span>

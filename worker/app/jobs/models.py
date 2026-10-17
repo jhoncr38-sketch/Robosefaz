@@ -86,6 +86,9 @@ class DocumentType(StrEnum):
     NFE_RECEBIDAS_CANCELADAS = "NFE_RECEBIDAS_CANCELADAS"
     NFSE_PRESTADAS = "NFSE_PRESTADAS"
     NFSE_TOMADAS = "NFSE_TOMADAS"
+    # NFS-e canceladas (1.2.39): ZIP próprio com a nota e o evento de cancelamento; não entra no índice
+    NFSE_PRESTADAS_CANCELADAS = "NFSE_PRESTADAS_CANCELADAS"
+    NFSE_TOMADAS_CANCELADAS = "NFSE_TOMADAS_CANCELADAS"
 
 
 TASK_DOCUMENT: dict[TaskType, DocumentType] = {
@@ -102,6 +105,8 @@ _CANCELED_BASE: dict[DocumentType, DocumentType] = {
     DocumentType.NFCE_CANCELADAS: DocumentType.NFCE,
     DocumentType.NFE_EMITIDAS_CANCELADAS: DocumentType.NFE_EMITIDAS,
     DocumentType.NFE_RECEBIDAS_CANCELADAS: DocumentType.NFE_RECEBIDAS,
+    DocumentType.NFSE_PRESTADAS_CANCELADAS: DocumentType.NFSE_PRESTADAS,
+    DocumentType.NFSE_TOMADAS_CANCELADAS: DocumentType.NFSE_TOMADAS,
 }
 
 # nome do tipo nas mensagens e no nome do arquivo da nota
@@ -114,6 +119,8 @@ DOC_LABEL: dict[str, str] = {
     "NFE_RECEBIDAS_CANCELADAS": "NF-e recebidas canceladas",
     "NFSE_PRESTADAS": "NFS-e prestadas",
     "NFSE_TOMADAS": "NFS-e tomadas",
+    "NFSE_PRESTADAS_CANCELADAS": "NFS-e prestadas canceladas",
+    "NFSE_TOMADAS_CANCELADAS": "NFS-e tomadas canceladas",
 }
 
 

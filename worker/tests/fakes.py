@@ -309,6 +309,14 @@ class FakeRepo:
         ]
         return max(rows, key=lambda d: str(d.get("downloaded_at") or ""), default=None)
 
+    async def list_notes_by_chave(self, client_id: str, chaves: list[str]) -> list[dict[str, Any]]:
+        wanted = set(chaves)
+        return [
+            {"chave": n["chave"], "document_type": n["document_type"], "competence": n["competence"], "canceled": n.get("canceled", False)}
+            for n in getattr(self, "notes", [])
+            if n.get("client_id") == client_id and n.get("chave") in wanted
+        ]
+
     async def mark_notes_canceled(self, client_id: str, chaves: list[str]) -> int:
         hits = [n for n in self._notes() if n["client_id"] == client_id and n["chave"] in chaves]
         for n in hits:

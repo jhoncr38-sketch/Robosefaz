@@ -227,6 +227,15 @@ def note_rows(download: dict[str, Any], zip_path: Path, notes: list[NoteInfo]) -
     return list(by_key.values())
 
 
+# ZIPs de canceladas de NFS-e (1.2.39): a nota já está no índice, marcada pelo evento; indexar o ZIP a
+# mostraria duas vezes. Esses downloads são dados como indexados sem gerar linhas.
+NO_INDEX_TYPES = frozenset({"NFSE_PRESTADAS_CANCELADAS", "NFSE_TOMADAS_CANCELADAS"})
+
+
+def skips_index(document_type: str) -> bool:
+    return str(document_type) in NO_INDEX_TYPES
+
+
 async def index_download_now(repo: Any, download_row: dict[str, Any], path: Path, document_type: str) -> int | None:
     """Nota pela chave: lê o ZIP recém-gravado e põe a(s) nota(s) no índice na hora, sem esperar a
     manutenção (quem pediu está olhando a tela Notas). Devolve quantas notas há no arquivo; None
@@ -235,7 +244,7 @@ async def index_download_now(repo: Any, download_row: dict[str, Any], path: Path
     if notes is None or not download_row.get("id"):
         return None
     row = {**download_row, "document_type": document_type}
-    if notes:
+    if notes and not skips_index(document_type):
         await repo.upsert_notes(note_rows(row, path, notes))
     await repo.set_download_notes_indexed(row["id"], len(notes))
     return len(notes)
@@ -250,6 +259,10 @@ async def index_pending_notes(repo: Any, base_dir: Path, *, skip: set[str], limi
         if done >= limit:
             break
         if row["id"] in skip:
+            continue
+        if skips_index(row.get("document_type", "")):
+            await repo.set_download_notes_indexed(row["id"], int(row.get("note_count") or 0))
+            done += 1
             continue
         path = await asyncio.to_thread(locate, row, base_dir)
         notes = await asyncio.to_thread(index_zip, path) if path else None

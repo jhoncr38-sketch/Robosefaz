@@ -79,6 +79,7 @@ class JobRepository(Protocol):
     async def save_nfse_cursor(self, client_id: str, last_nsu: int, documents: int) -> None: ...
     async def latest_download(self, client_id: str, competence: str, document_type: str) -> dict[str, Any] | None: ...
     async def mark_notes_canceled(self, client_id: str, chaves: list[str]) -> int: ...
+    async def list_notes_by_chave(self, client_id: str, chaves: list[str]) -> list[dict[str, Any]]: ...
     async def set_nfse_arrivals(self, client_id: str, items: list[dict[str, Any]]) -> int: ...
     # emissão de NFS-e (1.2.37)
     async def begin_nfse_emission(self, job_id: str) -> dict[str, Any] | None: ...
@@ -479,6 +480,21 @@ class SupabaseJobRepository:
             .execute()
         )
         return res.data[0] if res.data else None
+
+    @_transient
+    async def list_notes_by_chave(self, client_id: str, chaves: list[str]) -> list[dict[str, Any]]:
+        """Mês e tipo das notas de um cliente pelas chaves (NFS-e canceladas: em que ZIP a nota está)."""
+        out: list[dict[str, Any]] = []
+        for i in range(0, len(chaves), 200):
+            res = (
+                await self._db.table("notes")
+                .select("chave, document_type, competence, canceled")
+                .eq("client_id", client_id)
+                .in_("chave", chaves[i : i + 200])
+                .execute()
+            )
+            out.extend(res.data or [])
+        return out
 
     @_transient
     async def mark_notes_canceled(self, client_id: str, chaves: list[str]) -> int:

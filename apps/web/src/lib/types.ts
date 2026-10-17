@@ -43,26 +43,13 @@ export type TaskType =
 /** pedidos normais (só as notas ativas) */
 export type RegularExportTaskType = Extract<TaskType, "NFCE_EXPORT" | "NFE_ISSUED_EXPORT" | "NFE_RECEIVED_EXPORT">;
 /** notas canceladas: pedido separado, com Status "Canceladas" (botão "Canceladas" do agendamento) */
-export type CanceledExportTaskType = Extract<
-  TaskType,
-  "NFCE_CANCELED_EXPORT" | "NFE_ISSUED_CANCELED_EXPORT" | "NFE_RECEIVED_CANCELED_EXPORT"
->;
+export type CanceledExportTaskType = Extract<TaskType, "NFCE_CANCELED_EXPORT" | "NFE_ISSUED_CANCELED_EXPORT" | "NFE_RECEIVED_CANCELED_EXPORT">;
 export type ExportTaskType = RegularExportTaskType | CanceledExportTaskType;
 /** o que um trabalho do robô pode conter: exportações do mês, uma nota pela chave, EFD, malhas, busca de
  *  NFS-e ou a emissão/cancelamento de uma NFS-e */
 export type JobOperation = ExportTaskType | "NFE_KEY_EXPORT" | "EFD_CHECK" | "MALHA_CHECK" | "NFSE_FETCH" | "NFSE_EMIT" | "NFSE_CANCEL";
 
-export type TaskStatus =
-  | "pending"
-  | "running"
-  | "scheduled"
-  | "processed"
-  | "downloaded"
-  | "completed"
-  | "failed"
-  | "skipped"
-  | "cancelled"
-  | "dry_run";
+export type TaskStatus = "pending" | "running" | "scheduled" | "processed" | "downloaded" | "completed" | "failed" | "skipped" | "cancelled" | "dry_run";
 
 export type DocumentType =
   | "NFCE"
@@ -73,7 +60,10 @@ export type DocumentType =
   | "NFE_RECEBIDAS_CANCELADAS"
   /** NFS-e Nacional (notas de serviço, lidas da API do ADN) */
   | "NFSE_PRESTADAS"
-  | "NFSE_TOMADAS";
+  | "NFSE_TOMADAS"
+  /** ZIP de canceladas da NFS-e (robô 1.2.39): nota + evento de cancelamento; não entra no índice */
+  | "NFSE_PRESTADAS_CANCELADAS"
+  | "NFSE_TOMADAS_CANCELADAS";
 
 export type CertificateStatus = "valid" | "expiring" | "expired" | "error";
 
@@ -425,5 +415,4 @@ export interface CreateJobResult {
 }
 
 export type ActionResult<T = undefined> =
-  | { ok: true; data?: T; message?: string }
-  | { ok: false; error: string; fieldErrors?: Record<string, string[] | undefined> };
+  { ok: true; data?: T; message?: string } | { ok: false; error: string; fieldErrors?: Record<string, string[] | undefined> };
