@@ -570,8 +570,12 @@ class DownloadOrganizer:
         *,
         keep_name: str | None = None,
         note_key: str | None = None,
+        allow_empty: bool = False,
     ) -> DownloadedFile:
         """Move o arquivo baixado para o destino definitivo, evitando duplicatas idênticas.
+
+        allow_empty: um ZIP sem XML é aceito (NFS-e, mês em que todas as notas foram canceladas); no SIAT
+        o ZIP vazio é erro de exportação.
 
         `keep_name`: grava com este nome (ex.: nota do plano B, que já tem registro no painel com
         ele); se já existir outro arquivo com o nome, vira a versão seguinte.
@@ -588,7 +592,7 @@ class DownloadOrganizer:
         if kind == "html":
             # portal devolveu uma página (sessão expirada/erro) em vez do arquivo
             raise InvalidDownloadError("O portal retornou uma página HTML em vez do arquivo exportado.")
-        if kind == "zip" and is_empty_zip(source):
+        if kind == "zip" and not allow_empty and is_empty_zip(source):
             raise EmptyExportError("O SIAT entregou um ZIP vazio: nenhuma nota no período.")
         checksum = sha256_file(source)
         ext = {"zip": ".zip", "xml": ".xml"}.get(kind) or source.suffix or ".zip"

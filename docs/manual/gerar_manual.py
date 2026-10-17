@@ -588,8 +588,9 @@ def cap_automacao() -> list:
                 "<b>Notas de serviço</b> (robô 1.2.39): o cancelamento lido na NFS-e Nacional também vai para um ZIP "
                 "próprio do mês da nota, <i>EMPRESA - NFS-e tomadas canceladas - 09-2026 - CLI000006.zip</i>, na pasta "
                 "NFSE_TOMADAS_CANCELADAS (ou NFSE_PRESTADAS_CANCELADAS), com o XML da nota e o XML do evento de "
-                "cancelamento. Não precisa de botão: acontece em toda busca de NFS-e. A nota continua no ZIP normal "
-                "do mês e no índice, marcada como cancelada.",
+                "cancelamento. Não precisa de botão: acontece em toda busca de NFS-e. Desde a 1.2.40 a nota também sai do "
+                "ZIP normal do mês, numa versão nova do arquivo (a anterior fica), para o ZIP do mês ter só notas "
+                "ativas, como no SIAT. No índice a nota continua uma só, marcada como cancelada.",
             ]
         ),
         H2("Pedidos repetidos"),
@@ -901,11 +902,13 @@ def cap_downloads() -> list:
                 "Em <b>Downloads</b>, o filtro <b>NFS-e</b> mostra só as notas de serviço. Na busca por chave, a "
                 "nota abre no formato da DANFSe, com prestador, tomador, serviço e ISS.",
                 "Quando a nota é cancelada, o cancelamento chega na busca seguinte: a nota fica marcada como "
-                "cancelada, o DANFSe sai com o carimbo e, desde o robô 1.2.39, o XML da nota e o do evento vão para o "
-                "ZIP de canceladas do mês (pasta NFSE_PRESTADAS_CANCELADAS ou NFSE_TOMADAS_CANCELADAS).",
+                "cancelada, o DANFSe sai com o carimbo, o XML da nota e o do evento vão para o ZIP de canceladas do mês "
+                "(pasta NFSE_PRESTADAS_CANCELADAS ou NFSE_TOMADAS_CANCELADAS) e a nota sai do ZIP normal numa versão "
+                "nova (robô 1.2.40). Mês em que todas as notas foram canceladas fica com um ZIP normal sem notas.",
                 "<b>Desde o início</b>, ao lado do botão Buscar NFS-e: relê a NFS-e Nacional do começo para montar os "
-                "ZIPs de canceladas das notas lidas por versões anteriores. Nada é apagado nem gravado de novo; a busca "
-                "só grava o que ainda não está nos arquivos. Use uma vez por empresa, depois de atualizar o robô.",
+                "ZIPs de canceladas das notas lidas por versões anteriores e tirar as canceladas dos ZIPs normais. Nada é "
+                "apagado; a busca só grava o que ainda não está certo nos arquivos. Use uma vez por empresa, depois de "
+                "atualizar o robô.",
                 "O sino avisa uma vez por lote, quando chegam notas novas; busca sem novidade não gera aviso. O "
                 "resultado de cada cliente fica na tela NFS-e Nacional.",
                 "Precisa do robô 1.2.36 ou mais novo e do certificado A1 do cliente instalado no computador. Funciona "

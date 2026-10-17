@@ -309,6 +309,14 @@ class FakeRepo:
         ]
         return max(rows, key=lambda d: str(d.get("downloaded_at") or ""), default=None)
 
+    async def list_canceled_nfse_chaves(self, client_id: str, competence: str, document_type: str) -> list[str]:
+        return [
+            n["chave"]
+            for n in getattr(self, "notes", [])
+            if n.get("client_id") == client_id and n.get("competence") == competence
+            and n.get("document_type") == document_type and n.get("canceled")
+        ]
+
     async def list_notes_by_chave(self, client_id: str, chaves: list[str]) -> list[dict[str, Any]]:
         wanted = set(chaves)
         return [

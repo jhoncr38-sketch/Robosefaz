@@ -6,16 +6,19 @@ um ZIP por mês e tipo na pasta das notas, como os do SIAT ("EMPRESA - NFS-e tom
 CLI000006.zip").
 
 Notas novas de um mês que já tem arquivo viram uma versão nova do ZIP com tudo (a anterior fica,
-como no reagendamento forçado); nada é apagado. Os cancelamentos chegam como eventos e marcam a
-nota no índice. O NSU só avança depois que os arquivos foram gravados: se algo falhar no meio, a
-próxima busca relê os mesmos documentos e só grava o que ainda não está nos arquivos.
+como no reagendamento forçado); nada é apagado. O NSU só avança depois que os arquivos foram
+gravados: se algo falhar no meio, a próxima busca relê os mesmos documentos e só grava o que ainda
+não está nos arquivos.
 
-Canceladas (1.2.39): cada cancelamento também vai para um ZIP próprio do mês da nota, como no SIAT
-("EMPRESA - NFS-e tomadas canceladas - 09-2026 - CLI000006.zip", pasta NFSE_TOMADAS_CANCELADAS),
-com o XML da nota e o XML do evento de cancelamento. Esse ZIP não entra no índice: a nota já está
-lá, marcada como cancelada, e uma linha a mais a mostraria duas vezes. "Desde o início" (pedido com
-force_reschedule) relê o ADN do NSU 0 para montar os ZIPs de canceladas antigos; o que já está nos
-arquivos não é gravado de novo.
+Canceladas (1.2.39/1.2.40), como no SIAT desde a 1.2.32: o ZIP normal do mês tem só as notas
+ativas; cada cancelamento vai para um ZIP próprio do mês da nota ("EMPRESA - NFS-e tomadas
+canceladas - 09-2026 - CLI000006.zip", pasta NFSE_TOMADAS_CANCELADAS) com o XML da nota e o XML do
+evento. Nota que já estava no ZIP normal quando o cancelamento chegou sai dele numa versão nova (a
+anterior fica). No índice a nota continua uma só, marcada como cancelada: o ZIP de canceladas é
+indexado sob o tipo da nota (NFSE_PRESTADAS/NFSE_TOMADAS) com canceled = true, o que atualiza a
+linha existente em vez de criar outra. "Desde o início" (pedido com force_reschedule) relê o ADN do
+NSU 0 para montar os ZIPs de canceladas antigos e limpar os ZIPs normais; o que já está nos arquivos
+não é gravado de novo.
 """
 
 from __future__ import annotations
@@ -170,6 +173,12 @@ def note_files(files: dict[str, bytes]) -> int:
     return sum(1 for name in files if " - evento " not in name)
 
 
+def active_only(files: dict[str, bytes], canceled: set[str]) -> tuple[dict[str, bytes], int]:
+    """O ZIP normal sem as notas canceladas. -> (arquivos, quantas saíram)."""
+    kept = {name: data for name, data in files.items() if not ((m := _KEY_IN_NAME.search(name)) and m.group(0) in canceled)}
+    return kept, len(files) - len(kept)
+
+
 async def run_nfse_fetch(
     repo: JobRepository,
     organizer: DownloadOrganizer,
@@ -197,8 +206,8 @@ async def run_nfse_fetch(
     await reporter.step(JobStatus.CHECKING_PROCESSING, "Consultando a NFS-e Nacional")
     if from_start:
         await logger.info(
-            "Relendo a NFS-e Nacional desde o início, a pedido: monta os arquivos de canceladas antigos; "
-            "o que já está nos arquivos não é gravado de novo.",
+            "Relendo a NFS-e Nacional desde o início, a pedido: monta os arquivos de canceladas antigos e tira as "
+            "canceladas dos arquivos do mês; o que já está certo não é gravado de novo.",
             step="checking_processing",
         )
     else:
@@ -244,12 +253,36 @@ async def run_nfse_fetch(
             break
     summary.last_nsu = nsu
 
-    # 2) grava um ZIP por tipo e mês (só quando há nota que ainda não está no arquivo do mês)
+    # em que ZIP do mês cada nota cancelada está (pela leitura de agora ou pelo índice)
+    where = await _locate_canceled(repo, groups, cancels, client) if cancels else {}
+    canceled_by_zip: dict[tuple[str, str], set[str]] = defaultdict(set)
+    for chave, (doc_type, comp) in where.items():
+        canceled_by_zip[(doc_type, comp)].add(chave)
+
     if groups or cancels:
         await reporter.step(JobStatus.ORGANIZING_FILES, "Organizando arquivos")
+
+    # 2) cancelamentos vão para o ZIP de canceladas do mês da nota, com o XML da nota e o do evento.
+    #    Antes de mexer no ZIP normal: o XML de uma nota antiga ainda está na versão atual dele.
+    if cancels:
+        for chave, ev in sorted(cancels.items()):
+            await logger.info(f"Evento na NFS-e {chave}: {ev.descricao}.", step="organizing_files")
+        unknown = sorted(set(cancels) - set(where))
+        if unknown:
+            await logger.info(
+                f"{len(unknown)} cancelamento(s) de nota que não é deste cliente (ou ainda não baixada) ficaram só no histórico.",
+                step="organizing_files",
+            )
+        await _store_canceled(repo, organizer, client, job, groups, cancels, canceled_by_zip, summary, logger)
+        summary.canceled = len(where)
+
+    # 3) grava um ZIP por tipo e mês, só com notas ativas (versão nova quando entra nota ou sai cancelada)
+    rebuilt: set[tuple[str, str]] = set()
     for (doc_type, comp), notes in sorted(groups.items()):
         await reporter.check_cancel()
-        added = await _store_group(repo, organizer, client, job, doc_type, comp, notes, logger)
+        drop = await _canceled_in_month(repo, client, comp, doc_type, canceled_by_zip.get((doc_type, comp), set()))
+        added = await _store_group(repo, organizer, client, job, doc_type, comp, notes, logger, drop=drop)
+        rebuilt.add((doc_type, comp))
         if added:
             summary.new_notes[doc_type] += added
             summary.files.append(f"{doc_type}:{comp}")
@@ -282,17 +315,19 @@ async def run_nfse_fetch(
         except Exception:  # noqa: BLE001 - banco ainda sem essa função, ou falha passageira: a busca não depende disso
             pass
 
-    # 3) cancelamentos marcam a nota no índice (o XML da nota continua no ZIP do mês)...
+    # 3a) cancelamentos marcam a nota no índice (e a emissão feita pelo sistema, se for o caso)
     if cancels:
-        summary.canceled = await repo.mark_notes_canceled(client.id, sorted(cancels))
+        await repo.mark_notes_canceled(client.id, sorted(cancels))
         try:
             await repo.mark_emissions_canceled(client.id, sorted(cancels))
         except Exception:  # noqa: BLE001 - banco ainda sem a tabela de emissões: o índice já foi marcado
             pass
-        for chave, ev in sorted(cancels.items()):
-            await logger.info(f"Evento na NFS-e {chave}: {ev.descricao}.", step="organizing_files")
-        # ...e vão, com o XML do evento, para o ZIP de canceladas do mês da nota
-        await _store_canceled(repo, organizer, client, job, groups, cancels, summary, logger)
+        # meses que só tiveram cancelamento (sem nota nova): a cancelada sai do ZIP normal numa versão nova
+        for (doc_type, comp), chaves in sorted(canceled_by_zip.items()):
+            if (doc_type, comp) in rebuilt:
+                continue
+            drop = await _canceled_in_month(repo, client, comp, doc_type, chaves)
+            await _store_group(repo, organizer, client, job, doc_type, comp, {}, logger, drop=drop)
 
     if summary.other_cnpj:
         await logger.warning(
@@ -363,6 +398,16 @@ async def _read_previous(
     return {}
 
 
+async def _canceled_in_month(repo: JobRepository, client: Client, comp: str, doc_type: str, now: set[str]) -> set[str]:
+    """Chaves canceladas do mês: as desta leitura e as que o índice já marcou (ficaram no ZIP de uma versão antiga)."""
+    chaves = set(now)
+    try:
+        chaves.update(await repo.list_canceled_nfse_chaves(client.id, comp, doc_type))
+    except Exception:  # noqa: BLE001 - falha passageira do banco: só as desta leitura
+        pass
+    return chaves
+
+
 async def _store_zip(
     repo: JobRepository,
     organizer: DownloadOrganizer,
@@ -373,17 +418,18 @@ async def _store_zip(
     files: dict[str, bytes],
     logger: JobLogger,
     *,
-    index: bool,
     extra: dict[str, Any] | None = None,
 ) -> Any:
-    """Grava a versão nova do ZIP do mês e registra o download. `index`: notas entram no índice agora;
-    o ZIP de canceladas de NFS-e não é indexado (a nota já está no índice, marcada)."""
+    """Grava a versão nova do ZIP do mês, registra o download e indexa as notas na hora."""
     name = client.trade_name or client.legal_name
     with tempfile.TemporaryDirectory(prefix="jr-nfse-") as tmp:
         source = Path(tmp) / f"{client.client_code}_{comp}_{doc_type}.zip"
         await asyncio.to_thread(write_zip, source, files)
         try:
-            stored = await asyncio.to_thread(organizer.store, source, client.client_code, comp, doc_type, name)
+            # allow_empty: mês em que todas as notas foram canceladas fica com um ZIP normal sem notas
+            stored = await asyncio.to_thread(
+                lambda: organizer.store(source, client.client_code, comp, doc_type, name, allow_empty=True)
+            )
         except DownloadFolderUnavailable as exc:
             raise AutomationError(ErrorCode.DOWNLOAD_FAILED, f"Pasta de downloads indisponível: {exc}", retryable=True) from exc
     if stored.saved_locally:
@@ -400,27 +446,23 @@ async def _store_zip(
         document_type=DocumentType(doc_type),
         result={"nfse": True, **(extra or {}), **stored.model_dump(mode="json")},
     )
-    fields: dict[str, Any] = {
-        "client_id": client.id,
-        "job_id": job.id,
-        "automation_task_id": download_task.id,
-        "document_type": doc_type,
-        "competence": comp,
-        "filename": stored.filename,
-        "filepath": stored.filepath,
-        "size": stored.size,
-        "checksum": stored.checksum,
-        "note_count": note_files(files),
-        "downloaded_at": now_utc(),
-    }
-    if not index:
-        fields["notes_indexed_at"] = now_utc()  # a manutenção não deve indexar este ZIP
-    row = await repo.insert_download(**fields)
-    if index:
-        try:
-            await index_download_now(repo, row, Path(stored.filepath), doc_type)
-        except Exception as exc:  # noqa: BLE001 - a manutenção indexa depois
-            await logger.warning(f"Não foi possível indexar as notas agora ({exc}); a manutenção fará em seguida.", step="organizing_files")
+    row = await repo.insert_download(
+        client_id=client.id,
+        job_id=job.id,
+        automation_task_id=download_task.id,
+        document_type=doc_type,
+        competence=comp,
+        filename=stored.filename,
+        filepath=stored.filepath,
+        size=stored.size,
+        checksum=stored.checksum,
+        note_count=note_files(files),
+        downloaded_at=now_utc(),
+    )
+    try:
+        await index_download_now(repo, row, Path(stored.filepath), doc_type)
+    except Exception as exc:  # noqa: BLE001 - a manutenção indexa depois
+        await logger.warning(f"Não foi possível indexar as notas agora ({exc}); a manutenção fará em seguida.", step="organizing_files")
     return stored
 
 
@@ -433,20 +475,29 @@ async def _store_group(
     comp: str,
     notes: dict[str, tuple[NoteInfo, AdnDocument]],
     logger: JobLogger,
+    *,
+    drop: set[str] | None = None,
 ) -> int:
-    """Grava a versão nova do ZIP do mês (anterior + notas novas). -> quantas notas novas entraram."""
+    """Versão nova do ZIP normal do mês: anterior + notas novas ativas - canceladas (`drop`). Só grava
+    quando algo muda. -> quantas notas novas (ativas) entraram. (A emissão de NFS-e também usa, sem drop.)"""
+    drop = drop or set()
     previous = await _read_previous(repo, organizer, client, comp, doc_type, logger)
     known = keys_in(previous)
-    new = {chave: item for chave, item in notes.items() if chave not in known}
-    if not new:
+    new = {chave: item for chave, item in notes.items() if chave not in known and chave not in drop}
+    files, removed = active_only(previous, drop)
+    if not new and not removed:
         return 0
-    files = dict(previous)
     for chave, (_info, doc) in new.items():
         files[xml_name(chave)] = doc.xml
-    stored = await _store_zip(repo, organizer, client, job, doc_type, comp, files, logger, index=True)
+    stored = await _store_zip(repo, organizer, client, job, doc_type, comp, files, logger)
     label = "prestada(s)" if doc_type == DocumentType.NFSE_PRESTADAS.value else "tomada(s)"
+    parts = []
+    if new:
+        parts.append(f"{len(new)} nota(s) {label} nova(s)")
+    if removed:
+        parts.append(f"{removed} cancelada(s) retirada(s)")
     await logger.info(
-        f"{stored.filename}: {len(new)} nota(s) {label} nova(s), {len(files)} no arquivo do mês {comp[5:]}/{comp[:4]}.",
+        f"{stored.filename}: {', '.join(parts)}, {len(files)} nota(s) ativa(s) no arquivo do mês {comp[5:]}/{comp[:4]}.",
         step="organizing_files",
     )
     return len(new)
@@ -482,23 +533,13 @@ async def _store_canceled(
     job: Job,
     groups: dict[tuple[str, str], dict[str, tuple[NoteInfo, AdnDocument]]],
     cancels: dict[str, Cancel],
+    canceled_by_zip: dict[tuple[str, str], set[str]],
     summary: FetchSummary,
     logger: JobLogger,
 ) -> None:
     """Um ZIP de canceladas por mês e tipo, com o XML da nota e o XML do evento; só o que ainda não está lá."""
-    where = await _locate_canceled(repo, groups, cancels, client)
-    unknown = sorted(set(cancels) - set(where))
-    if unknown:
-        await logger.info(
-            f"{len(unknown)} cancelamento(s) de nota que não é deste cliente (ou ainda não baixada) ficaram só no histórico.",
-            step="organizing_files",
-        )
-    by_zip: dict[tuple[str, str], list[str]] = defaultdict(list)
-    for chave, (doc_type, comp) in where.items():
-        by_zip[(CANCELED_TYPE[doc_type], comp)].append(chave)
-
-    for (canceled_type, comp), chaves in sorted(by_zip.items()):
-        base_type = next(k for k, v in CANCELED_TYPE.items() if v == canceled_type)
+    for (base_type, comp), chaves in sorted(canceled_by_zip.items()):
+        canceled_type = CANCELED_TYPE[base_type]
         previous = await _read_previous(repo, organizer, client, comp, canceled_type, logger)
         month_zip: dict[str, bytes] | None = None  # XMLs do ZIP normal do mês, lidos só se precisar
         files = dict(previous)
@@ -521,9 +562,7 @@ async def _store_canceled(
                 files[xml_name(chave)] = month_zip[xml_name(chave)]
         if not new:
             continue
-        stored = await _store_zip(
-            repo, organizer, client, job, canceled_type, comp, files, logger, index=False, extra={"canceled": True}
-        )
+        stored = await _store_zip(repo, organizer, client, job, canceled_type, comp, files, logger, extra={"canceled": True})
         summary.canceled_files.append(f"{canceled_type}:{comp}")
         label = "prestada(s)" if base_type == DocumentType.NFSE_PRESTADAS.value else "tomada(s)"
         await logger.info(

@@ -80,6 +80,7 @@ class JobRepository(Protocol):
     async def latest_download(self, client_id: str, competence: str, document_type: str) -> dict[str, Any] | None: ...
     async def mark_notes_canceled(self, client_id: str, chaves: list[str]) -> int: ...
     async def list_notes_by_chave(self, client_id: str, chaves: list[str]) -> list[dict[str, Any]]: ...
+    async def list_canceled_nfse_chaves(self, client_id: str, competence: str, document_type: str) -> list[str]: ...
     async def set_nfse_arrivals(self, client_id: str, items: list[dict[str, Any]]) -> int: ...
     # emissão de NFS-e (1.2.37)
     async def begin_nfse_emission(self, job_id: str) -> dict[str, Any] | None: ...
@@ -495,6 +496,21 @@ class SupabaseJobRepository:
             )
             out.extend(res.data or [])
         return out
+
+    @_transient
+    async def list_canceled_nfse_chaves(self, client_id: str, competence: str, document_type: str) -> list[str]:
+        """Chaves das NFS-e canceladas de um mês e tipo (as que ainda estiverem no ZIP normal saem dele)."""
+        res = (
+            await self._db.table("notes")
+            .select("chave")
+            .eq("client_id", client_id)
+            .eq("competence", competence)
+            .eq("document_type", document_type)
+            .eq("canceled", True)
+            .limit(5000)
+            .execute()
+        )
+        return [str(r["chave"]) for r in (res.data or [])]
 
     @_transient
     async def mark_notes_canceled(self, client_id: str, chaves: list[str]) -> int:
