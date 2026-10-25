@@ -266,6 +266,14 @@ export function parseAmount(text: string): number | null {
   return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
 }
 
+/** "Faltam 3 campos: tomador, descrição e valor." / "Falta 1 campo: valor." / "" quando não falta nada. */
+export function missingLine(fields: string[]): string {
+  const unique = [...new Set(fields.map((f) => f.trim()).filter(Boolean))];
+  if (!unique.length) return "";
+  const list = unique.length < 2 ? unique[0] : `${unique.slice(0, -1).join(", ")} e ${unique.at(-1)}`;
+  return unique.length === 1 ? `Falta 1 campo: ${list}.` : `Faltam ${unique.length} campos: ${list}.`;
+}
+
 export function formatBRL(value: number | string | null | undefined): string {
   return Number(value ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }

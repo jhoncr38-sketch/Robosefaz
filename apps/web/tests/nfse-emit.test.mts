@@ -28,6 +28,7 @@ import {
   pickBaseModel,
   pickModel,
   takerNoteKey,
+  missingLine,
 } from "../src/lib/nfse-emit.ts";
 
 const SOL = "55666777000188";
@@ -318,5 +319,14 @@ describe("quem entra na emissão", () => {
 
   it("a função segue travada até alguém decidir lançar", () => {
     assert.equal(NFSE_EMIT_RELEASED, false);
+  });
+});
+
+describe("emissão por etapas", () => {
+  it("diz quantos campos faltam, sem repetir e sem vírgula antes do último", () => {
+    assert.equal(missingLine([]), "");
+    assert.equal(missingLine(["valor"]), "Falta 1 campo: valor.");
+    assert.equal(missingLine(["tomador", "descrição", "valor"]), "Faltam 3 campos: tomador, descrição e valor.");
+    assert.equal(missingLine(["CEP", "CEP", " "]), "Falta 1 campo: CEP.");
   });
 });
