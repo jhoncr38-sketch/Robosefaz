@@ -378,7 +378,7 @@ function Rejections({ emission }: { emission: Emission }) {
         <li key={i}>
           {explainRejection(e) ? <b className="block font-semibold">{explainRejection(e)}</b> : null}
           <span className="block text-[12px] opacity-90">
-            Prefeitura{e.codigo ? ` ${e.codigo}` : ""}: {e.mensagem}
+            Recusa{e.codigo ? ` ${e.codigo}` : ""}: {e.mensagem}
           </span>
         </li>
       ))}
@@ -839,7 +839,7 @@ export function EmitBoard({
       );
     }
     if (draft.takerKind === "new") {
-      // cada recusa da prefeitura custa um trabalho do robô: o endereço é conferido aqui
+      // cada recusa custa um trabalho do robô: o endereço é conferido aqui
       for (const issue of checkNewTaker(draft.newTaker)) lack("taker", issue.short, issue.text);
     }
     if (!amount) lack("amount", "valor", "Informe o valor.");
@@ -917,7 +917,7 @@ export function EmitBoard({
         ),
       );
       setActiveId(emission.id);
-      toast.success("O robô vai conferir na prefeitura antes de qualquer novo envio.");
+      toast.success("O robô vai conferir no ambiente nacional antes de qualquer novo envio.");
     });
   }
 
@@ -1524,7 +1524,7 @@ export function EmitBoard({
                         <HelpTip label="O que são os códigos fiscais">
                           <p>NBS e IBS/CBS são opcionais: vazios, a nota sai sem eles.</p>
                           <p>A classificação já vem escolhida quando a tabela oficial só indica uma para o serviço.</p>
-                          <p>Os valores do IBS/CBS quem calcula é a prefeitura.</p>
+                          <p>Os valores do IBS/CBS quem calcula é o ambiente nacional da NFS-e.</p>
                         </HelpTip>
                       </span>
                       <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-(--c-4a4b46)" title={codesLine}>
@@ -1873,7 +1873,7 @@ export function EmitBoard({
                     {allClear ? (
                       <div
                         className="flex items-center gap-2 text-[12.5px] text-(--c-1c5e3c)"
-                        title="Certificado da empresa válido · Robô ligado no computador do escritório · Serviço já aceito pela prefeitura para esta empresa"
+                        title="Certificado da empresa válido · Robô ligado no computador do escritório · Serviço já usado em nota aceita desta empresa"
                       >
                         <CircleCheck className="size-3.5 shrink-0 text-primary" />
                         <span>
@@ -1901,7 +1901,7 @@ export function EmitBoard({
                     {isOwner ? (
                       <label className="flex cursor-pointer items-center gap-1.5 text-[12px] text-(--c-6b6c66)">
                         <input type="checkbox" checked={testEnv} onChange={(e) => setTestEnv(e.target.checked)} />
-                        <FlaskConical className="size-3.5" /> Ambiente de teste da prefeitura (sem valor fiscal)
+                        <FlaskConical className="size-3.5" /> Ambiente de teste nacional, produção restrita (sem valor fiscal)
                       </label>
                     ) : null}
                     <div className="flex flex-col gap-2 pt-1">
@@ -1938,23 +1938,21 @@ export function EmitBoard({
                     ) : null}
                     {active.test_env ? (
                       <Notice tone="amber" icon={<FlaskConical />}>
-                        Nota do ambiente de teste da prefeitura: sem valor fiscal.
+                        Nota do ambiente de teste nacional: sem valor fiscal.
                       </Notice>
                     ) : null}
                     {active.status === "rejected" || (active.status === "failed" && !activeState.uncertain) ? (
                       <Notice tone="red" icon={<TriangleAlert />}>
-                        <b className="mb-1 block">
-                          {active.status === "rejected" ? "A prefeitura recusou a nota. Nada foi emitido." : "A nota não foi emitida."}
-                        </b>
+                        <b className="mb-1 block">{active.status === "rejected" ? "A nota foi recusada. Nada foi emitido." : "A nota não foi emitida."}</b>
                         <Rejections emission={active} />
                       </Notice>
                     ) : null}
                     {activeState.uncertain ? (
                       <Notice tone="amber" icon={<TriangleAlert />}>
-                        <b className="block">O robô enviou a nota, mas não conseguiu confirmar a resposta da prefeitura.</b>
-                        Antes de emitir de novo, confira: o robô pergunta à prefeitura se a nota saiu e não envia nada em dobro.
+                        <b className="block">O robô enviou a nota, mas não conseguiu confirmar a resposta do ambiente nacional.</b>
+                        Antes de emitir de novo, confira: o robô pergunta ao ambiente nacional se a nota saiu e não envia nada em dobro.
                         <button type="button" className={cn(BTN_OUTLINE, "mt-2")} onClick={() => recheck(active)} disabled={sending || !canRun}>
-                          <RotateCw className="size-3.5" /> Conferir na prefeitura
+                          <RotateCw className="size-3.5" /> Conferir de novo
                         </button>
                       </Notice>
                     ) : null}
@@ -2117,7 +2115,7 @@ export function EmitBoard({
             <DialogTitle>Emitir esta nota{isOwner && testEnv ? " de teste" : ""}?</DialogTitle>
             <DialogDescription>
               {isOwner && testEnv
-                ? "Vai para o ambiente de teste da prefeitura: não tem valor fiscal."
+                ? "Vai para o ambiente de teste nacional: não tem valor fiscal."
                 : "É uma nota fiscal de verdade, em nome da empresa. Depois de emitida, só dá para cancelar."}
             </DialogDescription>
           </DialogHeader>
@@ -2167,7 +2165,9 @@ export function EmitBoard({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Cancelar a nota nº {canceling?.numero}?</DialogTitle>
-            <DialogDescription>O cancelamento vai para a prefeitura. Se ela aceitar, a nota fica marcada como cancelada.</DialogDescription>
+            <DialogDescription>
+              O cancelamento vai para quem gerou a nota (ambiente nacional ou prefeitura). Se for aceito, a nota fica marcada como cancelada.
+            </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
             <Field label="Motivo">
@@ -2179,7 +2179,7 @@ export function EmitBoard({
                 ))}
               </select>
             </Field>
-            <Field label="Explique em uma linha (a prefeitura exige ao menos 15 letras)">
+            <Field label="Explique em uma linha (ao menos 15 letras)">
               <input
                 className={INPUT}
                 value={cancelReason}
@@ -2253,7 +2253,7 @@ export function EmitBoard({
                       <Timeline emission={current} />
                       {current.status === "rejected" || current.status === "failed" ? (
                         <Notice tone={s.uncertain ? "amber" : "red"} icon={<TriangleAlert />}>
-                          {s.uncertain ? <b className="mb-1 block">Envio sem confirmação da prefeitura: confira antes de emitir de novo.</b> : null}
+                          {s.uncertain ? <b className="mb-1 block">Envio sem confirmação do ambiente nacional: confira antes de emitir de novo.</b> : null}
                           <Rejections emission={current} />
                         </Notice>
                       ) : null}
@@ -2286,7 +2286,7 @@ export function EmitBoard({
                         ) : null}
                         {s.uncertain && canRun ? (
                           <button type="button" className={BTN_OUTLINE} onClick={() => recheck(current)} disabled={sending}>
-                            <RotateCw className="size-3.5" /> Conferir na prefeitura
+                            <RotateCw className="size-3.5" /> Conferir de novo
                           </button>
                         ) : null}
                         {current.status === "issued" && canRun && !s.running ? (

@@ -37,6 +37,7 @@ USABLE_MODELS = frozenset({MODEL_OK, MODEL_SAME_TAKER})
 MODEL_REASONS = {
     "sem_dps": "a nota não traz a DPS de origem",
     "outro_municipio": "a nota não foi emitida por Teresina",
+    # até a 1.2.41; desde 01/11/2026 a nota do emissor nacional é a regra para ME/EPP e serve de modelo
     "emissor_nacional": "a nota foi emitida pelo emissor nacional, não pela prefeitura",
     "fora_simples": "empresa fora do Simples Nacional (ME/EPP)",
     "ibs_cbs": "a nota tem dados de IBS/CBS além dos códigos (destinatário, imóvel ou valores)",
@@ -54,6 +55,17 @@ _IBS_SIMPLE = re.compile(
     r"^<IBSCBS><finNFSe>\d</finNFSe>(?:<indFinal>\d</indFinal>)?<cIndOp>(\d{6})</cIndOp>(?:<indDest>\d</indDest>)?"
     r"<valores><trib><gIBSCBS><CST>(\d{3})</CST><cClassTrib>(\d{6})</cClassTrib></gIBSCBS></trib></valores></IBSCBS>$"
 )
+# o mesmo grupo no leiaute da NT 009 (finNFSe na raiz da DPS; CST e cClassTrib direto em trib)
+_IBS_SIMPLE_NT009 = re.compile(
+    r"^<IBSCBS>(?:<indFinal>\d</indFinal>)?(?:<cIndOp>(\d{6})</cIndOp>)?<indDest>\d</indDest>"
+    r"<valores><trib><CST>(\d{3})</CST><cClassTrib>(\d{6})</cClassTrib></trib></valores></IBSCBS>$"
+)
+
+# Leiautes da DPS no Sefin Nacional (versão 1.01 nos dois): o da produção (esquema de 09/02/2026) e o da
+# Nota Técnica SE/CGNFS-e nº 009, já na produção restrita (esquema de 20/10/2026) e que chega à produção
+# conforme o cronograma do portal. A nota é montada no da produção e convertida quando preciso.
+LAYOUT_20260209 = "20260209"
+LAYOUT_NT009 = "20261020"
 _MONEY = re.compile(r"<v[A-Z]\w*>")
 
 
@@ -92,10 +104,54 @@ def key_number(chave: str) -> str:
 
 
 def ibs_codes(dps_or_note: str) -> dict[str, str] | None:
-    """CST, cClassTrib e indicador da operação do grupo simples de IBS/CBS da DPS; None se não há ou não é simples."""
+    """CST, cClassTrib e indicador da operação do grupo simples de IBS/CBS da DPS; None se não há ou não é simples.
+    Lê os dois leiautes (o da produção e o da NT 009)."""
     dps = block("infDPS", dps_or_note) or dps_or_note
-    m = _IBS_SIMPLE.match(re.sub(r">\s+<", "><", block("IBSCBS", dps)))
-    return {"ind_op": m.group(1), "cst": m.group(2), "class_trib": m.group(3)} if m else None
+    group = re.sub(r">\s+<", "><", block("IBSCBS", dps))
+    m = _IBS_SIMPLE.match(group) or _IBS_SIMPLE_NT009.match(group)
+    if not m:
+        return None
+    if not m.group(1):
+        return None  # sem indicador da operação, a nota nova não teria como repetir o grupo
+    return {"ind_op": m.group(1), "cst": m.group(2), "class_trib": m.group(3)}
+
+
+def to_layout(xml: str, layout: str) -> str:
+    """A DPS montada no leiaute da produção convertida para o da NT 009 (o resto é igual):
+    - "finNFSe" sai do grupo IBSCBS e vai para a raiz, logo depois de "tpEmit" (é obrigatório mesmo sem IBSCBS);
+    - CST e cClassTrib ficam direto em IBSCBS/valores/trib (o "gIBSCBS" vazio deixa de existir);
+    - em cServ, a descrição ("xDescServ") passa para depois do NBS e do código interno."""
+    if layout == LAYOUT_20260209:
+        return xml
+    if layout != LAYOUT_NT009:
+        raise _invalid(f"Leiaute da DPS desconhecido: {layout}.")
+    out = re.sub(r"<IBSCBS><finNFSe>\d</finNFSe>", "<IBSCBS>", xml)
+    out = out.replace("</tpEmit>", "</tpEmit><finNFSe>0</finNFSe>", 1)
+    out = re.sub(
+        r"<trib><gIBSCBS><CST>(\d{3})</CST><cClassTrib>(\d{6})</cClassTrib>(.*?)</gIBSCBS></trib>",
+        lambda m: f"<trib><CST>{m.group(1)}</CST><cClassTrib>{m.group(2)}</cClassTrib>" + (f"<gIBSCBS>{m.group(3)}</gIBSCBS>" if m.group(3) else "") + "</trib>",
+        out,
+        flags=re.S,
+    )
+
+    def move_desc(m: re.Match[str]) -> str:
+        body = m.group(1)
+        desc = re.search(r"<xDescServ>.*?</xDescServ>", body, re.S)
+        if not desc:
+            return m.group(0)
+        rest = body.replace(desc.group(0), "", 1)
+        return f"<cServ>{rest}{desc.group(0)}</cServ>"
+
+    return re.sub(r"<cServ>(.*?)</cServ>", move_desc, out, count=1, flags=re.S)
+
+
+def other_layout(layout: str) -> str:
+    return LAYOUT_NT009 if layout == LAYOUT_20260209 else LAYOUT_20260209
+
+
+def default_layout(test_env: bool) -> str:
+    """Leiaute de cada ambiente hoje: a produção restrita já está na NT 009; a produção, no esquema de 09/02/2026."""
+    return LAYOUT_NT009 if test_env else LAYOUT_20260209
 
 
 def ibs_block(codes: dict[str, str]) -> str:
@@ -121,8 +177,8 @@ def model_status(nfse_xml: str) -> str:
         return "sem_dps"
     if tag("cLocEmi", dps) != TERESINA:
         return "outro_municipio"
-    if tag("ambGer", nfse_xml.split("<DPS", 1)[0]) != "1":
-        return "emissor_nacional"
+    # nota gerada pelo emissor nacional (ambGer 2) serve: desde 01/11/2026 é por ele que a ME/EPP emite;
+    # o MEI, que também emite por lá, fica de fora pelo regime (opSimpNac 2)
     if tag("opSimpNac", block("prest", dps)) != "3":
         return "fora_simples"
     if "<IBSCBS" in dps and ibs_codes(dps) is None:
@@ -182,6 +238,8 @@ class DpsRequest:
     # NBS e IBS/CBS como conferidos no painel: None = como na nota-modelo; vazio = a nota vai sem
     c_nbs: str | None = None
     ibs: dict[str, str] | None = None
+    # leiaute do Sefin (LAYOUT_20260209 ou LAYOUT_NT009); None = o do ambiente (default_layout)
+    layout: str | None = None
 
 
 def _new_taker(t: dict[str, Any]) -> str:
@@ -279,7 +337,8 @@ def build_dps(req: DpsRequest) -> tuple[str, str]:
         f"<valores><vServPrest><vServ>{amount}</vServ></vServPrest>{trib}</valores>{ibs}"
         "</infDPS></DPS>"
     )
-    return re.sub(r">\s+<", "><", xml), ident
+    layout = req.layout or default_layout(req.test_env)
+    return to_layout(re.sub(r">\s+<", "><", xml), layout), ident
 
 
 def build_cancel(chave: str, cnpj: str, reason_code: int, reason: str, *, test_env: bool, now: datetime | None = None) -> str:

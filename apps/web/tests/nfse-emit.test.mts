@@ -56,7 +56,15 @@ function note(n: number, over: Partial<EmitNote> = {}): EmitNote {
 const NOTES: EmitNote[] = [
   note(1),
   note(5, { valor: 1300 }),
-  note(3, { dest_doc: MERCADO, dest_nome: "Mercado Bom Preço", c_trib_nac: "140601", c_trib_mun: "009", servico_nome: "Instalação", valor: 2400, emit_model: "mesmo_tomador" }),
+  note(3, {
+    dest_doc: MERCADO,
+    dest_nome: "Mercado Bom Preço",
+    c_trib_nac: "140601",
+    c_trib_mun: "009",
+    servico_nome: "Instalação",
+    valor: 2400,
+    emit_model: "mesmo_tomador",
+  }),
   note(4, { emit_model: "fora_simples" }),
   note(6, { canceled: true, valor: 9999 }),
   note(7, { dest_doc: null, dest_nome: null, valor: 80 }),
@@ -67,25 +75,37 @@ describe("emissão de NFS-e: o que a tela tira do índice", () => {
   it("monta tomadores, serviços e últimas notas só com as notas que servem de modelo", () => {
     const p = buildEmitProfile(NOTES);
     assert.equal(p.usable, 4);
-    assert.deepEqual(p.takers.map((t) => [t.nome, t.notas, t.ultima.numero, t.ultima.valor]), [
-      ["Condomínio Sol", 2, 5, 1300],
-      ["Mercado Bom Preço", 1, 3, 2400],
-    ]);
-    assert.deepEqual(p.services.map((s) => [s.id, s.codigo, s.notas, s.livre]), [
-      ["140101|040", "14.01.01 / 040", 3, true],
-      ["140601|009", "14.06.01 / 009", 1, false],
-    ]);
-    assert.deepEqual(p.recent.map((n) => n.numero), [7, 5, 3, 1]);
+    assert.deepEqual(
+      p.takers.map((t) => [t.nome, t.notas, t.ultima.numero, t.ultima.valor]),
+      [
+        ["Condomínio Sol", 2, 5, 1300],
+        ["Mercado Bom Preço", 1, 3, 2400],
+      ],
+    );
+    assert.deepEqual(
+      p.services.map((s) => [s.id, s.codigo, s.notas, s.livre]),
+      [
+        ["140101|040", "14.01.01 / 040", 3, true],
+        ["140601|009", "14.06.01 / 009", 1, false],
+      ],
+    );
+    assert.deepEqual(
+      p.recent.map((n) => n.numero),
+      [7, 5, 3, 1],
+    );
     assert.equal(buildEmitProfile([note(1, { emit_model: "fora_simples" })]).blocked, "a empresa está fora do Simples Nacional (ME/EPP)");
   });
 
   it("a amostra da aba bloqueada (empresa e notas inventadas) monta a tela até o passo do pedido", () => {
     const p = buildEmitProfile(DEMO_NOTES);
     assert.equal(p.usable, DEMO_NOTES.length, "sem nota que sirva de modelo a amostra mostraria um aviso em vez da tela");
-    assert.deepEqual(p.takers.map((t) => [t.nome, t.notas]), [
-      ["CONDOMINIO SOL", 2],
-      ["CLINICA EXEMPLO", 1],
-    ]);
+    assert.deepEqual(
+      p.takers.map((t) => [t.nome, t.notas]),
+      [
+        ["CONDOMINIO SOL", 2],
+        ["CLINICA EXEMPLO", 1],
+      ],
+    );
     assert.ok(DEMO_NOTES.every((n) => /^\d{50}$/.test(n.chave)));
     assert.equal(DEMO_CLIENT.certificate_ok, true);
   });
@@ -120,7 +140,10 @@ describe("emissão de NFS-e: o que a tela tira do índice", () => {
     assert.equal(pickBaseModel([notes[2]]).ok, false);
     const ok = { custom: false, nac: "", mun: "", nbs: "", cst: "", classTrib: "", indOp: "" };
     assert.deepEqual(checkCodes(ok), []);
-    assert.deepEqual(checkCodes({ ...ok, custom: true, nac: "14.06.01", mun: "009", nbs: "1.0106.12.00", cst: "000", classTrib: "000001", indOp: "050101" }), []);
+    assert.deepEqual(
+      checkCodes({ ...ok, custom: true, nac: "14.06.01", mun: "009", nbs: "1.0106.12.00", cst: "000", classTrib: "000001", indOp: "050101" }),
+      [],
+    );
     assert.match(checkCodes({ ...ok, custom: true, nac: "1406", mun: "9" })[0], /código nacional/);
     assert.match(checkCodes({ ...ok, nbs: "123" })[0], /NBS tem 9/);
     assert.match(checkCodes({ ...ok, classTrib: "000001" })[0], /IBS\/CBS/);
@@ -187,20 +210,28 @@ describe("emissão de NFS-e: situação e andamento", () => {
     assert.deepEqual([of({}).label, of({}).running], ["Na fila do robô", true]);
     assert.equal(of({ status: "processing" }).label, "Emitindo");
     assert.deepEqual([of({ status: "issued" }).label, of({ status: "issued" }).tone], ["Emitida", "green"]);
-    assert.deepEqual([of({ status: "issued", cancel_status: "requested" }).label, of({ status: "issued", cancel_status: "requested" }).running], ["Cancelando", true]);
+    assert.deepEqual(
+      [of({ status: "issued", cancel_status: "requested" }).label, of({ status: "issued", cancel_status: "requested" }).running],
+      ["Cancelando", true],
+    );
     assert.equal(of({ status: "issued", cancel_status: "rejected" }).label, "Emitida");
     assert.equal(of({ status: "canceled" }).label, "Cancelada");
-    assert.equal(of({ status: "rejected" }).label, "Recusada pela prefeitura");
+    assert.equal(of({ status: "rejected" }).label, "Recusada");
     assert.deepEqual([of({ status: "failed" }).label, of({ status: "failed" }).uncertain], ["Não emitida", false]);
     const lost = of({ status: "failed", send_started_at: "2026-10-10T15:01:00Z" });
-    assert.deepEqual([lost.label, lost.uncertain, lost.tone], ["Confira na prefeitura", true, "amber"]);
+    assert.deepEqual([lost.label, lost.uncertain, lost.tone], ["Confira se saiu", true, "amber"]);
   });
 
   it("mostra o andamento em quatro passos, parando onde a nota parou", () => {
     const states = (o: Partial<Emission>) => emissionSteps(emission(o)).map((s) => s.state);
     assert.deepEqual(states({}), ["now", "todo", "todo", "todo"]);
     assert.deepEqual(states({ status: "processing", steps: { started_at: "a", signed_at: "b" } }), ["done", "done", "now", "todo"]);
-    assert.deepEqual(states({ status: "issued", numero: 128, steps: { started_at: "a", signed_at: "b", sent_at: "c", issued_at: "d" } }), ["done", "done", "done", "done"]);
+    assert.deepEqual(states({ status: "issued", numero: 128, steps: { started_at: "a", signed_at: "b", sent_at: "c", issued_at: "d" } }), [
+      "done",
+      "done",
+      "done",
+      "done",
+    ]);
     assert.deepEqual(states({ status: "rejected", steps: { started_at: "a", signed_at: "b", sent_at: "c" } }), ["done", "done", "done", "todo"]);
     assert.equal(emissionSteps(emission({ status: "issued", numero: 128 }))[3].hint, "NFS-e nº 128");
   });
@@ -213,8 +244,14 @@ describe("emissão de NFS-e: situação e andamento", () => {
     assert.match(text, /nº 128 para Condomínio Sol, no valor de R\$\s1\.500,00/);
     assert.ok(text.includes(`https://www.nfse.gov.br/ConsultaPublica/?tpc=1&chave=${key(128)}`));
     const sum = monthSummary(
-      [emission({ status: "issued" }), emission({ status: "issued", amount: "500.50" }), emission({ status: "canceled", amount: 300 }), emission({ status: "rejected" }),
-       emission({ status: "issued", test_env: true }), emission({ status: "issued", created_at: "2026-09-30T10:00:00Z" })],
+      [
+        emission({ status: "issued" }),
+        emission({ status: "issued", amount: "500.50" }),
+        emission({ status: "canceled", amount: 300 }),
+        emission({ status: "rejected" }),
+        emission({ status: "issued", test_env: true }),
+        emission({ status: "issued", created_at: "2026-09-30T10:00:00Z" }),
+      ],
       "2026-10",
     );
     assert.deepEqual(sum, { issued: 2, issuedTotal: 2000.5, canceled: 1, canceledTotal: 300, refused: 1 });
@@ -241,11 +278,27 @@ describe("DANFSe no modelo nacional (NT 008/2026)", () => {
   it("traz os blocos do modelo na ordem, com os dados do XML e o nome dos municípios", () => {
     const html = danfseNacionalHtml(nfse("1"), { logoUrl: "https://painel.test/nfse-logo.png" }) ?? "";
     assert.ok(html.includes("<div>DANFSe v2.0</div><div>Documento Auxiliar da NFS-e</div>"));
-    const order = ["PRESTADOR / FORNECEDOR", "TOMADOR / ADQUIRENTE", "DESTINATÁRIO DA OPERAÇÃO NÃO IDENTIFICADO", "INTERMEDIÁRIO DA OPERAÇÃO NÃO IDENTIFICADO",
-                   "SERVIÇO PRESTADO", "TRIBUTAÇÃO MUNICIPAL (ISSQN)", "TRIBUTAÇÃO FEDERAL (EXCETO CBS)", "TRIBUTAÇÃO IBS / CBS", "VALOR TOTAL DA NFS-E", "INFORMAÇÕES COMPLEMENTARES"];
+    const order = [
+      "PRESTADOR / FORNECEDOR",
+      "TOMADOR / ADQUIRENTE",
+      "DESTINATÁRIO DA OPERAÇÃO NÃO IDENTIFICADO",
+      "INTERMEDIÁRIO DA OPERAÇÃO NÃO IDENTIFICADO",
+      "SERVIÇO PRESTADO",
+      "TRIBUTAÇÃO MUNICIPAL (ISSQN)",
+      "TRIBUTAÇÃO FEDERAL (EXCETO CBS)",
+      "TRIBUTAÇÃO IBS / CBS",
+      "VALOR TOTAL DA NFS-E",
+      "INFORMAÇÕES COMPLEMENTARES",
+    ];
     const positions = order.map((t) => html.indexOf(t));
-    assert.ok(positions.every((p) => p > 0), JSON.stringify(positions));
-    assert.deepEqual([...positions].sort((a, b) => a - b), positions);
+    assert.ok(
+      positions.every((p) => p > 0),
+      JSON.stringify(positions),
+    );
+    assert.deepEqual(
+      [...positions].sort((a, b) => a - b),
+      positions,
+    );
     assert.ok(html.includes(`<b>${CHAVE}</b>`) && html.includes("<b>10/10/2026 22:48:24</b>") && html.includes("<b>01/10/2026</b>"));
     assert.ok(html.includes("Município: Teresina / PI") && html.includes("Ambiente Gerador: Prefeitura") && html.includes("Tipo de Ambiente: Produção"));
     // prestador vem do grupo emit; os textos do XML são protegidos; município pelo código IBGE
@@ -300,7 +353,15 @@ describe("quem entra na emissão", () => {
   });
 
   it("tomador novo é conferido antes de enviar: documento com dígito certo, CEP, município, rua, número e bairro", () => {
-    const ok = { doc: "11.222.333/0001-81", nome: "EMPRESA EXEMPLO LTDA", cmun: "2211001", cep: "64000-100", logradouro: "RUA DAS FLORES", numero: "100", bairro: "CENTRO" };
+    const ok = {
+      doc: "11.222.333/0001-81",
+      nome: "EMPRESA EXEMPLO LTDA",
+      cmun: "2211001",
+      cep: "64000-100",
+      logradouro: "RUA DAS FLORES",
+      numero: "100",
+      bairro: "CENTRO",
+    };
     assert.deepEqual(checkNewTaker(ok), []);
     assert.deepEqual(checkNewTaker({ ...ok, doc: "123.456.789-09" }), []); // CPF válido também serve
     const shorts = (t: typeof ok) => checkNewTaker(t).map((i) => i.short);
@@ -319,6 +380,21 @@ describe("quem entra na emissão", () => {
 
   it("a função segue travada até alguém decidir lançar", () => {
     assert.equal(NFSE_EMIT_RELEASED, false);
+  });
+});
+
+describe("recusas desde a Resolução CGSN 191", () => {
+  it("explica a recusa da prefeitura ao Simples e o convênio inativo", () => {
+    const l9999 = {
+      codigo: "L9999",
+      mensagem:
+        "Por determinação da Resolução nº 191 do CGSN, a partir do dia 01/11/2026, a emissão de nota fiscal pelas microempresas e empresas de pequeno porte optantes pelo Simples Nacional deve ocorrer por meio do Emissor Nacional da NFS-e.",
+    };
+    assert.match(explainRejection(l9999), /atualize o robô para a versão 1\.2\.42/);
+    assert.match(
+      explainRejection({ codigo: "", mensagem: "O convênio do o município <Teresina/PI> ainda não está ativo no Sistema Nacional da NFS-e" }),
+      /convênio ativo/,
+    );
   });
 });
 

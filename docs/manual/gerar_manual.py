@@ -939,6 +939,11 @@ def cap_downloads() -> list:
             "O cartão não aparece quando as notas estão chegando em minutos. Ele depende da hora de chegada de cada "
             "nota, que o robô anota a partir da versão 1.2.37."
         ),
+        P(
+            "Desde 01/11/2026 (Resolução CGSN nº 191), as empresas do Simples Nacional (ME e EPP) emitem a nota de "
+            "serviço pelo <b>Emissor Nacional</b>, e não mais pelo site da prefeitura. Essas notas já nascem no "
+            "ambiente nacional e aparecem na busca sem depender do repasse da prefeitura."
+        ),
     ]
 
 

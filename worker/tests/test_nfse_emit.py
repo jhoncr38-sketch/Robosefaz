@@ -6,6 +6,7 @@ from __future__ import annotations
 import base64
 import gzip
 import json
+import dataclasses
 import re
 import uuid
 import zipfile
@@ -24,7 +25,7 @@ from app.jobs.models import TaskStatus, TaskType
 from app.jobs.scheduler_runner import SchedulerRunner
 from app.nfse.adn import NO_DOCUMENTS, AdnBatch, AdnDocument
 from app.nfse.dps import DpsRequest, build_cancel, build_dps, dps_id, ibs_codes, key_number, model_status
-from app.nfse.prefeitura import ApiResult, PrefeituraClient
+from app.nfse.prefeitura import ApiResult, PrefeituraClient, SefinClient, generated_by_prefeitura
 from app.nfse.signer import sign_xml
 from fakes import CNPJ_OK, FakeRepo, make_certificate, make_client
 
@@ -147,6 +148,8 @@ class FakeApi:
 @pytest.fixture
 def api(monkeypatch: pytest.MonkeyPatch) -> FakeApi:
     fake = FakeApi()
+    # emissão vai ao Sefin Nacional; cancelamento, a quem gerou a nota: os dois caminhos caem na mesma simulação
+    monkeypatch.setattr(nfse_emit, "SefinClient", fake)
     monkeypatch.setattr(nfse_emit, "PrefeituraClient", fake)
     monkeypatch.setattr(nfse_emit, "sign_xml", fake_sign)
 
@@ -216,7 +219,8 @@ def test_model_status_says_which_notes_can_be_repeated() -> None:
     assert model_status(nota(k, numero=1, ret="2").decode()) == "mesmo_tomador"
     assert model_status(nota(k, numero=1, simples="1").decode()) == "fora_simples"
     assert model_status(nota(k, numero=1, simples="2").decode()) == "fora_simples"  # MEI emite pelo emissor nacional
-    assert model_status(nota(k, numero=1, amb="2").decode()) == "emissor_nacional"
+    # desde 01/11/2026 (Resolução CGSN 191) a ME/EPP emite pelo emissor nacional: a nota dele serve de modelo
+    assert model_status(nota(k, numero=1, amb="2").decode()) == "ok"
     assert model_status(nota(k, numero=1, municipio="2111300").decode()) == "outro_municipio"
     assert model_status(nota(k, numero=1, extra_trib="<vRetISS>10.00</vRetISS>").decode()) == "valores_de_imposto"
     assert model_status("<NFSe><infNFSe/></NFSe>") == "sem_dps"
@@ -500,7 +504,7 @@ async def test_rejection_emits_nothing_and_frees_the_number(repo: FakeRepo, deps
     assert await SchedulerRunner(deps).run_once()
     j = repo.job(job.id)
     assert (j["status"], j["error_code"]) == ("failed", "NFSE_REJECTED"), repo.log_messages()
-    assert "A prefeitura recusou a nota: Código de tributação municipal não vinculado ao cadastro (L0001)" in j["error_message"]
+    assert "Recusaram a nota: Código de tributação municipal não vinculado ao cadastro (L0001)" in j["error_message"]
     assert (em["status"], em["n_dps"], em["send_started_at"], em["chave"]) == ("rejected", None, None, None)
     assert em["errors"] == api.emit_errors and len(api.sent) == 1  # recusa não é reenviada sozinha
     assert not [d for d in repo.downloads if d["competence"] == MES]
@@ -548,9 +552,9 @@ async def test_note_the_prefeitura_cannot_show_is_still_registered_as_issued(rep
     assert api.sent == [] and (em["status"], em["chave"], em["numero"], em["nfse_xml"]) == ("issued", key, 300, None)
     assert j["last_message"] == (
         "NFS-e nº 300 emitida: R$ 1.500,00 para CONDOMINIO FICTICIO SOL. "
-        "Atenção: a prefeitura ainda não devolveu o arquivo da nota; a próxima busca de NFS-e traz."
+        "Atenção: o ambiente nacional ainda não devolveu o arquivo da nota; a próxima busca de NFS-e traz."
     )
-    assert em["last_message"].startswith("NFS-e nº 300 emitida (recuperada); a prefeitura ainda não devolveu o arquivo")
+    assert em["last_message"].startswith("NFS-e nº 300 emitida (recuperada); o ambiente nacional ainda não devolveu o arquivo")
     assert not [d for d in repo.downloads if d["competence"] == MES]
     (task,) = [t for t in repo.tasks_of(job.id) if t["task_type"] == TaskType.NFSE_EMIT]
     assert task["result"]["xml_pending"] is True and key_number(key) == "300" and key_number("123") == ""
@@ -580,7 +584,7 @@ async def test_lost_answer_and_broken_lookup_never_send_twice(repo: FakeRepo, de
     assert len(api.sent) == 1 and (em["status"], em["numero"], em["nfse_xml"]) == ("issued", 128, None)
     # no ambiente de teste não há busca que traga o arquivo depois
     assert j["last_message"].endswith(
-        "Atenção: a prefeitura não devolveu o arquivo da nota." if test_env else "a próxima busca de NFS-e traz."
+        "Atenção: o ambiente nacional não devolveu o arquivo da nota." if test_env else "a próxima busca de NFS-e traz."
     )
 
 
@@ -695,3 +699,169 @@ async def test_old_index_rows_get_the_service_codes(repo: FakeRepo, deps, tmp_pa
     notes = {n["chave"]: n for n in repo.notes}
     assert (notes[k1]["emit_model"], notes[k1]["c_trib_mun"], notes[k2]["emit_model"]) == ("ok", "040", "fora_simples")
     assert await evaluate_nfse_models(repo, path.parent, skip=set()) == 0
+
+
+# -- Sefin Nacional (1.2.42) ---------------------------------------------------------------
+
+
+async def test_sefin_client_uses_the_national_addresses_and_reads_its_errors(tmp_path: Path) -> None:
+    calls: list[tuple[str, bytes | None]] = []
+    answers: list[tuple[int, bytes]] = []
+
+    async def runner(url: str, thumbprint: str, body: bytes | None, out: Path, timeout: int) -> tuple[int, str]:
+        calls.append((url, body))
+        status, raw = answers.pop(0)
+        out.write_bytes(raw)
+        return status, ""
+
+    k = chave(128, "2611")
+    prod = SefinClient(THUMB, test_env=False, runner=runner)
+    answers.append((201, json.dumps({"chaveAcesso": k, "nfseXmlGZipB64": pack(b"<NFSe/>"), "alertas": [{"codigo": "A1", "descricao": "aviso"}]}).encode()))
+    r = await prod.emit(b"<DPS><tpAmb>1</tpAmb><Signature/></DPS>")
+    assert (r.status, r.chave, r.xml("nfseXmlGZipB64"), r.alerts) == (201, k, "<NFSe/>", ["A1 aviso"])
+    assert calls[-1][0] == "https://sefin.nfse.gov.br/SefinNacional/nfse"
+    # consulta pela DPS no caminho do Sefin; 404 com E2404 (como a produção restrita respondeu) = número livre
+    ident = dps_id(CNPJ_OK, 1)
+    answers.append((404, '{"tipoAmbiente":0,"erro":{"codigo":"E2404","descricao":"Não foi gerada uma NFS-e com o identificador de DPS informado"}}'.encode()))
+    assert await prod.find_by_dps(ident) is None
+    assert calls[-1][0] == f"https://sefin.nfse.gov.br/SefinNacional/dps/{ident}"
+    # recusa: "erros" em lista, chaves em PascalCase, descrição com complemento
+    answers.append((400, '{"erros":[{"Codigo":"E0312","Descricao":"Código de tributação inválido","Complemento":"cTribNac"}]}'.encode()))
+    r = await prod.emit(b"<DPS><tpAmb>1</tpAmb><Signature/></DPS>")
+    assert r.errors == [{"codigo": "E0312", "mensagem": "Código de tributação inválido (cTribNac)"}]
+    # recusa com "erro" único
+    assert ApiResult(400, {"erro": {"codigo": "E0008", "descricao": "Data futura"}}).errors == [{"codigo": "E0008", "mensagem": "Data futura"}]
+    # a produção restrita (teste nacional, sem valor fiscal) usa o próprio endereço
+    test = SefinClient(THUMB, test_env=True, runner=runner)
+    answers.append((201, json.dumps({"eventoXmlGZipB64": pack(b"<evento/>")}).encode()))
+    r = await test.register_event(k, b"<pedRegEvento><tpAmb>2</tpAmb><Signature/></pedRegEvento>")
+    assert calls[-1][0] == f"https://sefin.producaorestrita.nfse.gov.br/API/SefinNacional/nfse/{k}/eventos"
+    with pytest.raises(AutomationError, match="envio bloqueado"):
+        await test.emit(b"<DPS><tpAmb>1</tpAmb><Signature/></DPS>")
+    # certificado recusado
+    answers.append((403, b""))
+    with pytest.raises(AutomationError) as err:
+        await prod.get_nfse(k)
+    assert err.value.code == ErrorCode.CERTIFICATE_REQUIRED and "ambiente nacional" in err.value.message
+
+
+def test_who_generated_the_note_comes_from_the_key() -> None:
+    municipal = chave(13, "2610")  # posição 8 = 1: gerada pela prefeitura
+    assert generated_by_prefeitura(municipal)
+    nacional = municipal[:7] + "2" + municipal[8:]
+    assert not generated_by_prefeitura(nacional) and not generated_by_prefeitura(None) and not generated_by_prefeitura("1")
+
+
+async def test_emission_goes_to_the_national_environment_and_cancel_to_who_generated_it(repo: FakeRepo, deps, monkeypatch, tmp_path: Path) -> None:  # noqa: ANN001
+    """A emissão nunca usa a API da prefeitura; o cancelamento vai a quem gerou a nota (posição 8 da chave)."""
+    used: list[str] = []
+    sefin, prefeitura = FakeApi(), FakeApi()
+
+    def factory(name: str, fake: FakeApi):  # noqa: ANN202
+        def make(thumbprint: str, *, test_env: bool) -> FakeApi:
+            used.append(name)
+            return fake(thumbprint, test_env=test_env)
+
+        return make
+
+    monkeypatch.setattr(nfse_emit, "SefinClient", factory("sefin", sefin))
+    monkeypatch.setattr(nfse_emit, "PrefeituraClient", factory("prefeitura", prefeitura))
+    monkeypatch.setattr(nfse_emit, "sign_xml", fake_sign)
+
+    async def loader() -> list[StoreCertificate]:
+        return [
+            StoreCertificate(
+                subject=f"CN=EMPRESA A LTDA:{CNPJ_OK}, O=ICP-Brasil", issuer="CN=AC TESTE", thumbprint=THUMB, serial_number="ABC123",
+                has_private_key=True, not_before=None, not_after=datetime.now(timezone.utc) + timedelta(days=200),
+            )
+        ]
+
+    monkeypatch.setattr(nfse_fetch, "list_user_certificates", loader)
+    client, job, em = setup(repo)
+    await seed(repo, tmp_path, client, {chave(127): nota(chave(127), numero=127)})
+    assert await SchedulerRunner(deps).run_once()
+    assert repo.job(job.id)["status"] == "completed", repo.log_messages()
+    assert used == ["sefin"] and len(sefin.sent) == 1 and not prefeitura.sent
+    assert any("ao ambiente nacional da NFS-e" in m for m in repo.log_messages())
+
+    # nota antiga gerada pela prefeitura (1 na posição 8 da chave): o cancelamento vai para ela
+    _c, cancel_job, _em, key = setup_cancel(repo)
+    assert generated_by_prefeitura(key)
+    assert await SchedulerRunner(deps).run_once()
+    assert repo.job(cancel_job.id)["status"] == "completed", repo.log_messages()
+    assert used[-1] == "prefeitura" and prefeitura.events and not sefin.events
+
+    # nota gerada pelo Sefin (2 na posição 8): o cancelamento vai para o Sefin
+    _c2, cancel2, em2, _key = setup_cancel(repo)
+    em2["chave"] = em2["chave"][:7] + "2" + em2["chave"][8:]
+    assert await SchedulerRunner(deps).run_once()
+    assert repo.job(cancel2.id)["status"] == "completed", repo.log_messages()
+    assert used[-1] == "sefin" and sefin.events
+
+
+async def test_notes_marked_national_by_an_old_robot_are_evaluated_again(repo: FakeRepo, tmp_path: Path) -> None:
+    from app.downloads.note_index import evaluate_nfse_models
+
+    client = make_client()
+    repo.add_client(client, make_certificate(client))
+    k = chave(140)
+    await seed(repo, tmp_path, client, {k: nota(k, numero=140, amb="2")})
+    row = next(n for n in repo.notes if n["chave"] == k)
+    row["emit_model"] = "emissor_nacional"  # como um robô até a 1.2.41 gravou
+    assert await evaluate_nfse_models(repo, tmp_path, skip=set()) == 1
+    assert row["emit_model"] == "ok"
+    assert await evaluate_nfse_models(repo, tmp_path, skip=set()) == 0  # não volta a reavaliar
+
+
+# -- leiautes do Sefin: produção (09/02/2026) e NT 009 (20/10/2026) ---------------------------
+
+
+def test_nt009_layout_moves_finnfse_trib_codes_and_description() -> None:
+    from app.nfse.dps import LAYOUT_20260209, LAYOUT_NT009, default_layout, ibs_codes, to_layout
+
+    k = chave(1)
+    req = DpsRequest(
+        cnpj=CNPJ_OK, numero=1, amount=Decimal("1.00"), description="Teste", competence="2026-09",
+        model_xml=nota(k, numero=1).decode(), prest_xml=nota(k, numero=1).decode(), taker_xml=nota(k, numero=1).decode(),
+        ibs={"cst": "000", "class_trib": "000001", "ind_op": "050101"}, layout=LAYOUT_20260209,
+    )
+    old, _ = build_dps(req)
+    assert "<IBSCBS><finNFSe>0</finNFSe>" in old and "<gIBSCBS><CST>000</CST>" in old
+    new = to_layout(old, LAYOUT_NT009)
+    assert "</tpEmit><finNFSe>0</finNFSe><cLocEmi>" in new and "<IBSCBS><cIndOp>050101</cIndOp>" in new
+    assert "<trib><CST>000</CST><cClassTrib>000001</cClassTrib></trib>" in new and "gIBSCBS" not in new
+    assert re.search(r"<cNBS>\d{9}</cNBS><xDescServ>Teste</xDescServ></cServ>", new)
+    assert new.count("finNFSe") == 2  # abre e fecha uma vez só, na raiz
+    # os códigos são lidos nos dois leiautes (a nota do emissor nacional serve de modelo depois da virada)
+    assert ibs_codes(old) == ibs_codes(new) == {"ind_op": "050101", "cst": "000", "class_trib": "000001"}
+    # cada ambiente com o seu leiaute hoje
+    assert (default_layout(True), default_layout(False)) == (LAYOUT_NT009, LAYOUT_20260209)
+    assert build_dps(dataclasses.replace(req, layout=None, test_env=True))[0].count("<finNFSe>") == 1
+
+
+async def test_schema_refusal_tries_the_other_layout_once(repo: FakeRepo, deps, api: FakeApi, tmp_path: Path) -> None:  # noqa: ANN001
+    client, job, em = setup(repo)
+    await seed(repo, tmp_path, client, {chave(127): nota(chave(127), numero=127)})
+    original = api.emit
+    calls: list[bytes] = []
+
+    async def picky(signed: bytes) -> ApiResult:
+        calls.append(signed)
+        if b"</tpEmit><finNFSe>" not in signed:  # este "ambiente" já está na NT 009
+            return ApiResult(status=400, data={"erros": [{"Codigo": "E1235", "Descricao": "Falha no esquema XML do DF-e."}]})
+        return await original(signed)
+
+    api.emit = picky  # type: ignore[method-assign]
+    assert await SchedulerRunner(deps).run_once()
+    assert repo.job(job.id)["status"] == "completed", repo.log_messages()
+    assert len(calls) == 2 and em["status"] == "issued"
+    assert any("enviando de novo no leiaute 20261020" in m for m in repo.log_messages())
+
+
+async def test_schema_refusal_in_both_layouts_is_a_rejection(repo: FakeRepo, deps, api: FakeApi, tmp_path: Path) -> None:  # noqa: ANN001
+    client, job, em = setup(repo)
+    await seed(repo, tmp_path, client, {chave(127): nota(chave(127), numero=127)})
+    api.emit_errors = [{"codigo": "E1235", "mensagem": "Falha no esquema XML do DF-e."}]
+    assert await SchedulerRunner(deps).run_once()
+    assert repo.job(job.id)["status"] == "failed" and em["status"] == "rejected"
+    assert len(api.sent) == 2  # uma tentativa em cada leiaute, nunca mais que isso

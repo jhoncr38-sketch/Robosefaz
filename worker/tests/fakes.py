@@ -412,7 +412,10 @@ class FakeRepo:
         return max(rows, key=lambda n: str(n.get("emitida_em") or ""), default=None)
 
     async def list_nfse_notes_to_evaluate(self, limit: int) -> list[dict[str, Any]]:
-        rows = [n for n in self._notes() if str(n["document_type"]) == "NFSE_PRESTADAS" and n.get("emit_model") is None]
+        rows = [
+            n for n in self._notes()
+            if str(n["document_type"]) == "NFSE_PRESTADAS" and n.get("emit_model") in (None, "emissor_nacional")
+        ]
         return [{**n, "downloads": next((d for d in self.downloads if d.get("id") == n.get("download_id")), None)} for n in rows[:limit]]
 
     async def update_note(self, note_id: str, **fields: Any) -> None:

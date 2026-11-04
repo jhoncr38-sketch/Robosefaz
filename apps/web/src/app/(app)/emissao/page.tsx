@@ -53,7 +53,17 @@ export default async function EmissaoPage({ searchParams }: PageProps<"/emissao"
           </div>
         </div>
         <div className="relative select-none" title="Bloqueado: esta tela é uma amostra">
-          <EmitBoard canRun isOwner={false} aiReady month={currentCompetence()} activities={[]} userNames={{}} initialEmissions={[]} clients={[DEMO_CLIENT]} demoNotes={DEMO_NOTES} />
+          <EmitBoard
+            canRun
+            isOwner={false}
+            aiReady
+            month={currentCompetence()}
+            activities={[]}
+            userNames={{}}
+            initialEmissions={[]}
+            clients={[DEMO_CLIENT]}
+            demoNotes={DEMO_NOTES}
+          />
           {/* por cima da amostra: nada embaixo recebe clique */}
           <div aria-hidden className="absolute inset-0 cursor-not-allowed" />
         </div>
@@ -89,19 +99,19 @@ export default async function EmissaoPage({ searchParams }: PageProps<"/emissao"
         help={
           <HelpTip>
             <p>
-              A nota nova é montada a partir de uma <b>nota real que a empresa já emitiu</b>: o código do serviço, a alíquota
-              e a retenção de ISS são copiados dela. Você escolhe o tomador, a descrição e o valor, confere a prévia e
-              confirma. Nada sai sem a sua confirmação.
+              A nota nova é montada a partir de uma <b>nota real que a empresa já emitiu</b>: o código do serviço, a alíquota e a retenção de ISS são copiados
+              dela. Você escolhe o tomador, a descrição e o valor, confere a prévia e confirma. Nada sai sem a sua confirmação.
             </p>
             <p>
-              Quem envia é o robô do escritório, com o certificado da empresa. Por enquanto, só para empresas de{" "}
-              <b>Teresina</b> no <b>Simples Nacional</b>, e para serviços sem retenção de imposto federal. A numeração é
-              própria (série 10001) e não se mistura com a das notas emitidas no site da prefeitura.
+              Quem envia é o robô do escritório, com o certificado da empresa, para o <b>ambiente nacional da NFS-e</b>: desde 01/11/2026 (Resolução CGSN nº
+              191) a empresa do Simples Nacional só emite por ele. Por enquanto, só para empresas de <b>Teresina</b> no <b>Simples Nacional</b> (ME/EPP), e para
+              serviços sem retenção de imposto federal. A numeração é própria (série 10001) e não se mistura com a das notas emitidas no Emissor Nacional pelo
+              site.
             </p>
             <p>
-              Em <b>outra atividade</b>, o código complementar é o do cadastro da empresa na prefeitura: aqui aparecem os que
-              já saíram em nota. Se o código não constar no cadastro, a prefeitura recusa a nota e nada é emitido. As listas
-              de NBS, classificação tributária e indicador da operação vêm das tabelas oficiais da NFS-e nacional.
+              Em <b>outra atividade</b>, o código complementar é o do cadastro da empresa na prefeitura: aqui aparecem os que já saíram em nota. Se o código não
+              constar no cadastro, a prefeitura recusa a nota e nada é emitido. As listas de NBS, classificação tributária e indicador da operação vêm das
+              tabelas oficiais da NFS-e nacional.
             </p>
           </HelpTip>
         }
@@ -120,7 +130,9 @@ export default async function EmissaoPage({ searchParams }: PageProps<"/emissao"
                 <Lock className="size-[11px]" /> Só você vê esta tela
               </span>
             </div>
-            <p className="text-[13px] leading-[1.45] text-(--c-7a5410)">Para os escritórios, a aba aparece com cadeado e mostra uma amostra bloqueada da tela.</p>
+            <p className="text-[13px] leading-[1.45] text-(--c-7a5410)">
+              Para os escritórios, a aba aparece com cadeado e mostra uma amostra bloqueada da tela.
+            </p>
           </div>
         </div>
       ) : null}

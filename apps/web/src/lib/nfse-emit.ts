@@ -1,6 +1,6 @@
 // Emissão de NFS-e: o que a tela tira das notas já baixadas do cliente (tomadores, serviços e a
 // nota-modelo) e como mostrar cada emissão. Nada aqui decide imposto: o serviço e a tributação saem
-// sempre de uma nota real que a prefeitura já aceitou; a tela só escolhe qual e avisa o que mudou.
+// sempre de uma nota real já aceita (pela prefeitura ou pelo ambiente nacional); a tela só escolhe qual e avisa o que mudou.
 
 import { validateCNPJ, validateCPF } from "./cnpj.ts";
 import { MUNICIPIOS } from "./ibge-municipios.ts";
@@ -30,7 +30,7 @@ export interface EmitNote {
   ibs_ind_op?: string | null;
 }
 
-/** Códigos de IBS/CBS que a nota leva (os valores quem calcula é a prefeitura). */
+/** Códigos de IBS/CBS que a nota leva (os valores quem calcula é o ambiente nacional). */
 export interface IbsCodes {
   cst: string;
   classTrib: string;
@@ -93,7 +93,8 @@ export interface EmitProfile {
 export const MODEL_BLOCK_REASON: Record<string, string> = {
   sem_dps: "as notas não trazem a DPS de origem",
   outro_municipio: "as notas não foram emitidas por Teresina",
-  emissor_nacional: "as notas foram emitidas pelo emissor nacional (caso do MEI), não pela prefeitura",
+  // só em notas avaliadas por robô até a 1.2.41; o robô 1.2.42 reavalia e elas passam a servir de modelo
+  emissor_nacional: "as notas foram emitidas pelo emissor nacional e ainda não foram reavaliadas (atualize o robô para a 1.2.42)",
   fora_simples: "a empresa está fora do Simples Nacional (ME/EPP)",
   ibs_cbs: "as notas têm o grupo de IBS/CBS",
   valores_de_imposto: "as notas têm valores de imposto ou retenção que precisariam ser recalculados",
@@ -176,7 +177,15 @@ export function buildEmitProfile(notes: EmitNote[]): EmitProfile {
   for (const n of good) {
     const id = serviceId(n);
     // as notas vêm da mais recente para a mais antiga: o NBS e o IBS/CBS sugeridos são os da mais recente
-    const s = services.get(id) ?? { id, codigo: formatServiceCode(id), nome: n.servico_nome ?? formatServiceCode(id), notas: 0, livre: false, nbs: n.c_nbs ?? "", ibs: ibsOf(n) };
+    const s = services.get(id) ?? {
+      id,
+      codigo: formatServiceCode(id),
+      nome: n.servico_nome ?? formatServiceCode(id),
+      notas: 0,
+      livre: false,
+      nbs: n.c_nbs ?? "",
+      ibs: ibsOf(n),
+    };
     s.notas += 1;
     s.livre ||= n.emit_model === "ok";
     services.set(id, s);
@@ -227,11 +236,24 @@ export function pickBaseModel(notes: EmitNote[]): ModelChoice {
 
 /** O que falta ou está errado nos códigos (atividade, NBS e IBS/CBS). `lists`: a pessoa escolhe nas listas
  *  oficiais em vez de digitar, e o aviso fala em escolher. */
-export function checkCodes(c: { custom: boolean; nac: string; mun: string; nbs: string; cst: string; classTrib: string; indOp: string; lists?: boolean }): string[] {
+export function checkCodes(c: {
+  custom: boolean;
+  nac: string;
+  mun: string;
+  nbs: string;
+  cst: string;
+  classTrib: string;
+  indOp: string;
+  lists?: boolean;
+}): string[] {
   const d = (v: string) => v.replace(/\D/g, "");
   const out: string[] = [];
   if (c.custom && (d(c.nac).length !== 6 || d(c.mun).length !== 3)) {
-    out.push(c.lists ? "Atividade: escolha o código de tributação nacional e o complementar municipal (3 números)." : "Atividade: informe o código nacional (6 números) e o municipal (3 números).");
+    out.push(
+      c.lists
+        ? "Atividade: escolha o código de tributação nacional e o complementar municipal (3 números)."
+        : "Atividade: informe o código nacional (6 números) e o municipal (3 números).",
+    );
   }
   if (d(c.nbs) && d(c.nbs).length !== 9) out.push("O código NBS tem 9 números.");
   const ibs = [d(c.cst), d(c.classTrib), d(c.indOp)];
@@ -312,12 +334,36 @@ export function checkDraft(amount: number | null, service: string, taker: EmitTa
 
 /** Faixas de CEP por estado (Correios): os 5 primeiros números, de–até. */
 const CEP_RANGES: [number, number, string][] = [
-  [1000, 19999, "SP"], [20000, 28999, "RJ"], [29000, 29999, "ES"], [30000, 39999, "MG"], [40000, 48999, "BA"],
-  [49000, 49999, "SE"], [50000, 56999, "PE"], [57000, 57999, "AL"], [58000, 58999, "PB"], [59000, 59999, "RN"],
-  [60000, 63999, "CE"], [64000, 64999, "PI"], [65000, 65999, "MA"], [66000, 68899, "PA"], [68900, 68999, "AP"],
-  [69000, 69299, "AM"], [69300, 69399, "RR"], [69400, 69899, "AM"], [69900, 69999, "AC"], [70000, 72799, "DF"],
-  [72800, 72999, "GO"], [73000, 73699, "DF"], [73700, 76799, "GO"], [76800, 76999, "RO"], [77000, 77999, "TO"],
-  [78000, 78899, "MT"], [79000, 79999, "MS"], [80000, 87999, "PR"], [88000, 89999, "SC"], [90000, 99999, "RS"],
+  [1000, 19999, "SP"],
+  [20000, 28999, "RJ"],
+  [29000, 29999, "ES"],
+  [30000, 39999, "MG"],
+  [40000, 48999, "BA"],
+  [49000, 49999, "SE"],
+  [50000, 56999, "PE"],
+  [57000, 57999, "AL"],
+  [58000, 58999, "PB"],
+  [59000, 59999, "RN"],
+  [60000, 63999, "CE"],
+  [64000, 64999, "PI"],
+  [65000, 65999, "MA"],
+  [66000, 68899, "PA"],
+  [68900, 68999, "AP"],
+  [69000, 69299, "AM"],
+  [69300, 69399, "RR"],
+  [69400, 69899, "AM"],
+  [69900, 69999, "AC"],
+  [70000, 72799, "DF"],
+  [72800, 72999, "GO"],
+  [73000, 73699, "DF"],
+  [73700, 76799, "GO"],
+  [76800, 76999, "RO"],
+  [77000, 77999, "TO"],
+  [78000, 78899, "MT"],
+  [79000, 79999, "MS"],
+  [80000, 87999, "PR"],
+  [88000, 89999, "SC"],
+  [90000, 99999, "RS"],
 ];
 
 /** Estado a que o CEP pertence ("PE"); vazio se o CEP está incompleto. */
@@ -335,7 +381,7 @@ export function cepMismatch(cep: string, cmun: string): string | null {
   const cityUf = city?.split("/").pop() ?? "";
   if (!uf || !cityUf || uf === cityUf) return null;
   const d = cep.replace(/\D/g, "");
-  return `O CEP ${d.slice(0, 5)}-${d.slice(5)} é de ${uf}, mas o município do tomador é ${city}. A prefeitura recusa a nota assim: confira o endereço.`;
+  return `O CEP ${d.slice(0, 5)}-${d.slice(5)} é de ${uf}, mas o município do tomador é ${city}. A nota é recusada assim: confira o endereço.`;
 }
 
 /** Dados do tomador novo como a tela guarda. */
@@ -355,12 +401,16 @@ export function checkNewTaker(t: NewTakerInput): { short: string; text: string }
   const out: { short: string; text: string }[] = [];
   const doc = t.doc.replace(/\D/g, "");
   if (doc.length === 11 ? !validateCPF(doc) : doc.length === 14 ? !validateCNPJ(doc) : true) {
-    out.push({ short: "CNPJ ou CPF do tomador", text: doc.length === 11 || doc.length === 14 ? "O CNPJ ou CPF do tomador está com dígito errado." : "Informe o CNPJ (14 números) ou CPF (11) do tomador." });
+    out.push({
+      short: "CNPJ ou CPF do tomador",
+      text: doc.length === 11 || doc.length === 14 ? "O CNPJ ou CPF do tomador está com dígito errado." : "Informe o CNPJ (14 números) ou CPF (11) do tomador.",
+    });
   }
   if (!t.nome.trim()) out.push({ short: "nome do tomador", text: "Informe o nome do tomador." });
   const cep = t.cep.replace(/\D/g, "");
   if (cep.length !== 8) out.push({ short: "CEP do tomador", text: "O CEP do tomador tem 8 números." });
-  if (!/^\d{7}$/.test(t.cmun.replace(/\D/g, ""))) out.push({ short: "município do tomador", text: "Informe o município do tomador (código IBGE de 7 números)." });
+  if (!/^\d{7}$/.test(t.cmun.replace(/\D/g, "")))
+    out.push({ short: "município do tomador", text: "Informe o município do tomador (código IBGE de 7 números)." });
   const mismatch = cep.length === 8 ? cepMismatch(cep, t.cmun) : null;
   if (mismatch) out.push({ short: "CEP do tomador (outro estado)", text: mismatch });
   if (!t.logradouro.trim()) out.push({ short: "rua do tomador", text: "Informe a rua do tomador." });
@@ -435,11 +485,9 @@ export function emissionState(e: Pick<Emission, "status" | "cancel_status" | "se
     if (e.cancel_status === "requested" || e.cancel_status === "processing") return { ...base, label: "Cancelando", tone: "yellow", running: true };
     return { ...base, label: "Emitida", tone: "green" };
   }
-  if (e.status === "rejected") return { ...base, label: "Recusada pela prefeitura", tone: "red" };
+  if (e.status === "rejected") return { ...base, label: "Recusada", tone: "red" };
   if (e.status === "failed") {
-    return e.send_started_at
-      ? { ...base, label: "Confira na prefeitura", tone: "amber", uncertain: true }
-      : { ...base, label: "Não emitida", tone: "red" };
+    return e.send_started_at ? { ...base, label: "Confira se saiu", tone: "amber", uncertain: true } : { ...base, label: "Não emitida", tone: "red" };
   }
   return { ...base, label: e.status === "queued" ? "Na fila do robô" : "Emitindo", tone: "blue", running: true };
 }
@@ -459,7 +507,7 @@ export function emissionSteps(e: Pick<Emission, "status" | "created_at" | "steps
   const steps: Omit<EmissionStep, "state">[] = [
     { key: "queued", label: "Na fila do robô", hint: "computador do escritório", at: s.started_at ?? null },
     { key: "signed", label: "Assinada", hint: "com o certificado da empresa", at: s.signed_at ?? null },
-    { key: "sent", label: "Enviada à prefeitura", hint: "aguardando a resposta", at: s.sent_at ?? null },
+    { key: "sent", label: "Enviada ao ambiente nacional", hint: "aguardando a resposta", at: s.sent_at ?? null },
     { key: "issued", label: "Nota emitida", hint: e.numero ? `NFS-e nº ${e.numero}` : "número da nota", at: s.issued_at ?? e.issued_at ?? null },
   ];
   const stopped = e.status === "rejected" || e.status === "failed";
@@ -478,11 +526,16 @@ const EXPLAIN_CODE: Record<string, string> = {
 
 const EXPLAIN_TEXT: [RegExp, string][] = [
   [/configura..o atividade/i, "A prefeitura não tem este serviço configurado para a empresa. Escolha outro serviço ou confira o cadastro dela na prefeitura."],
+  [
+    /Resolu..o n. ?191 do CGSN/i,
+    "Desde 01/11/2026 a empresa do Simples só emite pelo ambiente nacional da NFS-e (Resolução CGSN 191). Esta nota foi para a prefeitura por um robô antigo: atualize o robô para a versão 1.2.42 e emita de novo.",
+  ],
+  [/conv.nio .{0,40}n.o est. ativo/i, "O município ainda não tem convênio ativo no ambiente nacional da NFS-e para emitir por API."],
   [/tomador n.o identificado/i, "Este serviço não aceita nota sem tomador. Escolha ou cadastre o tomador."],
   [/estado deve ser informado/i, "Falta o endereço do tomador (município e CEP)."],
 ];
 
-/** Explicação em português simples para uma recusa da prefeitura ("" quando não há). */
+/** Explicação em português simples para uma recusa ("" quando não há). */
 export function explainRejection(e: EmissionError): string {
   return EXPLAIN_CODE[e.codigo] ?? EXPLAIN_TEXT.find(([re]) => re.test(e.mensagem))?.[1] ?? "";
 }

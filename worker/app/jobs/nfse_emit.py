@@ -1,4 +1,8 @@
-"""Emissão e cancelamento de NFS-e pela API da prefeitura (tarefas NFSE_EMIT e NFSE_CANCEL, desde a 1.2.37).
+"""Emissão e cancelamento de NFS-e por API (tarefas NFSE_EMIT e NFSE_CANCEL, desde a 1.2.37).
+
+Desde a 1.2.42 a nota vai ao Sefin Nacional: a partir de 01/11/2026 (Resolução CGSN nº 191) a ME/EPP do
+Simples só emite pelo ambiente nacional, e a API da prefeitura recusa com L9999. O cancelamento vai a
+quem gerou a nota: a prefeitura, para as emitidas por ela antes disso; o Sefin, para as demais.
 
 Sem navegador. O painel grava em nfse_emissions o que a pessoa conferiu e confirmou; o robô monta a
 DPS copiando de notas reais do cliente o que não pode ser inventado (ver app.nfse.dps), assina com o
@@ -19,6 +23,7 @@ teste da prefeitura nada vai para a pasta: a nota não tem valor fiscal.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import re
 from collections.abc import Awaitable, Callable
 from decimal import Decimal
@@ -36,13 +41,27 @@ from app.jobs.repository import JobRepository
 from app.jobs.state_machine import JobStatus
 from app.logs.job_logger import JobLogger
 from app.nfse.adn import AdnDocument
-from app.nfse.dps import API_SERIE, DpsRequest, build_cancel, build_dps, dps_id, key_number, note_key, tag
-from app.nfse.prefeitura import ApiResult, PrefeituraClient
+from app.nfse.dps import (
+    API_SERIE,
+    DpsRequest,
+    build_cancel,
+    build_dps,
+    default_layout,
+    dps_id,
+    key_number,
+    note_key,
+    other_layout,
+    tag,
+)
+from app.nfse.prefeitura import ApiResult, PrefeituraClient, SefinClient, generated_by_prefeitura
 from app.nfse.signer import sign_xml
 from app.utils.cnpj import normalize_cnpj
 
 # números de DPS já usados fora do sistema (testes, outro programa) são pulados, até este limite
 MAX_NUMBER_TRIES = 30
+# recusa por esquema do Sefin ("Falha no esquema XML do DF-e"): a DPS nem foi processada; com a NT 009 o leiaute
+# muda de um ambiente para o outro em datas diferentes, e o robô tenta uma vez no outro leiaute
+SCHEMA_ERROR = "E1235"
 # resposta real da prefeitura ao cancelar duas vezes: "Nota fiscal não está ativa. Situação atual Cancelada"
 _ALREADY_CANCELED = re.compile(r"situa[cç][aã]o atual\s+cancelad|j[aá]\b.{0,40}cancelad", re.I)
 
@@ -89,7 +108,7 @@ async def _issued_xml(api: PrefeituraClient, chave: str, logger: JobLogger) -> b
         return await api.get_nfse(chave)
     except AutomationError as exc:
         await logger.warning(
-            f"A nota existe na prefeitura (chave {chave}), mas a consulta dela falhou: {exc.message}", step="checking_processing"
+            f"A nota existe (chave {chave}), mas a consulta dela falhou: {exc.message}", step="checking_processing"
         )
         return None
 
@@ -98,7 +117,7 @@ def _rejection(result: ApiResult, what: str) -> AutomationError:
     first = result.errors[0]
     return AutomationError(
         ErrorCode.NFSE_REJECTED,
-        f"A prefeitura recusou {what}: {first['mensagem']}" + (f" ({first['codigo']})" if first["codigo"] else ""),
+        f"Recusaram {what}: {first['mensagem']}" + (f" ({first['codigo']})" if first["codigo"] else ""),
         metadata={"errors": result.errors},
     )
 
@@ -134,7 +153,8 @@ async def run_nfse_emit(
 
     cnpj = normalize_cnpj(client.cnpj)
     thumbprint = await resolve_thumbprint(certificate, client, store_loader=store_loader)
-    api = (api_factory or PrefeituraClient)(thumbprint, test_env=test_env)
+    # desde 01/11/2026 a ME/EPP do Simples emite só pelo ambiente nacional (Resolução CGSN nº 191)
+    api = (api_factory or SefinClient)(thumbprint, test_env=test_env)
     steps = dict(em.get("steps") or {})
     numero = int(em["n_dps"])
     await reporter.step(JobStatus.CHECKING_PROCESSING, "Preparando a NFS-e")
@@ -149,7 +169,7 @@ async def run_nfse_emit(
         chave = await api.find_by_dps(ident)
         if chave is None or (sent_before and em.get("id_dps") == ident):
             break
-        await logger.info(f"O número {numero} da série {API_SERIE} já foi usado na prefeitura; usando o próximo.", step="checking_processing")
+        await logger.info(f"O número {numero} da série {API_SERIE} já foi usado; usando o próximo.", step="checking_processing")
         numero = await repo.bump_nfse_number(emission_id)
         chave = None
     else:
@@ -176,27 +196,27 @@ async def run_nfse_emit(
         taker_xml = None
         if em.get("toma_chave"):
             taker_xml = await load_note_xml(repo, organizer, client.id, em["toma_chave"], "nota do tomador")
-        xml, ident = build_dps(
-            DpsRequest(
-                cnpj=cnpj,
-                numero=numero,
-                amount=Decimal(str(em["amount"])),
-                description=em["description"],
-                competence=em["competence"],
-                model_xml=model_xml,
-                prest_xml=prest_xml,
-                taker_xml=taker_xml,
-                taker=em.get("toma") if isinstance(em.get("toma"), dict) else None,
-                test_env=test_env,
-                # o que a pessoa conferiu no painel: atividade informada à mão, NBS e IBS/CBS
-                c_trib_nac=em["c_trib_nac"] if em.get("custom_service") else None,
-                c_trib_mun=em["c_trib_mun"] if em.get("custom_service") else None,
-                c_nbs=em.get("c_nbs"),
-                ibs=None
-                if em.get("ibs_cst") is None
-                else {"cst": em.get("ibs_cst") or "", "class_trib": em.get("ibs_class_trib") or "", "ind_op": em.get("ibs_ind_op") or ""},
-            )
+        request = DpsRequest(
+            cnpj=cnpj,
+            numero=numero,
+            amount=Decimal(str(em["amount"])),
+            description=em["description"],
+            competence=em["competence"],
+            model_xml=model_xml,
+            prest_xml=prest_xml,
+            taker_xml=taker_xml,
+            taker=em.get("toma") if isinstance(em.get("toma"), dict) else None,
+            test_env=test_env,
+            # o que a pessoa conferiu no painel: atividade informada à mão, NBS e IBS/CBS
+            c_trib_nac=em["c_trib_nac"] if em.get("custom_service") else None,
+            c_trib_mun=em["c_trib_mun"] if em.get("custom_service") else None,
+            c_nbs=em.get("c_nbs"),
+            ibs=None
+            if em.get("ibs_cst") is None
+            else {"cst": em.get("ibs_cst") or "", "class_trib": em.get("ibs_class_trib") or "", "ind_op": em.get("ibs_ind_op") or ""},
+            layout=default_layout(test_env),
         )
+        xml, ident = build_dps(request)
         signed = await (signer or sign_xml)(xml, thumbprint, "infDPS")
         steps["signed_at"] = now_utc().isoformat()
         await reporter.check_cancel()  # última chance de desistir: depois do envio só o cancelamento da nota
@@ -205,11 +225,26 @@ async def run_nfse_emit(
         sent_at = now_utc()
         steps["sent_at"] = sent_at.isoformat()
         await repo.update_nfse_emission(
-            emission_id, id_dps=ident, send_started_at=sent_at, steps=steps, last_message="Enviada à prefeitura; aguardando a resposta"
+            emission_id, id_dps=ident, send_started_at=sent_at, steps=steps, last_message="Enviada ao ambiente nacional; aguardando a resposta"
         )
-        await reporter.step(JobStatus.CHECKING_PROCESSING, "Enviando a NFS-e à prefeitura")
-        await logger.info(f"Enviando a DPS {numero} (série {API_SERIE}) à prefeitura{suffix}.", step="checking_processing")
+        await reporter.step(JobStatus.CHECKING_PROCESSING, "Enviando a NFS-e ao ambiente nacional")
+        await logger.info(f"Enviando a DPS {numero} (série {API_SERIE}) ao ambiente nacional da NFS-e{suffix}.", step="checking_processing")
         result = await api.emit(signed)
+        if result.status == 400 and any(e["codigo"] == SCHEMA_ERROR for e in result.errors):
+            # recusa por esquema: nada foi gerado (a DPS nem foi processada); confere e tenta uma vez no outro leiaute
+            layout = other_layout(request.layout or default_layout(test_env))
+            if await api.find_by_dps(ident) is None:
+                await logger.warning(
+                    f"O ambiente nacional recusou o formato da DPS ({result.errors[0]['mensagem'][:200]}); "
+                    f"enviando de novo no leiaute {layout}.",
+                    step="checking_processing",
+                )
+                request = dataclasses.replace(request, layout=layout)
+                xml, ident = build_dps(request)
+                signed = await (signer or sign_xml)(xml, thumbprint, "infDPS")
+                result = await api.emit(signed)
+        for alert in result.alerts:
+            await logger.info(f"Aviso do ambiente nacional: {alert}", step="checking_processing")
         nfse_bytes = result.xml_bytes("nfseXmlGZipB64") if result.status in (200, 201) else None
         chave = result.chave or (note_key(nfse_bytes.decode("utf-8", "replace")) if nfse_bytes else None)
         if nfse_bytes is None or chave is None:
@@ -226,22 +261,22 @@ async def run_nfse_emit(
                 # recusa de negócio: nada foi emitido e o número volta a ficar livre
                 await repo.update_nfse_emission(
                     emission_id, status="rejected", errors=result.errors, n_dps=None, id_dps=None, send_started_at=None,
-                    last_message="A prefeitura recusou a nota",
+                    last_message="O ambiente nacional recusou a nota",
                 )
                 for e in result.errors:
-                    await logger.warning(f"Prefeitura {e['codigo']}: {e['mensagem']}", step="checking_processing")
+                    await logger.warning(f"Recusa {e['codigo']}: {e['mensagem']}", step="checking_processing")
                 raise _rejection(result, "a nota")
             else:
-                await repo.update_nfse_emission(emission_id, last_message="Sem confirmação da prefeitura; o robô vai conferir de novo")
+                await repo.update_nfse_emission(emission_id, last_message="Sem confirmação do ambiente nacional; o robô vai conferir de novo")
                 raise AutomationError(
                     ErrorCode.NFSE_UNAVAILABLE,
-                    f"A prefeitura não confirmou a emissão ({result.summary}). Nada foi reenviado: a próxima tentativa confere primeiro se a nota saiu.",
+                    f"O ambiente nacional não confirmou a emissão ({result.summary}). Nada foi reenviado: a próxima tentativa confere primeiro se a nota saiu.",
                     retryable=True,
                 )
 
     if chave is None:
         raise AutomationError(
-            ErrorCode.NFSE_UNAVAILABLE, "A prefeitura não confirmou a emissão; o robô vai conferir de novo.", retryable=True
+            ErrorCode.NFSE_UNAVAILABLE, "O ambiente nacional não confirmou a emissão; o robô vai conferir de novo.", retryable=True
         )
 
     # 4) nota emitida: registra primeiro (é o que importa), depois guarda na pasta. Sem o XML (a consulta
@@ -255,9 +290,9 @@ async def run_nfse_emit(
     fields: dict[str, Any] = {} if nfse_xml is None else {"nfse_xml": nfse_xml}
     if nfse_xml is None:
         if test_env:
-            waiting = "a prefeitura não devolveu o arquivo da nota"
+            waiting = "o ambiente nacional não devolveu o arquivo da nota"
         else:
-            waiting = "a prefeitura ainda não devolveu o arquivo da nota; a próxima busca de NFS-e traz"
+            waiting = "o ambiente nacional ainda não devolveu o arquivo da nota; a próxima busca de NFS-e traz"
         message += f" Atenção: {waiting}."
         note += f"; {waiting}"
     await repo.update_nfse_emission(
@@ -329,15 +364,18 @@ async def run_nfse_cancel(
         raise AutomationError(ErrorCode.INVALID_CONFIGURATION, "Só dá para cancelar uma nota emitida.")
 
     thumbprint = await resolve_thumbprint(certificate, client, store_loader=store_loader)
-    api = (api_factory or PrefeituraClient)(thumbprint, test_env=test_env)
+    # o evento vai a quem gerou a nota: a prefeitura (emitidas por ela antes de 01/11/2026) ou o Sefin Nacional
+    factory = api_factory or (PrefeituraClient if generated_by_prefeitura(chave) else SefinClient)
+    api = factory(thumbprint, test_env=test_env)
     await repo.update_nfse_emission(emission_id, cancel_status="processing")
     xml = build_cancel(
         chave, normalize_cnpj(client.cnpj), int(em.get("cancel_reason_code") or 0), em.get("cancel_reason") or "", test_env=test_env
     )
     signed = await (signer or sign_xml)(xml, thumbprint, "infPedReg")
     await reporter.check_cancel()
-    await reporter.step(JobStatus.CHECKING_PROCESSING, "Cancelando a NFS-e na prefeitura")
-    await logger.info(f"Enviando o cancelamento da NFS-e nº {em.get('numero')} à prefeitura{suffix}.", step="checking_processing")
+    await reporter.step(JobStatus.CHECKING_PROCESSING, "Cancelando a NFS-e")
+    where = getattr(api, "label", "o ambiente da NFS-e")
+    await logger.info(f"Enviando o cancelamento da NFS-e nº {em.get('numero')} a {where}{suffix}.", step="checking_processing")
     result = await api.register_event(chave, signed)
 
     accepted = result.status in (200, 201) and result.xml("eventoXmlGZipB64") is not None
@@ -355,8 +393,8 @@ async def run_nfse_cancel(
     if result.status == 400 and result.errors:
         await repo.update_nfse_emission(emission_id, cancel_status="rejected", cancel_errors=result.errors)
         for e in result.errors:
-            await logger.warning(f"Prefeitura {e['codigo']}: {e['mensagem']}", step="checking_processing")
+            await logger.warning(f"Recusa {e['codigo']}: {e['mensagem']}", step="checking_processing")
         raise _rejection(result, "o cancelamento")
     raise AutomationError(
-        ErrorCode.NFSE_UNAVAILABLE, f"A prefeitura não confirmou o cancelamento ({result.summary}).", retryable=True
+        ErrorCode.NFSE_UNAVAILABLE, f"{where[0].upper()}{where[1:]} não confirmou o cancelamento ({result.summary}).", retryable=True
     )

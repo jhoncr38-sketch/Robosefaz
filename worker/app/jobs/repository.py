@@ -617,12 +617,13 @@ class SupabaseJobRepository:
 
     @_transient
     async def list_nfse_notes_to_evaluate(self, limit: int) -> list[dict[str, Any]]:
-        """NFS-e prestadas do índice ainda sem os códigos do serviço (indexadas antes da 1.2.37)."""
+        """NFS-e prestadas do índice ainda sem os códigos do serviço (indexadas antes da 1.2.37) ou marcadas como
+        "emissor_nacional" por robô anterior à 1.2.42 (desde 01/11/2026 essas notas servem de modelo)."""
         res = (
             await self._db.table("notes")
             .select("id, chave, xml_name, zip_path, downloads(filepath, competence, document_type, size, checksum)")
             .eq("document_type", "NFSE_PRESTADAS")
-            .is_("emit_model", "null")
+            .or_("emit_model.is.null,emit_model.eq.emissor_nacional")
             .order("emitida_em", desc=True)
             .limit(limit)
             .execute()
