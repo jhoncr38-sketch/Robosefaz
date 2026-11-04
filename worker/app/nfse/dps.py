@@ -272,9 +272,15 @@ def build_dps(req: DpsRequest) -> tuple[str, str]:
     if tag("CNPJ", prest) != cnpj:
         prest = block("prest", model)
     prest = without_contact(prest)
+    # E0120 no Sefin Nacional: "IM do prestador não deve ser informado, pois não existem informações complementares
+    # registradas no CNC NFS-e do município emissor" (Teresina, 04/11/2026). A nota da prefeitura trazia a IM; a DPS
+    # para o ambiente nacional vai sem ela (o campo é opcional no esquema)
+    prest = re.sub(r"<IM>[^<]*</IM>", "", prest)
 
     if req.taker_xml is not None:
-        toma = without_contact(block("toma", block("infDPS", req.taker_xml)))
+        # sem e-mail, telefone e inscrição municipal: a IM do tomador é opcional e, como a do prestador (E0120),
+        # não deve ir quando o município dele não tem dados complementares no CNC
+        toma = re.sub(r"<IM>[^<]*</IM>", "", without_contact(block("toma", block("infDPS", req.taker_xml))))
         if not toma:
             raise _invalid("A nota de onde o tomador seria copiado não tem tomador.")
     elif req.taker:

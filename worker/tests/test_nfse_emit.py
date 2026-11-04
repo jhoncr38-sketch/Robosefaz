@@ -244,7 +244,8 @@ def test_dps_copies_what_cannot_be_invented_and_changes_only_what_was_confirmed(
     assert f'<infDPS Id="{ident}"><tpAmb>1</tpAmb><dhEmi>2026-10-10T15:28:00-03:00</dhEmi><verAplic>JRSistema</verAplic>' in xml
     assert "<serie>10001</serie><nDPS>3</nDPS><dCompet>2026-10-01</dCompet><tpEmit>1</tpEmit><cLocEmi>2211001</cLocEmi>" in xml
     # prestador, códigos do serviço e tributação: iguais aos da nota real
-    assert f"<prest><CNPJ>{CNPJ_OK}</CNPJ><IM>1234567</IM><regTrib><opSimpNac>3</opSimpNac>" in xml
+    # sem a inscrição municipal: o Sefin recusa com E0120 quando o município não tem dados complementares no CNC
+    assert f"<prest><CNPJ>{CNPJ_OK}</CNPJ><regTrib><opSimpNac>3</opSimpNac>" in xml and "<IM>" not in xml
     assert "<cTribNac>140101</cTribNac><cTribMun>040</cTribMun>" in xml and "<cNBS>101061200</cNBS>" in xml
     assert "<trib><tribMun><tribISSQN>1</tribISSQN><tpRetISSQN>1</tpRetISSQN></tribMun>" in xml
     # o que a pessoa conferiu: descrição (com os caracteres especiais protegidos) e valor
@@ -865,3 +866,13 @@ async def test_schema_refusal_in_both_layouts_is_a_rejection(repo: FakeRepo, dep
     assert await SchedulerRunner(deps).run_once()
     assert repo.job(job.id)["status"] == "failed" and em["status"] == "rejected"
     assert len(api.sent) == 2  # uma tentativa em cada leiaute, nunca mais que isso
+
+
+def test_dps_goes_without_municipal_registration_of_provider_and_taker() -> None:
+    """E0120 no Sefin (04/11/2026): a IM não deve ir quando o município não tem dados complementares no CNC."""
+    k = chave(1)
+    model = nota(k, numero=1).decode()
+    taker = model.replace("<toma><CNPJ>", "<toma><IM>7654321</IM><CNPJ>", 1) if "<toma><CNPJ>" in model else model
+    xml, _ = build_dps(DpsRequest(cnpj=CNPJ_OK, numero=1, amount=Decimal("1"), description="Teste", competence="2026-09",
+                                  model_xml=model, prest_xml=model, taker_xml=taker))
+    assert "<IM>" not in xml and f"<prest><CNPJ>{CNPJ_OK}</CNPJ><regTrib>" in xml
