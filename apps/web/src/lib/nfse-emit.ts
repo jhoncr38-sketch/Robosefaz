@@ -111,7 +111,7 @@ export const EMIT_NOTE_COLUMNS =
 
 /** Colunas de nfse_emissions para a tela: sem o XML da nota (vem só quando alguém abre o DANFSe). */
 export const EMISSION_COLUMNS =
-  "id, client_id, created_by, created_at, test_env, source, request_text, toma_doc, toma_nome, c_trib_nac, c_trib_mun, servico_nome, description, amount, competence, status, job_id, n_dps, send_started_at, chave, numero, issued_at, errors, last_message, steps, cancel_status, cancel_job_id, cancel_reason, cancel_errors, canceled_at, custom_service, c_nbs, ibs_cst, ibs_class_trib, ibs_ind_op";
+  "id, client_id, created_by, created_at, test_env, source, request_text, toma_doc, toma_nome, c_trib_nac, c_trib_mun, servico_nome, description, amount, competence, status, job_id, n_dps, send_started_at, chave, numero, issued_at, errors, last_message, steps, cancel_status, cancel_job_id, cancel_reason, cancel_errors, canceled_at, custom_service, c_nbs, ibs_cst, ibs_class_trib, ibs_ind_op, p_tot_trib_sn";
 
 /** A emissão ainda está em teste. Enquanto for false, a aba aparece no menu com cadeado para todos os
  *  escritórios e só o dono da plataforma entra (para testar). No lançamento vira true, e aí vale o
@@ -304,6 +304,27 @@ export function formatAmountInput(value: number): string {
   return value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/** "8,99", "8.99" ou "8,99%" -> 8.99; null quando não é um percentual de 0 a 99,99 com até duas casas. */
+export function parsePercent(text: string): number | null {
+  const t = String(text ?? "").replace(/[%\s]/g, "").replace(",", ".");
+  if (!/^\d{1,2}(\.\d{1,2})?$/.test(t)) return null;
+  return Math.round(Number(t) * 100) / 100;
+}
+
+/** 8.99 -> "8,99" ("" sem valor). */
+export function formatPercent(value: number | string | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "";
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
+}
+
+/** O último percentual aproximado dos tributos pedido para a empresa ("" se nunca houve). A lista vem da
+ *  emissão mais nova para a mais antiga, como a tela carrega. */
+export function lastTaxRate(list: Pick<Emission, "client_id" | "p_tot_trib_sn">[], clientId: string): string {
+  const hit = list.find((e) => e.client_id === clientId && e.p_tot_trib_sn !== null && e.p_tot_trib_sn !== undefined && e.p_tot_trib_sn !== "");
+  return hit ? formatPercent(hit.p_tot_trib_sn) : "";
+}
+
 export interface DraftCheck {
   /** diferença em % para a última nota do tomador (null: igual, sem nota anterior ou sem valor) */
   amountDiff: number | null;
@@ -467,6 +488,8 @@ export interface Emission {
   ibs_cst?: string | null;
   ibs_class_trib?: string | null;
   ibs_ind_op?: string | null;
+  /** percentual aproximado dos tributos (alíquota do Simples Nacional) conferido na tela; null nos pedidos antigos */
+  p_tot_trib_sn?: number | string | null;
 }
 
 export interface EmissionState {
@@ -522,13 +545,16 @@ const EXPLAIN_CODE: Record<string, string> = {
   L0001: "Este serviço não consta no cadastro da empresa na prefeitura. Escolha outro serviço.",
   L0017: "Faltou o código municipal do serviço.",
   L0022: "A série da nota está fora da faixa da API.",
+  E0712:
+    "Para ME/EPP o ambiente nacional exige o percentual aproximado dos tributos (a alíquota do Simples Nacional da empresa). Atualize o robô para a versão 1.2.44, informe o percentual na tela e emita de novo.",
+  E0120: "A nota levou a inscrição municipal, que o ambiente nacional não aceita para Teresina. Atualize o robô para a versão 1.2.44 e emita de novo.",
 };
 
 const EXPLAIN_TEXT: [RegExp, string][] = [
   [/configura..o atividade/i, "A prefeitura não tem este serviço configurado para a empresa. Escolha outro serviço ou confira o cadastro dela na prefeitura."],
   [
     /Resolu..o n. ?191 do CGSN/i,
-    "Desde 01/11/2026 a empresa do Simples só emite pelo ambiente nacional da NFS-e (Resolução CGSN 191). Esta nota foi para a prefeitura por um robô antigo: atualize o robô para a versão 1.2.42 e emita de novo.",
+    "Desde 01/11/2026 a empresa do Simples só emite pelo ambiente nacional da NFS-e (Resolução CGSN 191). Esta nota foi para a prefeitura por um robô antigo: atualize o robô para a versão 1.2.44 e emita de novo.",
   ],
   [/conv.nio .{0,40}n.o est. ativo/i, "O município ainda não tem convênio ativo no ambiente nacional da NFS-e para emitir por API."],
   [/tomador n.o identificado/i, "Este serviço não aceita nota sem tomador. Escolha ou cadastre o tomador."],

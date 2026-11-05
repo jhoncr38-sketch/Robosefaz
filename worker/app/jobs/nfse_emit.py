@@ -215,6 +215,8 @@ async def run_nfse_emit(
             if em.get("ibs_cst") is None
             else {"cst": em.get("ibs_cst") or "", "class_trib": em.get("ibs_class_trib") or "", "ind_op": em.get("ibs_ind_op") or ""},
             layout=default_layout(test_env),
+            # alíquota do Simples conferida no painel (desde a 1.2.44; a ME/EPP não emite sem ela, E0712)
+            p_tot_trib_sn=Decimal(str(em["p_tot_trib_sn"])) if em.get("p_tot_trib_sn") is not None else None,
         )
         xml, ident = build_dps(request)
         signed = await (signer or sign_xml)(xml, thumbprint, "infDPS")

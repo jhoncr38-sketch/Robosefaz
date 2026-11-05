@@ -238,7 +238,7 @@ def test_dps_copies_what_cannot_be_invented_and_changes_only_what_was_confirmed(
     now = datetime(2026, 10, 10, 15, 30, tzinfo=timezone(timedelta(hours=-3)))
     xml, ident = build_dps(
         DpsRequest(cnpj=CNPJ_OK, numero=3, amount=Decimal("1500"), description="Manutenção do ar & copa <urgente>", competence="2026-10",
-                   model_xml=model, prest_xml=model, taker_xml=model, now=now)
+                   model_xml=model, prest_xml=model, taker_xml=model, now=now, p_tot_trib_sn=Decimal("6"))
     )
     assert ident == dps_id(CNPJ_OK, 3) == f"DPS22110012{CNPJ_OK}10001000000000000003" and len(ident) == 45
     assert f'<infDPS Id="{ident}"><tpAmb>1</tpAmb><dhEmi>2026-10-10T15:28:00-03:00</dhEmi><verAplic>JRSistema</verAplic>' in xml
@@ -255,13 +255,13 @@ def test_dps_copies_what_cannot_be_invented_and_changes_only_what_was_confirmed(
     assert f"<toma><CNPJ>{TOMADOR}</CNPJ><xNome>CONDOMINIO FICTICIO SOL</xNome><end>" in xml
     assert "email" not in xml and "fone" not in xml and "<Signature" not in xml
     assert "<tpAmb>2</tpAmb>" in build_dps(
-        DpsRequest(cnpj=CNPJ_OK, numero=1, amount=Decimal("1"), description="Teste", competence="2026-10", model_xml=model, prest_xml=model, test_env=True, now=now)
+        DpsRequest(cnpj=CNPJ_OK, numero=1, amount=Decimal("1"), description="Teste", competence="2026-10", model_xml=model, prest_xml=model, test_env=True, now=now, p_tot_trib_sn=Decimal("6"))
     )[0]
 
 
 def test_dps_new_taker_and_refusals() -> None:
     model = nota(chave(127), numero=127).decode()
-    base = dict(cnpj=CNPJ_OK, numero=1, amount=Decimal("80"), description="Visita técnica", competence=MES, model_xml=model, prest_xml=model)
+    base = dict(cnpj=CNPJ_OK, numero=1, amount=Decimal("80"), description="Visita técnica", competence=MES, model_xml=model, prest_xml=model, p_tot_trib_sn=Decimal("6"))
     novo = {"doc": "11.222.333/0001-81", "nome": "Mercado Bom & Barato", "cmun": "2211001", "cep": "64000-100", "logradouro": "Rua B", "numero": "20", "bairro": "Sul"}
     xml, _ = build_dps(DpsRequest(**base, taker=novo))
     assert "<toma><CNPJ>11222333000181</CNPJ><xNome>Mercado Bom &amp; Barato</xNome><end><endNac><cMun>2211001</cMun><CEP>64000100</CEP></endNac>" in xml
@@ -300,7 +300,7 @@ IBS = (
 
 def test_activity_nbs_and_ibs_can_be_informed_by_hand() -> None:
     model = nota(chave(127), numero=127).decode()
-    base = dict(cnpj=CNPJ_OK, numero=1, amount=Decimal("80"), description="Projeto elétrico", competence=MES, model_xml=model, prest_xml=model)
+    base = dict(cnpj=CNPJ_OK, numero=1, amount=Decimal("80"), description="Projeto elétrico", competence=MES, model_xml=model, prest_xml=model, p_tot_trib_sn=Decimal("6"))
     # sem nada informado: tudo como na nota-modelo
     xml, _ = build_dps(DpsRequest(**base))
     assert "<cTribNac>140101</cTribNac><cTribMun>040</cTribMun>" in xml and "<cNBS>101061200</cNBS>" in xml and "<IBSCBS>" not in xml
@@ -331,7 +331,7 @@ def test_simple_ibs_group_is_read_copied_and_indexed() -> None:
     assert info is not None and (info.ibs_cst, info.ibs_class_trib, info.ibs_ind_op) == ("200", "200052", "100301")
     assert parse_note_xml(nota(chave(8), numero=8), "NFSe y.xml").ibs_cst is None
     # repetir a nota leva o mesmo grupo; com destinatário, imóvel ou valores a nota não serve de modelo
-    xml, _ = build_dps(DpsRequest(cnpj=CNPJ_OK, numero=1, amount=Decimal("10"), description="Repetição", competence=MES, model_xml=com.decode(), prest_xml=com.decode()))
+    xml, _ = build_dps(DpsRequest(cnpj=CNPJ_OK, numero=1, amount=Decimal("10"), description="Repetição", competence=MES, model_xml=com.decode(), prest_xml=com.decode(), p_tot_trib_sn=Decimal("6")))
     assert IBS in xml
     complexo = IBS.replace("<indDest>0</indDest>", "<indDest>1</indDest><dest><CNPJ>99888777000155</CNPJ><xNome>X</xNome></dest>")
     assert model_status(nota(chave(9), numero=9, ibs=complexo).decode()) == "ibs_cbs"
@@ -824,7 +824,7 @@ def test_nt009_layout_moves_finnfse_trib_codes_and_description() -> None:
     req = DpsRequest(
         cnpj=CNPJ_OK, numero=1, amount=Decimal("1.00"), description="Teste", competence="2026-09",
         model_xml=nota(k, numero=1).decode(), prest_xml=nota(k, numero=1).decode(), taker_xml=nota(k, numero=1).decode(),
-        ibs={"cst": "000", "class_trib": "000001", "ind_op": "050101"}, layout=LAYOUT_20260209,
+        ibs={"cst": "000", "class_trib": "000001", "ind_op": "050101"}, layout=LAYOUT_20260209, p_tot_trib_sn=Decimal("6"),
     )
     old, _ = build_dps(req)
     assert "<IBSCBS><finNFSe>0</finNFSe>" in old and "<gIBSCBS><CST>000</CST>" in old
@@ -874,5 +874,49 @@ def test_dps_goes_without_municipal_registration_of_provider_and_taker() -> None
     model = nota(k, numero=1).decode()
     taker = model.replace("<toma><CNPJ>", "<toma><IM>7654321</IM><CNPJ>", 1) if "<toma><CNPJ>" in model else model
     xml, _ = build_dps(DpsRequest(cnpj=CNPJ_OK, numero=1, amount=Decimal("1"), description="Teste", competence="2026-09",
-                                  model_xml=model, prest_xml=model, taker_xml=taker))
+                                  model_xml=model, prest_xml=model, taker_xml=taker, p_tot_trib_sn=Decimal("6")))
     assert "<IM>" not in xml and f"<prest><CNPJ>{CNPJ_OK}</CNPJ><regTrib>" in xml
+
+
+def test_me_epp_note_carries_the_simples_rate_instead_of_not_informing() -> None:
+    """E0712 no Sefin (04/11/2026): para ME/EPP o "não informar" (indTotTrib) dos tributos é recusado; a nota
+    leva o percentual aproximado da alíquota do Simples (pTotTribSN), como as do Emissor Nacional."""
+    k = chave(1)
+    model = nota(k, numero=1).decode()
+    assert "<indTotTrib>0</indTotTrib>" in model  # como nas notas da prefeitura
+    base = dict(cnpj=CNPJ_OK, numero=1, amount=Decimal("1"), description="Teste", competence="2026-09", model_xml=model, prest_xml=model)
+    xml, _ = build_dps(DpsRequest(**base, p_tot_trib_sn=Decimal("8.99")))
+    assert "</tribMun><totTrib><pTotTribSN>8.99</pTotTribSN></totTrib></trib>" in xml and "indTotTrib" not in xml
+    assert "<pTotTribSN>2.00</pTotTribSN>" in build_dps(DpsRequest(**base, p_tot_trib_sn=Decimal("2")))[0]
+    assert "<pTotTribSN>0.00</pTotTribSN>" in build_dps(DpsRequest(**base, p_tot_trib_sn=Decimal("0")))[0]
+    # sem o percentual, a nota nem sai (o número não se perde numa recusa certa)
+    with pytest.raises(AutomationError, match="percentual aproximado dos tributos"):
+        build_dps(DpsRequest(**base))
+    for bad in (Decimal("100"), Decimal("-1")):
+        with pytest.raises(AutomationError, match="inválido"):
+            build_dps(DpsRequest(**base, p_tot_trib_sn=bad))
+    # nota-modelo do Emissor Nacional, que já traz o percentual: sem valor no pedido, vai o dela
+    nacional = model.replace("<indTotTrib>0</indTotTrib>", "<pTotTribSN>5.50</pTotTribSN>")
+    xml, _ = build_dps(DpsRequest(**{**base, "model_xml": nacional, "prest_xml": nacional}))
+    assert "<totTrib><pTotTribSN>5.50</pTotTribSN></totTrib>" in xml
+    # o valor conferido no painel vale mais que o da nota-modelo
+    xml, _ = build_dps(DpsRequest(**{**base, "model_xml": nacional, "prest_xml": nacional}, p_tot_trib_sn=Decimal("6.1")))
+    assert "<totTrib><pTotTribSN>6.10</pTotTribSN></totTrib>" in xml and xml.count("<totTrib>") == 1
+
+
+async def test_emission_sends_the_rate_confirmed_in_the_panel(repo: FakeRepo, deps, api: FakeApi, tmp_path: Path) -> None:  # noqa: ANN001
+    client, job, em = setup(repo)
+    em["p_tot_trib_sn"] = 8.99
+    await seed(repo, tmp_path, client, {chave(127): nota(chave(127), numero=127)})
+    assert await SchedulerRunner(deps).run_once()
+    assert repo.job(job.id)["status"] == "completed", repo.log_messages()
+    assert b"<totTrib><pTotTribSN>8.99</pTotTribSN></totTrib>" in api.sent[0]
+
+
+async def test_emission_without_the_rate_stops_before_sending(repo: FakeRepo, deps, api: FakeApi, tmp_path: Path) -> None:  # noqa: ANN001
+    client, job, em = setup(repo)
+    em["p_tot_trib_sn"] = None  # pedido feito por painel antigo
+    await seed(repo, tmp_path, client, {chave(127): nota(chave(127), numero=127)})
+    assert await SchedulerRunner(deps).run_once()
+    assert repo.job(job.id)["status"] == "failed" and not api.sent
+    assert any("alíquota do Simples Nacional" in m for m in repo.log_messages())

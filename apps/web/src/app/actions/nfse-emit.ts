@@ -282,6 +282,11 @@ const emissionSchema = z.object({
     .optional(),
   description: z.string().trim().min(3, "Escreva a descrição do serviço").max(2000),
   amount: z.number().positive("Informe o valor").max(99_999_999),
+  // percentual aproximado dos tributos (alíquota do Simples Nacional): sem ele o ambiente nacional recusa a ME/EPP (E0712)
+  p_tot_trib_sn: z
+    .number({ error: "Informe o percentual aproximado dos tributos" })
+    .min(0, "Percentual dos tributos inválido")
+    .max(99.99, "Percentual dos tributos inválido"),
   // atividade informada à mão (outra do cadastro da empresa), NBS e IBS/CBS como conferidos na tela
   custom_service: z.boolean().optional(),
   c_trib_nac: z.string().max(12).optional(),

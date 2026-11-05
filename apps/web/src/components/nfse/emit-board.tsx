@@ -49,10 +49,13 @@ import {
   formatAmountInput,
   formatBRL,
   formatDoc,
+  formatPercent,
   formatServiceCode,
+  lastTaxRate,
   missingLine,
   monthSummary,
   parseAmount,
+  parsePercent,
   checkCodes,
   formatNbs,
   pickBaseModel,
@@ -124,6 +127,8 @@ interface Draft extends IbsDraft {
   munOther: boolean;
   description: string;
   amount: string;
+  /** percentual aproximado dos tributos (alíquota do Simples Nacional), como a pessoa digitou */
+  taxRate: string;
   /** de onde veio a descrição e o valor, para a etiqueta do campo */
   origin: string;
   doubts: string[];
@@ -133,7 +138,7 @@ interface Draft extends IbsDraft {
 const CUSTOM = "__custom";
 
 /** campo da nota que ainda falta preencher */
-type GapField = "taker" | "codes" | "amount" | "description";
+type GapField = "taker" | "codes" | "amount" | "taxRate" | "description";
 
 /** "a, b e c" */
 const listOf = (items: string[]) => (items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} e ${items.at(-1)}`);
@@ -563,6 +568,8 @@ export function EmitBoard({
           ibsOff: false,
           description: "",
           amount: "",
+          // o percentual muda com o faturamento da empresa: a tela sugere o último pedido e a pessoa confere
+          taxRate: lastTaxRate(emissions, clientId),
           origin: "",
           doubts: [],
           read: false,
@@ -806,6 +813,8 @@ export function EmitBoard({
         }
       : (profile?.services.find((s) => s.id === draft?.service) ?? null);
   const amount = draft ? parseAmount(draft.amount) : null;
+  const taxRate = draft ? parsePercent(draft.taxRate) : null;
+  const lastRate = clientId ? lastTaxRate(emissions, clientId) : "";
   const check = draft ? checkDraft(amount, custom ? customId : draft.service, taker, draft.takerKind === "new") : null;
   const takerDocForModel = draft?.takerKind === "known" ? draft.takerDoc : draft?.takerKind === "new" ? draft.newTaker.doc.replace(/\D/g, "") : null;
   const model = draft && notes ? (custom ? pickBaseModel(notes) : draft.service ? pickModel(notes, draft.service, takerDocForModel || null) : null) : null;
@@ -843,6 +852,7 @@ export function EmitBoard({
       for (const issue of checkNewTaker(draft.newTaker)) lack("taker", issue.short, issue.text);
     }
     if (!amount) lack("amount", "valor", "Informe o valor.");
+    if (taxRate === null) lack("taxRate", "percentual dos tributos", "Informe o percentual aproximado dos tributos (alíquota do Simples Nacional).");
     if (draft.description.trim().length < 3) lack("description", "descrição", "Escreva a descrição do serviço.");
     if (model && !model.ok) missing.push(model.error);
   }
@@ -850,7 +860,7 @@ export function EmitBoard({
   const ready = Boolean(draft && client && canRun && client.certificate_ok && missing.length === 0 && model?.ok);
 
   function emit() {
-    if (!draft || !client || !notes || !model?.ok || !amount) return;
+    if (!draft || !client || !notes || !model?.ok || !amount || taxRate === null) return;
     const payload = {
       client_id: client.id,
       test_env: isOwner && testEnv ? true : undefined,
@@ -861,6 +871,7 @@ export function EmitBoard({
       toma: draft.takerKind === "new" ? { ...draft.newTaker, doc: draft.newTaker.doc.replace(/\D/g, ""), cep: draft.newTaker.cep.replace(/\D/g, "") } : null,
       description: draft.description.trim(),
       amount,
+      p_tot_trib_sn: taxRate,
       ...(custom
         ? {
             custom_service: true,
@@ -1734,6 +1745,38 @@ export function EmitBoard({
                   ))}
                 </div>
 
+                <div className="flex flex-col gap-1">
+                  <Field
+                    label="Tributos aproximados (alíquota do Simples Nacional)"
+                    tag={
+                      mark("taxRate") ? (
+                        <Tag tone="amber">falta informar</Tag>
+                      ) : draft.taxRate && draft.taxRate === lastRate ? (
+                        <Origin icon={Repeat2}>do último pedido</Origin>
+                      ) : null
+                    }
+                  >
+                    <span
+                      className={cn(
+                        "flex h-8 w-28 items-center gap-1.5 rounded-[7px] border bg-card px-2.5 transition-colors focus-within:border-ring",
+                        mark("taxRate") ? "border-(--c-f0d9a8)" : "border-(--c-e3e3df)",
+                      )}
+                    >
+                      <input
+                        className="min-w-0 flex-1 bg-transparent text-[13px] tabular-nums outline-none placeholder:text-(--c-9a9b94)"
+                        inputMode="decimal"
+                        placeholder="0,00"
+                        value={draft.taxRate}
+                        onChange={(e) => patch({ taxRate: e.target.value })}
+                      />
+                      <span className="text-[13px] text-(--c-6b6c66)">%</span>
+                    </span>
+                  </Field>
+                  <p className="text-[12px] leading-[1.4] text-(--c-6b6c66)">
+                    A alíquota do Simples da empresa no mês. Sai na nota como total aproximado dos tributos (Lei 12.741/2012).
+                  </p>
+                </div>
+
                 {modelNote ? (
                   <p className="text-[12px] text-(--c-6b6c66)">
                     ISS e retenção como na nota nº {modelNote.numero ?? "—"}
@@ -1846,6 +1889,11 @@ export function EmitBoard({
                   <div className="flex flex-col gap-1.5 border-t border-(--c-e3e3df) bg-(--c-fafaf8) px-3 py-2.5">
                     {!active && modelNote ? (
                       <div className="text-[12px] text-(--c-6b6c66)">ISS e retenção como na nota nº {modelNote.numero ?? "—"}</div>
+                    ) : null}
+                    {(active ? formatPercent(active.p_tot_trib_sn) : taxRate !== null) ? (
+                      <div className="text-[12px] text-(--c-6b6c66)">
+                        Tributos aproximados {active ? formatPercent(active.p_tot_trib_sn) : formatPercent(taxRate)}% (alíquota do Simples Nacional)
+                      </div>
                     ) : null}
                     <div className="flex items-baseline justify-between gap-3">
                       <span className="text-[12px] text-(--c-6b6c66)">Valor da nota</span>
@@ -2140,6 +2188,7 @@ export function EmitBoard({
                     : "",
                 ],
                 ["Descrição", draft?.description ?? ""],
+                ["Tributos", taxRate !== null ? `${formatPercent(taxRate)}% aproximados (alíquota do Simples Nacional)` : ""],
                 ["Valor", formatBRL(amount ?? 0)],
               ] as const
             ).map(([label, value]) => (

@@ -29,6 +29,9 @@ import {
   pickModel,
   takerNoteKey,
   missingLine,
+  formatPercent,
+  lastTaxRate,
+  parsePercent,
 } from "../src/lib/nfse-emit.ts";
 
 const SOL = "55666777000188";
@@ -390,7 +393,7 @@ describe("recusas desde a Resolução CGSN 191", () => {
       mensagem:
         "Por determinação da Resolução nº 191 do CGSN, a partir do dia 01/11/2026, a emissão de nota fiscal pelas microempresas e empresas de pequeno porte optantes pelo Simples Nacional deve ocorrer por meio do Emissor Nacional da NFS-e.",
     };
-    assert.match(explainRejection(l9999), /atualize o robô para a versão 1\.2\.42/);
+    assert.match(explainRejection(l9999), /atualize o robô para a versão 1\.2\.44/);
     assert.match(
       explainRejection({ codigo: "", mensagem: "O convênio do o município <Teresina/PI> ainda não está ativo no Sistema Nacional da NFS-e" }),
       /convênio ativo/,
@@ -404,5 +407,38 @@ describe("emissão por etapas", () => {
     assert.equal(missingLine(["valor"]), "Falta 1 campo: valor.");
     assert.equal(missingLine(["tomador", "descrição", "valor"]), "Faltam 3 campos: tomador, descrição e valor.");
     assert.equal(missingLine(["CEP", "CEP", " "]), "Falta 1 campo: CEP.");
+  });
+});
+
+describe("percentual aproximado dos tributos (E0712, desde 04/11/2026)", () => {
+  it("lê o percentual como a pessoa digita e recusa o que não é percentual", () => {
+    assert.equal(parsePercent("8,99"), 8.99);
+    assert.equal(parsePercent("8.99"), 8.99);
+    assert.equal(parsePercent(" 6 % "), 6);
+    assert.equal(parsePercent("0"), 0);
+    assert.equal(parsePercent("15,5"), 15.5);
+    for (const bad of ["", "100", "8,999", "-1", "abc", "1.234,56"]) assert.equal(parsePercent(bad), null, bad);
+    assert.equal(formatPercent(8.99), "8,99");
+    assert.equal(formatPercent("6"), "6,00");
+    assert.equal(formatPercent(null), "");
+  });
+
+  it("sugere o último percentual pedido para a mesma empresa", () => {
+    const list = [
+      { client_id: "b", p_tot_trib_sn: 4 },
+      { client_id: "a", p_tot_trib_sn: null },
+      { client_id: "a", p_tot_trib_sn: "8.99" },
+      { client_id: "a", p_tot_trib_sn: 6 },
+    ];
+    assert.equal(lastTaxRate(list, "a"), "8,99");
+    assert.equal(lastTaxRate(list, "b"), "4,00");
+    assert.equal(lastTaxRate(list, "c"), "");
+  });
+
+  it("explica a recusa E0712", () => {
+    assert.match(
+      explainRejection({ codigo: "E0712", mensagem: "Para ME/EPP o indicador de informação de valor total de tributos não pode ser informado." }),
+      /percentual aproximado dos tributos/,
+    );
   });
 });

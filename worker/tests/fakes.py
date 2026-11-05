@@ -353,6 +353,7 @@ class FakeRepo:
             "numero": None, "errors": [], "steps": {}, "toma": None, "toma_chave": None, "toma_doc": None, "toma_nome": None,
             "competence": job.competence, "cancel_status": None, "cancel_errors": [], "nfse_xml": None, "last_message": None,
             "custom_service": False, "c_trib_nac": "140101", "c_trib_mun": "040", "c_nbs": None, "ibs_cst": None, "ibs_class_trib": None, "ibs_ind_op": None,
+            "p_tot_trib_sn": 6.0,
         }
         row.update(fields)
         self._emissions().append(row)

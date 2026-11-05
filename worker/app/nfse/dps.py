@@ -240,6 +240,9 @@ class DpsRequest:
     ibs: dict[str, str] | None = None
     # leiaute do Sefin (LAYOUT_20260209 ou LAYOUT_NT009); None = o do ambiente (default_layout)
     layout: str | None = None
+    # percentual aproximado dos tributos (alíquota do Simples Nacional, Lei 12.741/2012) conferido no painel;
+    # None = como na nota-modelo (que, se for da prefeitura, diz "não informar" e a ME/EPP não pode usar)
+    p_tot_trib_sn: Decimal | None = None
 
 
 def _new_taker(t: dict[str, Any]) -> str:
@@ -257,6 +260,28 @@ def _new_taker(t: dict[str, Any]) -> str:
         + (f"<xCpl>{escape(cpl)}</xCpl>" if cpl else "")
         + f"<xBairro>{escape(bairro)}</xBairro></end></toma>"
     )
+
+
+def total_taxes(trib: str, percent: Decimal | None, *, me_epp: bool) -> str:
+    """O grupo totTrib (total aproximado dos tributos, Lei 12.741/2012) da DPS.
+
+    Com o percentual conferido no painel, a nota leva <pTotTribSN> (alíquota do Simples Nacional), como as
+    notas do Emissor Nacional para ME/EPP. Sem ele, fica o da nota-modelo; mas o "não informar" (indTotTrib)
+    das notas da prefeitura o ambiente nacional recusa para ME/EPP (E0712, 04/11/2026), então a nota nem sai."""
+    if percent is not None:
+        value = Decimal(percent).quantize(Decimal("0.01"))
+        if not (Decimal("0") <= value < Decimal("100")):
+            raise _invalid("Percentual aproximado dos tributos inválido (de 0 a 99,99%).")
+        group = f"<totTrib><pTotTribSN>{abs(value)}</pTotTribSN></totTrib>"
+        if re.search(r"<totTrib>.*?</totTrib>", trib, re.S):
+            return re.sub(r"<totTrib>.*?</totTrib>", lambda _m: group, trib, count=1, flags=re.S)
+        return trib.replace("</trib>", group + "</trib>", 1)
+    if me_epp and "<indTotTrib>" in trib:
+        raise _invalid(
+            "Informe o percentual aproximado dos tributos (alíquota do Simples Nacional): para ME/EPP o ambiente "
+            "nacional não aceita nota sem ele (E0712)."
+        )
+    return trib
 
 
 def build_dps(req: DpsRequest) -> tuple[str, str]:
@@ -328,6 +353,7 @@ def build_dps(req: DpsRequest) -> tuple[str, str]:
     trib = block("trib", block("valores", model))
     if not trib:
         raise _invalid("A nota-modelo não tem o grupo de tributação.")
+    trib = total_taxes(trib, req.p_tot_trib_sn, me_epp=tag("opSimpNac", prest) == "3")
 
     issued = now_br(req.now)
     competence_day = f"{req.competence}-01"
