@@ -284,8 +284,12 @@ def test_dps_new_taker_and_refusals() -> None:
 def test_cancel_request_xml() -> None:
     k = chave(128, "2610")
     xml = build_cancel(k, CNPJ_OK, 1, "Valor combinado  foi alterado", test_env=True)
-    assert f'<infPedReg Id="PRE{k}101101001"><tpAmb>2</tpAmb>' in xml
-    assert f"<CNPJAutor>{CNPJ_OK}</CNPJAutor><chNFSe>{k}</chNFSe><nPedRegEvento>1</nPedRegEvento>" in xml
+    # leiaute 1.01: Id = "PRE" + chave + tipo do evento, sem o número do pedido (E1235 no Sefin, 05/11/2026)
+    assert f'<infPedReg Id="PRE{k}101101"><tpAmb>2</tpAmb>' in xml and "nPedRegEvento" not in xml
+    assert f"<CNPJAutor>{CNPJ_OK}</CNPJAutor><chNFSe>{k}</chNFSe><e101101>" in xml
+    # o formato anterior, para a segunda tentativa
+    old = build_cancel(k, CNPJ_OK, 1, "Valor combinado  foi alterado", test_env=True, legacy=True)
+    assert f'Id="PRE{k}101101001"' in old and f"<chNFSe>{k}</chNFSe><nPedRegEvento>1</nPedRegEvento><e101101>" in old
     assert "<e101101><xDesc>Cancelamento de NFS-e</xDesc><cMotivo>1</cMotivo><xMotivo>Valor combinado foi alterado</xMotivo></e101101>" in xml
     for bad in (dict(reason_code=7), dict(reason="curto")):
         with pytest.raises(AutomationError):
@@ -468,7 +472,7 @@ async def test_fetch_after_emitting_never_drops_or_repeats_the_note(repo: FakeRe
     emitted = next(d for d in repo.downloads if d["competence"] == MES)
 
     adn = FakeAdn()
-    monkeypatch.setattr(nfse_fetch, "AdnClient", lambda thumbprint: adn)
+    monkeypatch.setattr(nfse_fetch, "AdnClient", lambda thumbprint, **_: adn)
 
     # 1ª busca: só a nota emitida volta -> nenhum arquivo novo
     adn.docs = [AdnDocument(nsu=1, chave=key, tipo="NFSE", xml=api.notes[key])]
@@ -562,7 +566,7 @@ async def test_note_the_prefeitura_cannot_show_is_still_registered_as_issued(rep
 
     # a busca de NFS-e traz a nota depois: o arquivo entra na pasta e completa o registro da emissão
     adn = FakeAdn()
-    monkeypatch.setattr(nfse_fetch, "AdnClient", lambda thumbprint: adn)
+    monkeypatch.setattr(nfse_fetch, "AdnClient", lambda thumbprint, **_: adn)
     adn.docs = [AdnDocument(nsu=1, chave=key, tipo="NFSE", xml=api.notes[key])]
     repo.add_job(client, [TaskType.NFSE_FETCH], competence=MES)
     assert await SchedulerRunner(deps).run_once()
@@ -663,7 +667,7 @@ async def test_cancel_registers_the_event_and_marks_the_note(repo: FakeRepo, dep
     j = repo.job(job.id)
     assert (j["status"], j["last_message"]) == ("completed", "NFS-e nº 128 cancelada."), repo.log_messages()
     ((sent_key, signed),) = api.events
-    assert sent_key == key and f'Id="PRE{key}101101001"' in signed.decode() and "<tpAmb>1</tpAmb>" in signed.decode()
+    assert sent_key == key and f'Id="PRE{key}101101"' in signed.decode() and "<tpAmb>1</tpAmb>" in signed.decode()
     assert (em["status"], em["cancel_status"]) == ("canceled", None) and em["canceled_at"] is not None
     assert repo.notes[0]["canceled"] is True
 
@@ -920,3 +924,29 @@ async def test_emission_without_the_rate_stops_before_sending(repo: FakeRepo, de
     assert await SchedulerRunner(deps).run_once()
     assert repo.job(job.id)["status"] == "failed" and not api.sent
     assert any("alíquota do Simples Nacional" in m for m in repo.log_messages())
+
+
+async def test_cancel_refused_by_schema_tries_the_previous_format_once(repo: FakeRepo, deps, api: FakeApi) -> None:  # noqa: ANN001
+    """Quem ainda valida o evento pelo leiaute anterior (a prefeitura, nas notas dela) recebe uma segunda tentativa."""
+    client, job, em, key = setup_cancel(repo)
+    original = api.register_event
+
+    async def old_schema(k: str, signed: bytes) -> ApiResult:
+        if b"<nPedRegEvento>" not in signed:
+            api.events.append((k, signed))
+            return ApiResult(status=400, data={"erros": [{"Codigo": "E1235", "Descricao": "Falha no esquema XML do DF-e."}]})
+        return await original(k, signed)
+
+    api.register_event = old_schema  # type: ignore[method-assign]
+    assert await SchedulerRunner(deps).run_once()
+    assert repo.job(job.id)["status"] == "completed", repo.log_messages()
+    assert len(api.events) == 2 and b'101101001"' in api.events[1][1] and em["status"] == "canceled"
+    assert any("formato anterior" in m for m in repo.log_messages())
+
+
+async def test_cancel_refused_by_schema_in_both_formats_is_a_rejection(repo: FakeRepo, deps, api: FakeApi) -> None:  # noqa: ANN001
+    client, job, em, key = setup_cancel(repo)
+    api.event_errors = [{"codigo": "E1235", "mensagem": "Falha no esquema XML do DF-e."}]
+    assert await SchedulerRunner(deps).run_once()
+    assert repo.job(job.id)["status"] == "failed" and em["status"] == "issued" and em["cancel_status"] == "rejected"
+    assert len(api.events) == 2  # uma em cada formato, nunca mais que isso

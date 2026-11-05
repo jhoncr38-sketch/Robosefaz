@@ -373,19 +373,28 @@ def build_dps(req: DpsRequest) -> tuple[str, str]:
     return to_layout(re.sub(r">\s+<", "><", xml), layout), ident
 
 
-def build_cancel(chave: str, cnpj: str, reason_code: int, reason: str, *, test_env: bool, now: datetime | None = None) -> str:
-    """Pedido de registro do evento de cancelamento (sem assinatura)."""
+def build_cancel(
+    chave: str, cnpj: str, reason_code: int, reason: str, *, test_env: bool, now: datetime | None = None, legacy: bool = False
+) -> str:
+    """Pedido de registro do evento de cancelamento (sem assinatura).
+
+    No leiaute 1.01 (esquemas de 09/02/2026 e de 20/10/2026) o Id é "PRE" + chave + tipo do evento e o pedido
+    não tem mais o nPedRegEvento: o Sefin Nacional recusa o formato antigo com E1235 (05/11/2026).
+    `legacy` monta o formato anterior (Id terminado no número do pedido "001" e o campo nPedRegEvento), a
+    segunda tentativa para a prefeitura se ela recusar o novo."""
     if not re.fullmatch(r"\d{50}", chave or ""):
         raise _invalid("Chave de acesso da NFS-e inválida.")
     cnpj = digits(cnpj)
     reason = " ".join(str(reason or "").split())
     if reason_code not in (1, 2, 9) or not (15 <= len(reason) <= 255) or len(cnpj) != 14:
         raise _invalid("Motivo do cancelamento inválido.")
+    ident = f"PRE{chave}{CANCEL_EVENT}" + ("001" if legacy else "")
+    sequence = "<nPedRegEvento>1</nPedRegEvento>" if legacy else ""
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
-        f'<pedRegEvento xmlns="{NS}" versao="1.01"><infPedReg Id="PRE{chave}{CANCEL_EVENT}001">'
+        f'<pedRegEvento xmlns="{NS}" versao="1.01"><infPedReg Id="{ident}">'
         f"<tpAmb>{2 if test_env else 1}</tpAmb><verAplic>{APP_NAME}</verAplic><dhEvento>{now_br(now).isoformat()}</dhEvento>"
-        f"<CNPJAutor>{cnpj}</CNPJAutor><chNFSe>{chave}</chNFSe><nPedRegEvento>1</nPedRegEvento>"
+        f"<CNPJAutor>{cnpj}</CNPJAutor><chNFSe>{chave}</chNFSe>{sequence}"
         f"<e{CANCEL_EVENT}><xDesc>Cancelamento de NFS-e</xDesc><cMotivo>{reason_code}</cMotivo>"
         f"<xMotivo>{escape(reason)}</xMotivo></e{CANCEL_EVENT}>"
         "</infPedReg></pedRegEvento>"

@@ -233,10 +233,18 @@ async def _powershell(url: str, thumbprint: str, out: Path, timeout: int) -> tup
 class AdnClient:
     """Consulta a distribuição de documentos do contribuinte dono do certificado."""
 
-    def __init__(self, thumbprint: str, *, base_url: str = PROD_URL, timeout: int = 60, runner: Runner | None = None) -> None:
+    def __init__(
+        self, thumbprint: str, *, cnpj: str, base_url: str = PROD_URL, timeout: int = 60, runner: Runner | None = None
+    ) -> None:
         tp = (thumbprint or "").replace(" ", "").upper()
         if not _THUMBPRINT.match(tp):
             raise AutomationError(ErrorCode.INVALID_CONFIGURATION, "Impressão digital do certificado inválida.")
+        # desde 03/11/2026 o ADN rejeita (HTTP 400, REJEICAO, sem erros) a consulta que não diz de quem são as
+        # notas: o CNPJ da empresa vai em cnpjConsulta (o certificado é dela, então a consulta é do próprio CNPJ)
+        doc = re.sub(r"[^0-9A-Za-z]", "", cnpj or "").upper()
+        if len(doc) != 14:
+            raise AutomationError(ErrorCode.INVALID_CONFIGURATION, "CNPJ da empresa inválido para a busca de NFS-e.")
+        self.cnpj = doc
         self.thumbprint = tp
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
@@ -244,7 +252,7 @@ class AdnClient:
 
     async def fetch(self, nsu: int) -> AdnBatch:
         """Documentos a partir do NSU (exclusivo: o ADN devolve os seguintes)."""
-        url = f"{self.base_url}/DFe/{int(nsu)}?lote=true"
+        url = f"{self.base_url}/DFe/{int(nsu)}?cnpjConsulta={self.cnpj}&lote=true"
         out = Path(tempfile.gettempdir()) / f"jr-adn-{uuid.uuid4().hex}.json"
         try:
             status, detail = await self._run(url, self.thumbprint, out, self.timeout)
@@ -268,7 +276,9 @@ class AdnClient:
             return batch
         if status == 404 and (batch.status == NO_DOCUMENTS or any(e.startswith(NO_DOCUMENTS_CODE) for e in batch.errors)):
             return AdnBatch(status=NO_DOCUMENTS, errors=batch.errors)
-        reason = "; ".join(batch.errors) or body.strip()[:200] or f"HTTP {status}"
+        reason = "; ".join(batch.errors) or (
+            "consulta rejeitada sem motivo informado" if batch.status == "REJEICAO" else body.strip()[:200] or f"HTTP {status}"
+        )
         if status in (401, 403, 495, 496):
             # certificado recusado (vencido, revogado ou de outro CNPJ): tentar de novo não resolve
             raise AutomationError(

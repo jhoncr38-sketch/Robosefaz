@@ -379,6 +379,20 @@ async def run_nfse_cancel(
     where = getattr(api, "label", "o ambiente da NFS-e")
     await logger.info(f"Enviando o cancelamento da NFS-e nº {em.get('numero')} a {where}{suffix}.", step="checking_processing")
     result = await api.register_event(chave, signed)
+    if result.status == 400 and any(e["codigo"] == SCHEMA_ERROR for e in result.errors):
+        # recusa por esquema: o evento nem foi processado. O pedido sai no leiaute 1.01; quem ainda valida pelo
+        # anterior (a prefeitura, para as notas dela) recebe uma segunda tentativa no formato antigo
+        await logger.warning(
+            f"{where[0].upper()}{where[1:]} recusou o formato do cancelamento ({result.errors[0]['mensagem'][:200]}); "
+            "enviando de novo no formato anterior.",
+            step="checking_processing",
+        )
+        xml = build_cancel(
+            chave, normalize_cnpj(client.cnpj), int(em.get("cancel_reason_code") or 0), em.get("cancel_reason") or "",
+            test_env=test_env, legacy=True,
+        )
+        signed = await (signer or sign_xml)(xml, thumbprint, "infPedReg")
+        result = await api.register_event(chave, signed)
 
     accepted = result.status in (200, 201) and result.xml("eventoXmlGZipB64") is not None
     # um reenvio depois de falha de rede encontra a nota já cancelada: o resultado é o mesmo

@@ -61,7 +61,7 @@ def _job(repo: FakeRepo):  # noqa: ANN202
 async def test_old_attempt_does_not_overwrite_the_new_one(repo: FakeRepo, deps, certificado: None, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: ANN001
     job = _job(repo)
     adn = AdnComTomada(repo, job.id)
-    monkeypatch.setattr(nfse_fetch, "AdnClient", lambda thumbprint: adn)
+    monkeypatch.setattr(nfse_fetch, "AdnClient", lambda thumbprint, **_: adn)
     assert await SchedulerRunner(deps).run_once()
 
     j = repo.job(job.id)
@@ -74,7 +74,7 @@ async def test_old_attempt_failing_does_not_mark_the_job_failed(repo: FakeRepo, 
     """O caso de 13/10/2026: a tentativa antiga deu erro depois que a nova já tinha concluído."""
     job = _job(repo)
     adn = AdnComTomada(repo, job.id, falha=True)
-    monkeypatch.setattr(nfse_fetch, "AdnClient", lambda thumbprint: adn)
+    monkeypatch.setattr(nfse_fetch, "AdnClient", lambda thumbprint, **_: adn)
     assert await SchedulerRunner(deps).run_once()
 
     j = repo.job(job.id)

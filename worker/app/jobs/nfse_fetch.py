@@ -189,7 +189,7 @@ async def run_nfse_fetch(
     reporter: JobReporter,
     logger: JobLogger,
     *,
-    adn_factory: Callable[[str], AdnClient] | None = None,
+    adn_factory: Callable[..., AdnClient] | None = None,
     store_loader: Callable[[], Any] | None = None,
 ) -> None:
     for task in tasks:
@@ -197,8 +197,8 @@ async def run_nfse_fetch(
         task.status = TaskStatus.RUNNING
 
     thumbprint = await resolve_thumbprint(certificate, client, store_loader=store_loader)
-    adn = (adn_factory or AdnClient)(thumbprint)
     client_cnpj = normalize_cnpj(client.cnpj)
+    adn = (adn_factory or AdnClient)(thumbprint, cnpj=client_cnpj)
     # "Desde o início": relê tudo para montar os arquivos de canceladas antigos (nada é regravado)
     from_start = bool(job.force_reschedule)
     start = 0 if from_start else await repo.get_nfse_cursor(client.id)

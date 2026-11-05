@@ -7,6 +7,7 @@ import gzip
 import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -72,6 +73,7 @@ class FakeAdn:
     def __init__(self, docs: list[AdnDocument]) -> None:
         self.docs = docs
         self.calls: list[int] = []
+        self.cnpj: str | None = None
 
     async def fetch(self, nsu: int) -> AdnBatch:
         self.calls.append(nsu)
@@ -96,7 +98,11 @@ def store(*, thumb: str = THUMB, serial: str = "ABC123", cnpj: str = CNPJ_OK) ->
 @pytest.fixture
 def adn(monkeypatch: pytest.MonkeyPatch) -> FakeAdn:
     fake = FakeAdn([])
-    monkeypatch.setattr(nfse_fetch, "AdnClient", lambda thumbprint: fake)
+    def factory(thumbprint: str, **kw: Any) -> FakeAdn:
+        fake.cnpj = kw.get("cnpj")
+        return fake
+
+    monkeypatch.setattr(nfse_fetch, "AdnClient", factory)
 
     async def loader() -> list[StoreCertificate]:
         return store()
@@ -160,11 +166,12 @@ async def test_adn_client_reads_statuses(tmp_path: Path) -> None:
         status, detail, body = responses.pop(0)
         if body:
             out.write_text(body, encoding="utf-8")
-        assert url.startswith("https://adn.nfse.gov.br/contribuintes/DFe/") and url.endswith("?lote=true")
+        # desde 03/11/2026 a consulta diz de quem são as notas (sem isso: HTTP 400, REJEICAO, sem erros)
+        assert url.startswith("https://adn.nfse.gov.br/contribuintes/DFe/") and url.endswith(f"?cnpjConsulta={CNPJ_OK}&lote=true")
         assert thumbprint == THUMB
         return status, detail
 
-    client = AdnClient(THUMB.lower(), runner=runner)
+    client = AdnClient(THUMB.lower(), cnpj="11.222.333/0001-81", runner=runner)
     responses.append((404, "", '{"StatusProcessamento":"NENHUM_DOCUMENTO_LOCALIZADO","LoteDFe":[],"Erros":[{"Codigo":"E2220","Descricao":"Nenhum documento localizado"}]}'))
     assert (await client.fetch(14)).empty
     responses.append((403, "", '{"Erros":[{"Codigo":"E0001","Descricao":"Certificado nao autorizado"}]}'))
@@ -175,6 +182,11 @@ async def test_adn_client_reads_statuses(tmp_path: Path) -> None:
     with pytest.raises(AutomationError) as down:
         await client.fetch(0)
     assert down.value.code == ErrorCode.NFSE_UNAVAILABLE and down.value.retryable
+    responses.append((400, "", '{"TipoConsulta":"InscricaoCertificado","StatusProcessamento":"REJEICAO","LoteDFe":[],"Erros":[]}'))
+    with pytest.raises(AutomationError, match="sem motivo informado"):
+        await client.fetch(0)
+    with pytest.raises(AutomationError, match="CNPJ"):
+        AdnClient(THUMB, cnpj="123", runner=runner)
     responses.append((0, "CERT_NOT_FOUND", ""))
     with pytest.raises(CertificateNotInstalledError):
         await client.fetch(0)
@@ -200,6 +212,7 @@ async def test_first_fetch_writes_one_zip_per_type_and_month(repo: FakeRepo, dep
     assert j["status"] == "completed", repo.log_messages()
     assert j["last_message"] == "NFS-e: 1 prestada(s) e 2 tomada(s) nova(s)."
     assert adn.calls == [0]  # primeira busca começa do zero; menos de 50: acabou
+    assert adn.cnpj == CNPJ_OK  # a consulta diz de quem são as notas (ADN, desde 03/11/2026)
     assert repo.nfse_cursors[client.id] == {"last_nsu": 3, "last_documents": 3}
     files = {(d["document_type"], d["competence"]): d for d in repo.downloads}
     assert set(files) == {("NFSE_PRESTADAS", "2026-09"), ("NFSE_TOMADAS", "2026-09"), ("NFSE_TOMADAS", "2026-08")}
