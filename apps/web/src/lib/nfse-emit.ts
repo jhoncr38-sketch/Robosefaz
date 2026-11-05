@@ -113,10 +113,10 @@ export const EMIT_NOTE_COLUMNS =
 export const EMISSION_COLUMNS =
   "id, client_id, created_by, created_at, test_env, source, request_text, toma_doc, toma_nome, c_trib_nac, c_trib_mun, servico_nome, description, amount, competence, status, job_id, n_dps, send_started_at, chave, numero, issued_at, errors, last_message, steps, cancel_status, cancel_job_id, cancel_reason, cancel_errors, canceled_at, custom_service, c_nbs, ibs_cst, ibs_class_trib, ibs_ind_op, p_tot_trib_sn";
 
-/** A emissão ainda está em teste. Enquanto for false, a aba aparece no menu com cadeado para todos os
- *  escritórios e só o dono da plataforma entra (para testar). No lançamento vira true, e aí vale o
- *  liga/desliga de cada escritório. */
-export const NFSE_EMIT_RELEASED: boolean = false;
+/** A emissão foi liberada em 05/11/2026 (primeira nota real pelo ambiente nacional no mesmo dia). Vale o
+ *  liga/desliga de cada escritório, que o dono da plataforma controla na própria tela: escritório ligado
+ *  emite; desligado vê a aba com cadeado e uma amostra bloqueada. Com false, só o dono entra (modo de teste). */
+export const NFSE_EMIT_RELEASED: boolean = true;
 
 /** "on": usa a emissão. "testing": é o dono da plataforma, que entra antes do lançamento. "locked": vê o cadeado. */
 export type EmitAccess = "on" | "testing" | "locked";

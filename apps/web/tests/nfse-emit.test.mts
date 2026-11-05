@@ -381,8 +381,8 @@ describe("quem entra na emissão", () => {
     ]);
   });
 
-  it("a função segue travada até alguém decidir lançar", () => {
-    assert.equal(NFSE_EMIT_RELEASED, false);
+  it("a função foi liberada aos escritórios ligados (05/11/2026)", () => {
+    assert.equal(NFSE_EMIT_RELEASED, true);
   });
 });
 
